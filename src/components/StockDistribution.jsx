@@ -92,21 +92,21 @@ const StockDistribution = ({ onLogout }) => {
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      <Sidebar onLogout={onLogout} />
+      <Sidebar />
       
-      <div className="flex-1 flex flex-col">
-        <Header title="Stock Distribution" />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Header title="Stock Distribution" onLogout={onLogout} />
         
-        <div className="flex-1 p-6">
-          <div className="mb-8">
-            <div className="flex justify-between items-center mb-6">
-              <div>
+        <div className="flex-1 overflow-auto p-6">
+          <div className="mb-8 max-w-full">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+              <div className="flex-1">
                 <h1 className="text-2xl font-bold text-gray-800">Distribute inventory to stores and track distribution history</h1>
                 <p className="text-gray-600 mt-1">Manage stock distributions across all your stores</p>
               </div>
               <button
                 onClick={handleCreateDistribution}
-                className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg hover:bg-blue-700 transition-colors"
+                className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap"
               >
                 <FaPlus />
                 <span>New Distribution</span>
@@ -114,7 +114,7 @@ const StockDistribution = ({ onLogout }) => {
             </div>
             
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
               <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
                    onClick={() => setStatusFilter('All')}>
                 <div className="flex items-center justify-between">
@@ -205,33 +205,33 @@ const StockDistribution = ({ onLogout }) => {
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">DISTRIBUTION ID</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">STORE</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">MANAGER</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">DATE</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PRODUCTS</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">TOTAL VALUE</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PAYMENT</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">STATUS</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ACTIONS</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">DISTRIBUTION ID</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">STORE</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">MANAGER</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">DATE</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">PRODUCTS</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">TOTAL VALUE</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">PAYMENT</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">STATUS</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">ACTIONS</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {filteredDistributions.map((distribution) => (
                       <tr key={distribution.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-6 py-4">
                           <div className="font-medium text-gray-900">{distribution.id}</div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-6 py-4">
                           <div className="text-sm font-medium text-gray-900">{distribution.storeName}</div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-6 py-4">
                           <div className="text-sm text-gray-900">{distribution.managerName}</div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-6 py-4">
                           <div className="text-sm text-gray-500">{distribution.date}</div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-6 py-4">
                           <div className="text-sm text-gray-900">
                             {distribution.totalItems} items
                             <div className="text-xs text-gray-500">
@@ -239,7 +239,7 @@ const StockDistribution = ({ onLogout }) => {
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-6 py-4">
                           <div className="text-sm font-semibold text-gray-900">
                             ${distribution.totalValue.toFixed(2)}
                             {distribution.discount > 0 && (
@@ -249,20 +249,20 @@ const StockDistribution = ({ onLogout }) => {
                             )}
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 py-1 text-xs font-medium rounded ${getPaymentColor(distribution.paymentType)}`}>
+                        <td className="px-6 py-4">
+                          <span className={`px-2 py-1 text-xs font-medium rounded ${getPaymentColor(distribution.paymentType)} whitespace-nowrap`}>
                             {distribution.paymentType}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-6 py-4">
                           <div className="flex items-center">
                             {getStatusIcon(distribution.status)}
-                            <span className={`ml-2 px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(distribution.status)}`}>
+                            <span className={`ml-2 px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(distribution.status)} whitespace-nowrap`}>
                               {distribution.status}
                             </span>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <td className="px-6 py-4">
                           <div className="flex space-x-2">
                             <button
                               onClick={() => alert(`Viewing details for ${distribution.id}`)}

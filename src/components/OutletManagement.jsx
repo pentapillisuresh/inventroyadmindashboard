@@ -24,92 +24,19 @@ import {
   FaSignOutAlt,
   FaUserCircle,
   FaBell,
-  FaCog
+  FaCog,
+  FaCreditCard,
+  FaExclamationTriangle,
+  FaUnlock,
+  FaLock
 } from 'react-icons/fa';
 import { NavLink } from 'react-router-dom';
 import { storage } from '../data/storage';
+import Sidebar from './Sidebar';
 
-// Sidebar Component
-const Sidebar = ({ onLogout }) => {
-  const menuItems = [
-    { path: '/dashboard', icon: <FaTachometerAlt />, label: 'Overview' },
-    { path: '/stores', icon: <FaStore />, label: 'Store Management' },
-    { path: '/outlets', icon: <FaShoppingBag />, label: 'Outlet Management' },
-    { path: '/managers', icon: <FaUserTie />, label: 'Manager Management' },
-    { path: '/products', icon: <FaBox />, label: 'Product Management' },
-    { path: '/stock', icon: <FaTruck />, label: 'Stock Distribution' },
-    { path: '/invoices', icon: <FaFileInvoice />, label: 'Invoice Management' },
-    { path: '/expenditures', icon: <FaMoneyBill />, label: 'Expenditures' },
-    { path: '/reports', icon: <FaChartBar />, label: 'Reports & Analytics' },
-  ];
 
-  return (
-    <div className="w-64 bg-white border-r border-gray-200 flex flex-col h-screen sticky top-0">
-      <div className="p-6">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-            <FaStore className="text-white text-lg" />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-gray-800">InventoryPro</h2>
-            <p className="text-sm text-gray-500">Admin Panel</p>
-          </div>
-        </div>
-      </div>
-      
-      <nav className="flex-1 px-4">
-        <div className="mb-8">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4 px-3">
-            Navigation
-          </h3>
-          <ul className="space-y-1">
-            {menuItems.map((item) => (
-              <li key={item.path}>
-                <NavLink
-                  to={item.path}
-                  className={({ isActive }) =>
-                    `flex items-center space-x-3 px-3 py-3 rounded-lg transition-colors ${
-                      isActive
-                        ? 'bg-blue-600 text-white'
-                        : 'text-gray-700 hover:bg-gray-100'
-                    }`
-                  }
-                >
-                  <span className="text-lg">{item.icon}</span>
-                  <span className="font-medium">{item.label}</span>
-                </NavLink>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </nav>
-      
-      <div className="p-4 border-t border-gray-200">
-        <button
-          onClick={onLogout}
-          className="flex items-center space-x-3 w-full px-3 py-3 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-        >
-          <FaSignOutAlt />
-          <span className="font-medium">Logout</span>
-        </button>
-        
-        <div className="mt-4 px-3 py-2 bg-gray-50 rounded-lg">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-gray-500">Status</span>
-            <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">
-              Online
-            </span>
-          </div>
-          <div className="mt-2 text-xs text-gray-500">
-            <p>Last login: Today, 17:18</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
 
-// Header Component
+// Header Component (same as before)
 const Header = ({ title }) => {
   const currentDate = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
@@ -170,7 +97,407 @@ const Header = ({ title }) => {
   );
 };
 
-// Create Outlet Modal
+// Credit Dues Control Component
+const CreditDuesControl = () => {
+  const [outlets, setOutlets] = useState([]);
+  const [selectedOutlet, setSelectedOutlet] = useState(null);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [blockedOutlets, setBlockedOutlets] = useState([]);
+  const [warningOutlets, setWarningOutlets] = useState([]);
+
+  useEffect(() => {
+    loadOutlets();
+  }, []);
+
+  const loadOutlets = () => {
+    const outletsData = storage.getOutlets();
+    setOutlets(outletsData);
+    
+    // Separate blocked and warning outlets
+    const blocked = outletsData.filter(outlet => outlet.status === 'Blocked');
+    const warning = outletsData.filter(outlet => {
+      const percentage = calculatePercentage(outlet.creditUsed, outlet.creditLimit);
+      return percentage >= 80 && percentage < 100 && outlet.status !== 'Blocked';
+    });
+    
+    setBlockedOutlets(blocked);
+    setWarningOutlets(warning);
+  };
+
+  const calculatePercentage = (used, limit) => {
+    return Math.round((used / limit) * 100);
+  };
+
+  const handleProcessPayment = (outlet) => {
+    setSelectedOutlet(outlet);
+    setPaymentAmount('');
+    setShowPaymentModal(true);
+  };
+
+  const handleUnblockOutlet = (outletId) => {
+    const outletsData = storage.getOutlets();
+    const updatedOutlets = outletsData.map(outlet => {
+      if (outlet.id === outletId) {
+        return {
+          ...outlet,
+          status: 'Active',
+          blockedAt: null,
+          blockedReason: null
+        };
+      }
+      return outlet;
+    });
+    
+    storage.saveOutlets(updatedOutlets);
+    
+    // Add to recent activities
+    const activities = storage.getRecentActivities();
+    activities.unshift({
+      id: Date.now(),
+      type: 'outlet_unblocked',
+      description: `Outlet "${outletsData.find(o => o.id === outletId)?.name}" unblocked manually`,
+      timestamp: new Date().toISOString(),
+      user: 'Admin'
+    });
+    storage.saveRecentActivities(activities);
+    
+    loadOutlets();
+  };
+
+  const handlePaymentSubmit = () => {
+    if (!paymentAmount || isNaN(paymentAmount) || parseFloat(paymentAmount) <= 0) {
+      alert('Please enter a valid payment amount');
+      return;
+    }
+
+    const paymentAmt = parseFloat(paymentAmount);
+    const outletsData = storage.getOutlets();
+    
+    const updatedOutlets = outletsData.map(outlet => {
+      if (outlet.id === selectedOutlet.id) {
+        const newCreditUsed = Math.max(0, outlet.creditUsed - paymentAmt);
+        const percentage = calculatePercentage(newCreditUsed, outlet.creditLimit);
+        const shouldUnblock = outlet.status === 'Blocked' && newCreditUsed < outlet.creditLimit;
+        
+        return {
+          ...outlet,
+          creditUsed: newCreditUsed,
+          status: shouldUnblock ? 'Active' : outlet.status,
+          blockedAt: shouldUnblock ? null : outlet.blockedAt,
+          blockedReason: shouldUnblock ? null : outlet.blockedReason
+        };
+      }
+      return outlet;
+    });
+
+    storage.saveOutlets(updatedOutlets);
+    
+    // Add payment to credit history
+    storage.addPayment(selectedOutlet.id, { amount: paymentAmt });
+
+    // Show success message
+    if (selectedOutlet.status === 'Blocked' && paymentAmt > selectedOutlet.creditUsed - selectedOutlet.creditLimit) {
+      alert(`✅ Outlet "${selectedOutlet.name}" has been automatically unblocked after payment!`);
+    } else {
+      alert(`✅ Payment of $${paymentAmt} processed successfully for "${selectedOutlet.name}"`);
+    }
+
+    // Reset and reload
+    setShowPaymentModal(false);
+    setSelectedOutlet(null);
+    setPaymentAmount('');
+    loadOutlets();
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="flex items-center space-x-3">
+            <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+              <FaLock className="text-red-600 text-xl" />
+            </div>
+            <div>
+              <p className="text-gray-600 text-sm">Blocked Outlets</p>
+              <p className="text-2xl font-bold text-red-600">{blockedOutlets.length}</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="flex items-center space-x-3">
+            <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
+              <FaExclamationTriangle className="text-yellow-600 text-xl" />
+            </div>
+            <div>
+              <p className="text-gray-600 text-sm">Near Limit</p>
+              <p className="text-2xl font-bold text-yellow-600">{warningOutlets.length}</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="flex items-center space-x-3">
+            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+              <FaCreditCard className="text-green-600 text-xl" />
+            </div>
+            <div>
+              <p className="text-gray-600 text-sm">Total Credit Used</p>
+              <p className="text-2xl font-bold text-gray-800">
+                ${outlets.reduce((sum, o) => sum + (o.creditUsed || 0), 0).toLocaleString()}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Blocked Outlets Section */}
+      {blockedOutlets.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="flex items-center space-x-2 mb-6">
+            <div className="w-2 h-6 bg-red-600 rounded"></div>
+            <h3 className="text-lg font-bold text-gray-800">Blocked Outlets ({blockedOutlets.length})</h3>
+          </div>
+          
+          <div className="space-y-4">
+            {blockedOutlets.map((outlet) => (
+              <div key={outlet.id} className="border border-red-200 rounded-lg p-4 bg-red-50">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center space-x-3">
+                    <h3 className="font-semibold text-gray-800">{outlet.name}</h3>
+                    <span className="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs font-medium">
+                      Blocked
+                    </span>
+                    {outlet.blockedAt && (
+                      <span className="text-xs text-gray-500">
+                        Since: {new Date(outlet.blockedAt).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <div className="text-lg font-bold text-red-700">
+                      ${outlet.creditUsed.toLocaleString()}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      of ${outlet.creditLimit.toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mb-4">
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="text-gray-600">Credit Usage</span>
+                    <span className="font-medium">
+                      {calculatePercentage(outlet.creditUsed, outlet.creditLimit)}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-red-100 rounded-full h-2.5">
+                    <div
+                      className="bg-red-600 h-2.5 rounded-full"
+                      style={{ width: `${calculatePercentage(outlet.creditUsed, outlet.creditLimit)}%` }}
+                    ></div>
+                  </div>
+                </div>
+
+                {outlet.blockedReason && (
+                  <div className="mb-4 p-3 bg-red-100 rounded-lg">
+                    <p className="text-sm text-red-800">
+                      <span className="font-medium">Reason: </span>
+                      {outlet.blockedReason}
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex space-x-3">
+                  <button
+                    onClick={() => handleProcessPayment(outlet)}
+                    className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition font-medium"
+                  >
+                    Receive Payment
+                  </button>
+                  <button
+                    onClick={() => handleUnblockOutlet(outlet.id)}
+                    className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition font-medium flex items-center justify-center space-x-2"
+                  >
+                    <FaUnlock />
+                    <span>Unblock Outlet</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Warning Outlets Section */}
+      {warningOutlets.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="flex items-center space-x-2 mb-6">
+            <div className="w-2 h-6 bg-yellow-600 rounded"></div>
+            <h3 className="text-lg font-bold text-gray-800">Warning Outlets ({warningOutlets.length})</h3>
+          </div>
+          
+          <div className="space-y-4">
+            {warningOutlets.map((outlet) => (
+              <div key={outlet.id} className="border border-yellow-200 rounded-lg p-4 bg-yellow-50">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center space-x-3">
+                    <h3 className="font-semibold text-gray-800">{outlet.name}</h3>
+                    <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium">
+                      Near Limit
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-lg font-bold text-yellow-700">
+                      ${outlet.creditUsed.toLocaleString()}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      of ${outlet.creditLimit.toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mb-4">
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="text-gray-600">Credit Usage</span>
+                    <span className="font-medium">
+                      {calculatePercentage(outlet.creditUsed, outlet.creditLimit)}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-yellow-100 rounded-full h-2.5">
+                    <div
+                      className="bg-yellow-500 h-2.5 rounded-full"
+                      style={{ width: `${calculatePercentage(outlet.creditUsed, outlet.creditLimit)}%` }}
+                    ></div>
+                  </div>
+                </div>
+
+                <div className="flex space-x-3">
+                  <button
+                    onClick={() => handleProcessPayment(outlet)}
+                    className="flex-1 bg-yellow-600 text-white py-2 px-4 rounded-lg hover:bg-yellow-700 transition font-medium"
+                  >
+                    Request Payment
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (window.confirm(`Are you sure you want to block "${outlet.name}"? This will prevent any new credit invoices.`)) {
+                        const updatedOutlets = outlets.map(o => {
+                          if (o.id === outlet.id) {
+                            return {
+                              ...o,
+                              status: 'Blocked',
+                              blockedAt: new Date().toISOString(),
+                              blockedReason: 'Preventive block due to near credit limit'
+                            };
+                          }
+                          return o;
+                        });
+                        storage.saveOutlets(updatedOutlets);
+                        loadOutlets();
+                      }
+                    }}
+                    className="flex-1 bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition font-medium flex items-center justify-center space-x-2"
+                  >
+                    <FaLock />
+                    <span>Preventive Block</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Payment Modal */}
+      {showPaymentModal && selectedOutlet && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-bold text-gray-800 mb-4">
+              Receive Payment - {selectedOutlet.name}
+            </h3>
+            
+            <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <div className="text-gray-500">Current Due</div>
+                  <div className="font-bold text-lg">${selectedOutlet.creditUsed.toLocaleString()}</div>
+                </div>
+                <div>
+                  <div className="text-gray-500">Credit Limit</div>
+                  <div className="font-bold text-lg">${selectedOutlet.creditLimit.toLocaleString()}</div>
+                </div>
+              </div>
+              <div className="mt-3 pt-3 border-t border-gray-200">
+                <div className="text-gray-500">Status</div>
+                <div className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
+                  selectedOutlet.status === 'Blocked' 
+                    ? 'bg-red-100 text-red-800' 
+                    : 'bg-green-100 text-green-800'
+                }`}>
+                  {selectedOutlet.status}
+                </div>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Payment Amount ($)
+              </label>
+              <input
+                type="number"
+                value={paymentAmount}
+                onChange={(e) => setPaymentAmount(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Enter payment amount"
+                min="0"
+                max={selectedOutlet.creditUsed}
+                step="0.01"
+              />
+              {paymentAmount && (
+                <div className="mt-2 p-3 bg-blue-50 rounded-lg">
+                  <p className="text-sm text-gray-700">
+                    <span className="font-medium">After payment:</span><br />
+                    New due: ${(selectedOutlet.creditUsed - parseFloat(paymentAmount || 0)).toLocaleString()}<br />
+                    Available credit: ${(selectedOutlet.creditLimit - (selectedOutlet.creditUsed - parseFloat(paymentAmount || 0))).toLocaleString()}
+                  </p>
+                  {selectedOutlet.status === 'Blocked' && 
+                   (selectedOutlet.creditUsed - parseFloat(paymentAmount || 0)) < selectedOutlet.creditLimit && (
+                    <p className="text-sm text-green-700 font-medium mt-2">
+                      ✅ This outlet will be automatically unblocked!
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="flex space-x-3">
+              <button
+                onClick={() => {
+                  setShowPaymentModal(false);
+                  setSelectedOutlet(null);
+                }}
+                className="flex-1 py-2 px-4 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handlePaymentSubmit}
+                className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition font-medium"
+              >
+                Process Payment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Create Outlet Modal (same as before)
 const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
   const [formData, setFormData] = useState({
     name: '',
@@ -333,9 +660,11 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
   );
 };
 
-// View Details Modal
+// View Details Modal (updated with credit control)
 const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
   const [activeTab, setActiveTab] = useState('orders');
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
 
   if (!isOpen || !outlet) return null;
 
@@ -354,9 +683,80 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
     onUpdate();
   };
 
-  const handleAddPayment = () => {
-    const amount = 1000;
-    storage.addPayment(outlet.id, { amount });
+  const handleProcessPayment = () => {
+    if (!paymentAmount || isNaN(paymentAmount) || parseFloat(paymentAmount) <= 0) {
+      alert('Please enter a valid payment amount');
+      return;
+    }
+
+    const paymentAmt = parseFloat(paymentAmount);
+    storage.addPayment(outlet.id, { amount: paymentAmt });
+    
+    // Check if outlet should be unblocked
+    const outlets = storage.getOutlets();
+    const updatedOutlets = outlets.map(o => {
+      if (o.id === outlet.id) {
+        const newCreditUsed = Math.max(0, outlet.creditUsed - paymentAmt);
+        const shouldUnblock = outlet.status === 'Blocked' && newCreditUsed < outlet.creditLimit;
+        
+        return {
+          ...o,
+          creditUsed: newCreditUsed,
+          status: shouldUnblock ? 'Active' : outlet.status,
+          blockedAt: shouldUnblock ? null : outlet.blockedAt,
+          blockedReason: shouldUnblock ? null : outlet.blockedReason
+        };
+      }
+      return o;
+    });
+    
+    storage.saveOutlets(updatedOutlets);
+    
+    // Show success message
+    if (outlet.status === 'Blocked' && paymentAmt > outlet.creditUsed - outlet.creditLimit) {
+      alert(`✅ Outlet "${outlet.name}" has been automatically unblocked!`);
+    } else {
+      alert(`✅ Payment of $${paymentAmt} processed successfully`);
+    }
+    
+    setPaymentAmount('');
+    setShowPaymentForm(false);
+    onUpdate();
+  };
+
+  const handleBlockOutlet = () => {
+    if (window.confirm(`Are you sure you want to block "${outlet.name}"? This will prevent any new credit invoices.`)) {
+      const outlets = storage.getOutlets();
+      const updatedOutlets = outlets.map(o => {
+        if (o.id === outlet.id) {
+          return {
+            ...o,
+            status: 'Blocked',
+            blockedAt: new Date().toISOString(),
+            blockedReason: 'Manual block by admin'
+          };
+        }
+        return o;
+      });
+      storage.saveOutlets(updatedOutlets);
+      onUpdate();
+    }
+  };
+
+  const handleUnblockOutlet = () => {
+    const outlets = storage.getOutlets();
+    const updatedOutlets = outlets.map(o => {
+      if (o.id === outlet.id) {
+        return {
+          ...o,
+          status: 'Active',
+          blockedAt: null,
+          blockedReason: null
+        };
+      }
+      return o;
+    });
+    storage.saveOutlets(updatedOutlets);
     onUpdate();
   };
 
@@ -372,6 +772,54 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
             >
               <FaTimes className="text-xl" />
             </button>
+          </div>
+
+          {/* Credit Status Banner */}
+          <div className={`mb-6 p-4 rounded-lg border ${
+            outlet.status === 'Blocked' 
+              ? 'bg-red-50 border-red-200' 
+              : calculatePercentage(outlet.creditUsed, outlet.creditLimit) >= 80
+              ? 'bg-yellow-50 border-yellow-200'
+              : 'bg-blue-50 border-blue-200'
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                {outlet.status === 'Blocked' ? (
+                  <FaLock className="text-red-600 text-xl" />
+                ) : calculatePercentage(outlet.creditUsed, outlet.creditLimit) >= 80 ? (
+                  <FaExclamationTriangle className="text-yellow-600 text-xl" />
+                ) : (
+                  <FaCreditCard className="text-blue-600 text-xl" />
+                )}
+                <div>
+                  <h3 className="font-semibold">
+                    {outlet.status === 'Blocked' ? 'BLOCKED' : 
+                     calculatePercentage(outlet.creditUsed, outlet.creditLimit) >= 80 ? 'NEAR LIMIT' : 'ACTIVE'}
+                  </h3>
+                  <p className="text-sm">
+                    Credit: ${outlet.creditUsed.toLocaleString()} / ${outlet.creditLimit.toLocaleString()} 
+                    ({calculatePercentage(outlet.creditUsed, outlet.creditLimit)}%)
+                  </p>
+                </div>
+              </div>
+              {outlet.status === 'Blocked' ? (
+                <button
+                  onClick={handleUnblockOutlet}
+                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                >
+                  <FaUnlock className="inline-block mr-2" />
+                  Unblock Outlet
+                </button>
+              ) : (
+                <button
+                  onClick={handleBlockOutlet}
+                  className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
+                >
+                  <FaLock className="inline-block mr-2" />
+                  Block Outlet
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Basic Info */}
@@ -434,6 +882,43 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
               </div>
             </div>
           </div>
+
+          {/* Payment Form */}
+          {showPaymentForm && (
+            <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <h3 className="font-semibold text-gray-700 mb-3">Receive Payment</h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Payment Amount ($)
+                  </label>
+                  <input
+                    type="number"
+                    value={paymentAmount}
+                    onChange={(e) => setPaymentAmount(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                    placeholder="Enter amount"
+                    min="0"
+                    max={outlet.creditUsed}
+                  />
+                </div>
+                <div className="flex space-x-3">
+                  <button
+                    onClick={handleProcessPayment}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                  >
+                    Process Payment
+                  </button>
+                  <button
+                    onClick={() => setShowPaymentForm(false)}
+                    className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Credit Information */}
           <div className="mb-8">
@@ -600,18 +1085,18 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
           {/* Action Buttons */}
           <div className="flex space-x-3">
             <button
+              onClick={() => setShowPaymentForm(true)}
+              className="flex-1 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition font-medium flex items-center justify-center space-x-2"
+            >
+              <FaDollarSign />
+              <span>Receive Payment</span>
+            </button>
+            <button
               onClick={handleAddOrder}
               className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition font-medium flex items-center justify-center space-x-2"
             >
               <FaPlus />
               <span>Add Test Order</span>
-            </button>
-            <button
-              onClick={handleAddPayment}
-              className="flex-1 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition font-medium flex items-center justify-center space-x-2"
-            >
-              <FaDollarSign />
-              <span>Add Payment</span>
             </button>
             <button
               onClick={onClose}
@@ -633,6 +1118,7 @@ const OutletManagement = ({ onLogout }) => {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [currentOutlet, setCurrentOutlet] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState('outlets'); // 'outlets' or 'credit-dues'
 
   useEffect(() => {
     loadOutlets();
@@ -718,194 +1204,238 @@ const OutletManagement = ({ onLogout }) => {
             </div>
           </div>
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <FaShoppingCart className="text-blue-600 text-xl" />
-                </div>
-                <div>
-                  <p className="text-gray-600 text-sm">Total Outlets</p>
-                  <p className="text-2xl font-bold">{outlets.length}</p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                  <FaCheckCircle className="text-green-600 text-xl" />
-                </div>
-                <div>
-                  <p className="text-gray-600 text-sm">Active Outlets</p>
-                  <p className="text-2xl font-bold">{outlets.filter(o => o.status === 'Active').length}</p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                  <FaDollarSign className="text-purple-600 text-xl" />
-                </div>
-                <div>
-                  <p className="text-gray-600 text-sm">Total Credit Limit</p>
-                  <p className="text-2xl font-bold">${outlets.reduce((sum, outlet) => sum + outlet.creditLimit, 0).toLocaleString()}</p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                  <FaDollarSign className="text-orange-600 text-xl" />
-                </div>
-                <div>
-                  <p className="text-gray-600 text-sm">Credit Used</p>
-                  <p className="text-2xl font-bold">${outlets.reduce((sum, outlet) => sum + outlet.creditUsed, 0).toLocaleString()}</p>
-                </div>
-              </div>
+          {/* Tabs */}
+          <div className="mb-6">
+            <div className="border-b border-gray-200">
+              <nav className="flex space-x-8">
+                <button
+                  onClick={() => setActiveTab('outlets')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'outlets'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  All Outlets
+                </button>
+                <button
+                  onClick={() => setActiveTab('credit-dues')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'credit-dues'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Credit Dues Control
+                </button>
+              </nav>
             </div>
           </div>
 
-          {/* Search and Refresh */}
-          <div className="mb-6 flex items-center justify-between">
-            <div className="relative w-64">
-              <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search outlets"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-            <button 
-              onClick={loadOutlets}
-              className="flex items-center space-x-2 text-gray-700 hover:text-gray-900"
-            >
-              <FaHistory />
-              <span>Refresh</span>
-            </button>
-          </div>
-
-          {/* All Outlets Section */}
-          <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">All Outlets</h3>
-            
-            {filteredOutlets.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <FaShoppingCart className="text-gray-400 text-3xl" />
-                </div>
-                <h3 className="text-xl font-semibold text-gray-800 mb-2">No outlets found</h3>
-                <p className="text-gray-600 mb-6">
-                  {searchTerm ? 'Try a different search term' : 'Create your first outlet to get started'}
-                </p>
-                {!searchTerm && (
-                  <button 
-                    onClick={handleCreateOutlet}
-                    className="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition font-medium flex items-center space-x-2 mx-auto"
-                  >
-                    <FaPlus />
-                    <span>Create First Outlet</span>
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {filteredOutlets.map((outlet) => (
-                  <div key={outlet.id} className="bg-gray-50 rounded-lg border border-gray-200 p-6">
-                    <div className="flex items-start justify-between mb-6">
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-800 mb-2">{outlet.name}</h3>
-                        <div className="flex items-center space-x-2 text-gray-600">
-                          <FaPhone />
-                          <span>{outlet.phone}</span>
-                        </div>
-                      </div>
-                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                        outlet.type === 'Official' 
-                          ? 'bg-blue-100 text-blue-800' 
-                          : 'bg-orange-100 text-orange-800'
-                      }`}>
-                        {outlet.type}
-                      </span>
+          {/* Content based on active tab */}
+          {activeTab === 'outlets' ? (
+            <>
+              {/* Stats Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                      <FaShoppingCart className="text-blue-600 text-xl" />
                     </div>
-
-                    {/* Credit Usage */}
-                    <div className="mb-6">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm text-gray-600">Credit Usage</span>
-                        <span className="font-medium">
-                          ${outlet.creditUsed?.toLocaleString()} / ${outlet.creditLimit?.toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className={`h-2 rounded-full ${
-                            calculatePercentage(outlet.creditUsed, outlet.creditLimit) > 80 
-                              ? 'bg-red-600' 
-                              : calculatePercentage(outlet.creditUsed, outlet.creditLimit) > 50 
-                              ? 'bg-yellow-500' 
-                              : 'bg-green-600'
-                          }`}
-                          style={{ width: `${calculatePercentage(outlet.creditUsed, outlet.creditLimit)}%` }}
-                        ></div>
-                      </div>
-                      <div className="text-right text-sm text-gray-500 mt-1">
-                        {calculatePercentage(outlet.creditUsed, outlet.creditLimit)}% used
-                      </div>
-                    </div>
-
-                    {/* Order Information */}
-                    <div className="grid grid-cols-2 gap-4 mb-6">
-                      <div>
-                        <div className="flex items-center space-x-2 text-gray-600 mb-1">
-                          <FaCalendarAlt />
-                          <span className="text-sm">Last Order</span>
-                        </div>
-                        <p className="font-medium">{outlet.lastOrder}</p>
-                      </div>
-                      <div>
-                        <div className="flex items-center space-x-2 text-gray-600 mb-1">
-                          <FaShoppingCart />
-                          <span className="text-sm">Total Orders</span>
-                        </div>
-                        <p className="font-medium">{outlet.totalOrders}</p>
-                      </div>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="flex space-x-3">
-                      <button 
-                        onClick={() => handleViewDetails(outlet)}
-                        className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition flex items-center justify-center space-x-2"
-                      >
-                        <FaEye />
-                        <span>View Details</span>
-                      </button>
-                      <button 
-                        onClick={() => handleEditOutlet(outlet)}
-                        className="flex-1 bg-gray-100 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-200 transition flex items-center justify-center space-x-2"
-                      >
-                        <FaEdit />
-                        <span>Edit</span>
-                      </button>
-                      <button 
-                        onClick={() => handleDeleteOutlet(outlet)}
-                        className="flex-1 bg-red-100 text-red-700 py-2 px-4 rounded-lg hover:bg-red-200 transition flex items-center justify-center space-x-2"
-                      >
-                        <FaTrash />
-                        <span>Delete</span>
-                      </button>
+                    <div>
+                      <p className="text-gray-600 text-sm">Total Outlets</p>
+                      <p className="text-2xl font-bold">{outlets.length}</p>
                     </div>
                   </div>
-                ))}
+                </div>
+                
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                      <FaCheckCircle className="text-green-600 text-xl" />
+                    </div>
+                    <div>
+                      <p className="text-gray-600 text-sm">Active Outlets</p>
+                      <p className="text-2xl font-bold">{outlets.filter(o => o.status === 'Active').length}</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                      <FaDollarSign className="text-purple-600 text-xl" />
+                    </div>
+                    <div>
+                      <p className="text-gray-600 text-sm">Total Credit Limit</p>
+                      <p className="text-2xl font-bold">${outlets.reduce((sum, outlet) => sum + outlet.creditLimit, 0).toLocaleString()}</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                      <FaDollarSign className="text-orange-600 text-xl" />
+                    </div>
+                    <div>
+                      <p className="text-gray-600 text-sm">Credit Used</p>
+                      <p className="text-2xl font-bold">${outlets.reduce((sum, outlet) => sum + outlet.creditUsed, 0).toLocaleString()}</p>
+                    </div>
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
+
+              {/* Search and Refresh */}
+              <div className="mb-6 flex items-center justify-between">
+                <div className="relative w-64">
+                  <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search outlets"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <button 
+                  onClick={loadOutlets}
+                  className="flex items-center space-x-2 text-gray-700 hover:text-gray-900"
+                >
+                  <FaHistory />
+                  <span>Refresh</span>
+                </button>
+              </div>
+
+              {/* All Outlets Section */}
+              <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">All Outlets</h3>
+                
+                {filteredOutlets.length === 0 ? (
+                  <div className="text-center py-12">
+                    <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <FaShoppingCart className="text-gray-400 text-3xl" />
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-800 mb-2">No outlets found</h3>
+                    <p className="text-gray-600 mb-6">
+                      {searchTerm ? 'Try a different search term' : 'Create your first outlet to get started'}
+                    </p>
+                    {!searchTerm && (
+                      <button 
+                        onClick={handleCreateOutlet}
+                        className="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition font-medium flex items-center space-x-2 mx-auto"
+                      >
+                        <FaPlus />
+                        <span>Create First Outlet</span>
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {filteredOutlets.map((outlet) => (
+                      <div key={outlet.id} className="bg-gray-50 rounded-lg border border-gray-200 p-6">
+                        <div className="flex items-start justify-between mb-6">
+                          <div>
+                            <h3 className="text-xl font-bold text-gray-800 mb-2">{outlet.name}</h3>
+                            <div className="flex items-center space-x-2 text-gray-600">
+                              <FaPhone />
+                              <span>{outlet.phone}</span>
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-end space-y-2">
+                            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                              outlet.type === 'Official' 
+                                ? 'bg-blue-100 text-blue-800' 
+                                : 'bg-orange-100 text-orange-800'
+                            }`}>
+                              {outlet.type}
+                            </span>
+                            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                              outlet.status === 'Active' 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-red-100 text-red-800'
+                            }`}>
+                              {outlet.status}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Credit Usage */}
+                        <div className="mb-6">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-sm text-gray-600">Credit Usage</span>
+                            <span className="font-medium">
+                              ${outlet.creditUsed?.toLocaleString()} / ${outlet.creditLimit?.toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div
+                              className={`h-2 rounded-full ${
+                                calculatePercentage(outlet.creditUsed, outlet.creditLimit) > 80 
+                                  ? 'bg-red-600' 
+                                  : calculatePercentage(outlet.creditUsed, outlet.creditLimit) > 50 
+                                  ? 'bg-yellow-500' 
+                                  : 'bg-green-600'
+                              }`}
+                              style={{ width: `${calculatePercentage(outlet.creditUsed, outlet.creditLimit)}%` }}
+                            ></div>
+                          </div>
+                          <div className="text-right text-sm text-gray-500 mt-1">
+                            {calculatePercentage(outlet.creditUsed, outlet.creditLimit)}% used
+                          </div>
+                        </div>
+
+                        {/* Order Information */}
+                        <div className="grid grid-cols-2 gap-4 mb-6">
+                          <div>
+                            <div className="flex items-center space-x-2 text-gray-600 mb-1">
+                              <FaCalendarAlt />
+                              <span className="text-sm">Last Order</span>
+                            </div>
+                            <p className="font-medium">{outlet.lastOrder}</p>
+                          </div>
+                          <div>
+                            <div className="flex items-center space-x-2 text-gray-600 mb-1">
+                              <FaShoppingCart />
+                              <span className="text-sm">Total Orders</span>
+                            </div>
+                            <p className="font-medium">{outlet.totalOrders}</p>
+                          </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex space-x-3">
+                          <button 
+                            onClick={() => handleViewDetails(outlet)}
+                            className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition flex items-center justify-center space-x-2"
+                          >
+                            <FaEye />
+                            <span>View Details</span>
+                          </button>
+                          <button 
+                            onClick={() => handleEditOutlet(outlet)}
+                            className="flex-1 bg-gray-100 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-200 transition flex items-center justify-center space-x-2"
+                          >
+                            <FaEdit />
+                            <span>Edit</span>
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteOutlet(outlet)}
+                            className="flex-1 bg-red-100 text-red-700 py-2 px-4 rounded-lg hover:bg-red-200 transition flex items-center justify-center space-x-2"
+                          >
+                            <FaTrash />
+                            <span>Delete</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <CreditDuesControl />
+          )}
         </main>
       </div>
 

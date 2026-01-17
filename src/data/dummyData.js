@@ -1,15 +1,15 @@
 export const initialStores = [
   {
     id: 1,
-    name: "Downtown Store",
-    address: "123 Main Street, New York, NY 10001",
+    name: "Visakhapatnam Store",
+    address: "123 Beach Road, Visakhapatnam, AP 530001",
     status: "Active",
-    manager: "John Smith",
-    phone: "+1 (555) 123-4567",
+    manager: "Rajesh Kumar",
+    phone: "+91 9876543210",
     totalProducts: 245,
-    totalValue: "$125K",
+    totalValue: "₹125K",
     capacity: "5000 sq ft",
-    stockValue: "$45,200",
+    stockValue: "₹45,200",
     totalItems: 1245,
     infrastructure: [
       { name: "Storage Room A", capacity: "1000 sq ft", items: 245 },
@@ -28,28 +28,28 @@ export const initialStores = [
   },
   {
     id: 2,
-    name: "Westside Outlet",
-    address: "456 West Avenue, Los Angeles, CA 90001",
+    name: "Vijayawada Outlet",
+    address: "456 Prakasam Road, Vijayawada, AP 520001",
     status: "Active",
-    manager: "Sarah Johnson",
-    phone: "+1 (555) 234-5678",
+    manager: "Priya Sharma",
+    phone: "+91 8765432109",
     totalProducts: 198,
-    totalValue: "$98K",
+    totalValue: "₹98K",
     capacity: "3500 sq ft",
-    stockValue: "$38,500",
+    stockValue: "₹38,500",
     totalItems: 987
   },
   {
     id: 3,
-    name: "Central Plaza",
-    address: "789 Central Road, Chicago, IL 60601",
+    name: "Guntur Plaza",
+    address: "789 Market Street, Guntur, AP 522001",
     status: "Active",
-    manager: "Mike Davis",
-    phone: "+1 (555) 345-6789",
+    manager: "Suresh Reddy",
+    phone: "+91 7654321098",
     totalProducts: 312,
-    totalValue: "$156K",
+    totalValue: "₹156K",
     capacity: "6000 sq ft",
-    stockValue: "$58,900",
+    stockValue: "₹58,900",
     totalItems: 1543
   }
 ];
@@ -57,9 +57,9 @@ export const initialStores = [
 export const initialOutlets = [
   {
     id: 1,
-    name: "Downtown Store",
+    name: "Visakhapatnam Store",
     type: "Official",
-    phone: "+1 (555) 123-4567",
+    phone: "+91 9876543210",
     creditUsed: 12500,
     creditLimit: 15000,
     lastOrder: "2024-01-15",
@@ -69,9 +69,9 @@ export const initialOutlets = [
   },
   {
     id: 2,
-    name: "Westside Outlet",
+    name: "Vijayawada Outlet",
     type: "Official",
-    phone: "+1 (555) 234-5678",
+    phone: "+91 8765432109",
     creditUsed: 8200,
     creditLimit: 10000,
     lastOrder: "2024-01-14",
@@ -84,22 +84,22 @@ export const initialOutlets = [
 export const pendingApprovals = [
   {
     id: "INV-2024-001",
-    store: "Downtown Store",
-    manager: "John Smith",
+    store: "Visakhapatnam Store",
+    manager: "Rajesh Kumar",
     items: 15,
     date: "2024-01-15"
   },
   {
     id: "INV-2024-002",
-    store: "Westside Outlet",
-    manager: "Sarah Johnson",
+    store: "Vijayawada Outlet",
+    manager: "Priya Sharma",
     items: 12,
     date: "2024-01-15"
   },
   {
     id: "INV-2024-003",
-    store: "Central Plaza",
-    manager: "Mike Davis",
+    store: "Guntur Plaza",
+    manager: "Suresh Reddy",
     items: 20,
     date: "2024-01-14"
   }
@@ -108,21 +108,21 @@ export const pendingApprovals = [
 export const creditDues = [
   {
     id: 1,
-    store: "Downtown Store",
+    store: "Visakhapatnam Store",
     dueDate: "2024-01-20",
     creditUsed: 12500,
     creditLimit: 15000
   },
   {
     id: 2,
-    store: "Westside Outlet",
+    store: "Vijayawada Outlet",
     dueDate: "2024-01-18",
     creditUsed: 8200,
     creditLimit: 10000
   },
   {
     id: 3,
-    store: "Central Plaza",
+    store: "Guntur Plaza",
     dueDate: "2024-01-15",
     creditUsed: 15000,
     creditLimit: 15000
@@ -133,7 +133,7 @@ export const stockAlerts = [
   {
     id: 1,
     name: "Premium Coffee Beans",
-    store: "Downtown Store",
+    store: "Visakhapatnam Store",
     sku: "PCB-001",
     current: 45,
     min: 100
@@ -141,7 +141,7 @@ export const stockAlerts = [
   {
     id: 2,
     name: "Organic Tea Leaves",
-    store: "Westside Outlet",
+    store: "Vijayawada Outlet",
     sku: "OTL-002",
     current: 78,
     min: 150
@@ -149,7 +149,7 @@ export const stockAlerts = [
   {
     id: 3,
     name: "Chocolate Bars",
-    store: "Central Plaza",
+    store: "Guntur Plaza",
     sku: "CHB-003",
     current: 120,
     min: 200
@@ -165,13 +165,13 @@ export const recentActivities = [
   },
   {
     id: 2,
-    action: "Stock distributed to Downtown Store",
+    action: "Stock distributed to Visakhapatnam Store",
     user: "Admin",
     time: "15 minutes ago"
   },
   {
     id: 3,
-    action: "New manager created: Emily Brown",
+    action: "New manager created: Kavitha Naidu",
     user: "Admin",
     time: "1 hour ago"
   }

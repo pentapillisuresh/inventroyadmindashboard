@@ -8,7 +8,7 @@ body {
 }
 
 .sidebar-link.active {
-  background-color: #3b82f6;
+  background-color: green;
   color: white;
 }
 
@@ -28,4 +28,52 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #555;
+}
+
+/* Ensure sidebar doesn't get hidden by other elements */
+.z-10 {
+  z-index: 10;
+}
+
+/* Make sure sticky positioning works */
+.sticky {
+  position: sticky;
+}
+
+/* Ensure button is properly clickable */
+button {
+  cursor: pointer;
+}
+
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.hide-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* Or add these classes to the sidebar nav */
+.sidebar-nav {
+  overflow-y: auto;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE 10+ */
+}
+
+.sidebar-nav::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera*/
+}
+
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
