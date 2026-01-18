@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
-import { FaArrowLeft, FaStore, FaUser, FaMapMarkerAlt, FaCubes, FaExclamationCircle } from 'react-icons/fa';
+import { FaArrowLeft, FaStore, FaMapMarkerAlt, FaCubes, FaExclamationCircle } from 'react-icons/fa';
 import { storage } from '../data/storage';
 
 const CreateStore = ({ onLogout }) => {
@@ -14,11 +14,9 @@ const CreateStore = ({ onLogout }) => {
     state: '',
     zipCode: '',
     capacity: '',
-    managerId: '',
     phone: '',
     email: ''
   });
-  const [managers, setManagers] = useState([]);
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [stats, setStats] = useState({
@@ -28,17 +26,14 @@ const CreateStore = ({ onLogout }) => {
   });
 
   useEffect(() => {
-    // Load managers from localStorage
-    const loadedManagers = storage.getManagers();
-    setManagers(loadedManagers.filter(manager => manager.status === 'Active'));
-    
     // Load statistics
     const stores = storage.getStores();
+    const managers = storage.getManagers();
     const totalItems = stores.reduce((sum, store) => sum + (store.totalItems || 0), 0);
     
     setStats({
       totalStores: stores.length,
-      activeManagers: loadedManagers.filter(m => m.status === 'Active').length,
+      activeManagers: managers.filter(m => m.status === 'Active').length,
       totalItems: totalItems
     });
   }, []);
@@ -66,9 +61,8 @@ const CreateStore = ({ onLogout }) => {
     
     if (!formData.zipCode.trim()) {
       newErrors.zipCode = 'ZIP code is required';
-    } else if (!/^\d{5}(-\d{4})?$/.test(formData.zipCode)) {
-      newErrors.zipCode = 'Invalid ZIP code format';
     }
+    // Removed strict ZIP code validation to accept any format
     
     if (!formData.capacity.trim()) {
       newErrors.capacity = 'Capacity is required';
@@ -107,10 +101,17 @@ const CreateStore = ({ onLogout }) => {
         state: formData.state,
         zipCode: formData.zipCode,
         capacity: formData.capacity,
-        managerId: formData.managerId || null,
         phone: formData.phone || '',
         email: formData.email || '',
-        createdAt: new Date().toISOString()
+        status: 'Active',
+        totalProducts: 0,
+        totalValue: '$0',
+        totalItems: 0,
+        infrastructure: [],
+        racks: [],
+        freezers: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       };
       
       // Add store to localStorage
@@ -129,13 +130,13 @@ const CreateStore = ({ onLogout }) => {
       
       // Show success message
       setTimeout(() => {
-        alert(`Store "${formData.name}" created successfully!`);
+        alert(`✅ Store "${formData.name}" created successfully!`);
         navigate('/stores');
       }, 500);
       
     } catch (error) {
       console.error('Error creating store:', error);
-      alert('An error occurred while creating the store. Please try again.');
+      alert('❌ An error occurred while creating the store. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -182,7 +183,7 @@ const CreateStore = ({ onLogout }) => {
       <Sidebar onLogout={onLogout} />
       
       <div className="flex-1">
-        <Header title="Store Management" />
+        <Header title="Create Store" />
         
         <main className="p-6">
           <div className="mb-6">
@@ -287,7 +288,7 @@ const CreateStore = ({ onLogout }) => {
                             className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition ${
                               errors.zipCode ? 'border-red-500' : 'border-gray-300'
                             }`}
-                            placeholder="ZIP Code"
+                            placeholder="ZIP Code (any format)"
                           />
                           {errors.zipCode && (
                             <p className="mt-1 text-sm text-red-600">{errors.zipCode}</p>
@@ -358,31 +359,8 @@ const CreateStore = ({ onLogout }) => {
                       {errors.capacity && (
                         <p className="mt-1 text-sm text-red-600">{errors.capacity}</p>
                       )}
-                    </div>
-
-                    {/* Assign Manager */}
-                    <div>
-                      <div className="flex items-center mb-2">
-                        <FaUser className="text-gray-400 mr-2" />
-                        <label className="block text-sm font-medium text-gray-700">
-                          Assign Manager (Optional)
-                        </label>
-                      </div>
-                      <select
-                        name="managerId"
-                        value={formData.managerId}
-                        onChange={handleChange}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-                      >
-                        <option value="">Select a manager</option>
-                        {managers.map((manager) => (
-                          <option key={manager.id} value={manager.id}>
-                            {manager.name} - {manager.storeName || 'Unassigned'}
-                          </option>
-                        ))}
-                      </select>
                       <p className="mt-1 text-sm text-gray-500">
-                        Only active managers without current store assignment are shown
+                        You can specify area (sq ft) or storage capacity (units)
                       </p>
                     </div>
 
@@ -450,8 +428,12 @@ const CreateStore = ({ onLogout }) => {
                         <p className="text-sm text-gray-600 truncate">{store.address}</p>
                         <div className="flex justify-between items-center mt-2">
                           <span className="text-xs text-gray-500">Capacity: {store.capacity || 'N/A'}</span>
-                          <span className="text-xs px-2 py-1 bg-green-100 text-green-800 rounded-full">
-                            Active
+                          <span className={`text-xs px-2 py-1 rounded-full ${
+                            store.status === 'Active' ? 'bg-green-100 text-green-800' :
+                            store.status === 'Inactive' ? 'bg-red-100 text-red-800' :
+                            'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {store.status}
                           </span>
                         </div>
                       </div>
@@ -472,12 +454,16 @@ const CreateStore = ({ onLogout }) => {
                       Include complete address for accurate deliveries
                     </li>
                     <li className="flex items-start">
-                      <span className="inline-block w-2 h-2 bg-yellow-400 rounded-full mt=1 mr-2"></span>
-                      Assign managers to streamline operations
+                      <span className="inline-block w-2 h-2 bg-yellow-400 rounded-full mt-1 mr-2"></span>
+                      Enter any ZIP code format - it will be accepted
                     </li>
                     <li className="flex items-start">
-                      <span className="inline-block w-2 h-2 bg-yellow-400 rounded-full mt=1 mr-2"></span>
+                      <span className="inline-block w-2 h-2 bg-yellow-400 rounded-full mt-1 mr-2"></span>
                       Regular capacity updates help in inventory planning
+                    </li>
+                    <li className="flex items-start">
+                      <span className="inline-block w-2 h-2 bg-yellow-400 rounded-full mt-1 mr-2"></span>
+                      You can assign managers later in store management
                     </li>
                   </ul>
                 </div>
