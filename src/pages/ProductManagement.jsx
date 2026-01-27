@@ -4,7 +4,7 @@ import Sidebar from './Sidebar';
 import Header from './Header';
 import { FaPlus, FaEdit, FaTrash, FaSearch, FaFilter } from 'react-icons/fa';
 import { storage } from '../data/storage';
-import AddProductModal from '../pages/AddProductModal';
+import AddProductModal from '../components/AddProductModal';
 
 const ProductManagement = ({ onLogout }) => {
   const navigate = useNavigate();

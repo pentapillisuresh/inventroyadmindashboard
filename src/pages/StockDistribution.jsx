@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
-import AddDistributionModal from '../pages/AddDistributionModal';
+import AddDistributionModal from '../components/AddDistributionModal';
 import { 
   FaPlus, 
   FaSearch, 

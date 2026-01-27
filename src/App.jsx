@@ -1,18 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { storage } from './data/storage';
-import AdminLogin from './components/AdminLogin';
-import Dashboard from './components/Dashboard';
-import StoreManagement from './components/StoreManagement';
-import StoreDetails from './components/StoreDetails';
-import OutletManagement from './components/OutletManagement';
-import ManagerManagement from './components/ManagerManagement';
-import CreateStore from './components/CreateStore';
-import ProductManagement from './components/ProductManagement';
-import StockDistribution from './components/StockDistribution';
-import InvoiceManagement from './components/InvoiceManagement';
-import Expenditures from './components/Expenditures';
-import ReportsAnalytics from './components/ReportsAnalytics';
+import AdminLogin from './pages/AdminLogin';
+import Dashboard from './pages/Dashboard';
+import StoreManagement from './pages/StoreManagement';
+import StoreDetails from './pages/StoreDetails';
+import OutletManagement from './pages/OutletManagement';
+import ManagerManagement from './pages/ManagerManagement';
+import CreateStore from './pages/CreateStore';
+import ProductManagement from './pages/ProductManagement';
+import StockDistribution from './pages/StockDistribution';
+import InvoiceManagement from './pages/InvoiceManagement';
+import Expenditures from './pages/Expenditures';
+import ReportsAnalytics from './pages/ReportsAnalytics';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
