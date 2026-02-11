@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { FaSearch, FaFilter, FaEye, FaCheckCircle, FaTimesCircle, FaFileInvoice, FaExclamationTriangle } from 'react-icons/fa';
-import { storage } from '../data/storage';
+import ApiService from '../components/ApiService';
 
 const InvoiceManagement = ({ onLogout }) => {
   const navigate = useNavigate();
@@ -12,14 +12,17 @@ const InvoiceManagement = ({ onLogout }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [selectedInvoice, setSelectedInvoice] = useState(null);
-  const [outletCreditStatus, setOutletCreditStatus] = useState(null);
+  const [storeCreditStatus, setStoreCreditStatus] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     total: 0,
-    pending: 0,
-    approved: 0,
-    rejected: 0,
+    outlet_sale: 0,
+    credit: 0,
+    paid: 0,
     totalValue: 0
   });
+
+  const clientToken = localStorage.getItem('token');
 
   useEffect(() => {
     loadInvoices();
@@ -27,157 +30,255 @@ const InvoiceManagement = ({ onLogout }) => {
 
   useEffect(() => {
     if (id) {
-      const invoice = storage.getInvoiceById(id);
+      const invoice = invoices.find(inv => inv.id.toString() === id);
       setSelectedInvoice(invoice);
-      if (invoice && invoice.outletName) {
-        checkOutletCredit(invoice.outletName, invoice.totalAmount);
+      if (invoice && invoice.type === 'credit' && invoice.Store) {
+        checkStoreCredit(invoice.Store, invoice.totalAmount);
       }
     }
-  }, [id]);
+  }, [id, invoices]);
 
-  const loadInvoices = () => {
-    const allInvoices = storage.getInvoices();
-    setInvoices(allInvoices);
-    
-    // Calculate statistics
-    const total = allInvoices.length;
-    const pending = allInvoices.filter(i => i.status === 'Pending').length;
-    const approved = allInvoices.filter(i => i.status === 'Approved').length;
-    const rejected = allInvoices.filter(i => i.status === 'Rejected').length;
-    const totalValue = allInvoices.reduce((sum, invoice) => sum + invoice.totalAmount, 0);
-    
-    setStats({ total, pending, approved, rejected, totalValue });
+  const loadInvoices = async () => {
+    try {
+      setLoading(true);
+      const response = await ApiService.get('/invoice/allNonDistributed/Invoices/admin', {
+        headers: {
+          Authorization: `Bearer ${clientToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (response.invoices) {
+        const transformedInvoices = response.invoices.map(invoice => {
+          // Calculate total items from invoice items
+          const totalItems = invoice.items.reduce((sum, item) => sum + item.quantity, 0);
+          
+          // Map status
+          const mapStatus = (status) => {
+            switch (status) {
+              case 'pending': return 'pending';
+              case 'completed': return 'completed';
+              case 'cancelled': return 'cancelled';
+              default: return status;
+            }
+          };
+
+          // Map payment method to display text
+          const mapPaymentMethod = (method) => {
+            switch (method) {
+              case 'paid': return 'Paid';
+              case 'credit': return 'Credit';
+              case 'mixed': return 'Mixed';
+              default: return method.charAt(0).toUpperCase() + method.slice(1);
+            }
+          };
+
+          return {
+            id: invoice.invoiceNumber,
+            invoiceId: invoice.id,
+            outletName: invoice.Outlet?.name || 'N/A',
+            storeName: invoice.Store?.name || 'N/A',
+            storeId: invoice.storeId,
+            managerName: invoice.StoreManager?.name || invoice.Admin?.name || 'Unassigned',
+            date: new Date(invoice.invoiceDate).toLocaleDateString(),
+            totalAmount: parseFloat(invoice.totalAmount),
+            creditAmount: parseFloat(invoice.creditAmount),
+            paidAmount: parseFloat(invoice.paidAmount),
+            paymentMethod: invoice.paymentMethod,
+            paymentType: mapPaymentMethod(invoice.paymentMethod),
+            type: invoice.type,
+            status: mapStatus(invoice.status),
+            createdAt: invoice.createdAt,
+            totalItems: totalItems,
+            products: invoice.items.map(item => ({
+              productId: item.productId,
+              productName: item.Product?.name || 'Unknown Product',
+              sku: item.Product?.sku || 'N/A',
+              quantity: item.quantity,
+              price: parseFloat(item.price),
+              total: parseFloat(item.totalPrice)
+            })),
+            // Store details for credit checking
+            Store: invoice.Store,
+            Admin: invoice.Admin,
+            items: invoice.items
+          };
+        });
+
+        setInvoices(transformedInvoices);
+        
+        // Calculate statistics
+        const total = transformedInvoices.length;
+        const outlet_sale = transformedInvoices.filter(i => i.type === 'outlet_sale').length;
+        const credit = transformedInvoices.filter(i => i.type === 'credit').length;
+        const paid = transformedInvoices.filter(i => i.type === 'paid' || i.type === 'distribution').length;
+        const totalValue = transformedInvoices.reduce((sum, invoice) => sum + invoice.totalAmount, 0);
+        
+        setStats({ total, outlet_sale, credit, paid, totalValue });
+      }
+    } catch (error) {
+      console.error('Error loading invoices:', error);
+      alert('Failed to load invoices. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const checkOutletCredit = (outletName, invoiceAmount) => {
-    const outlets = storage.getOutlets();
-    const outlet = outlets.find(o => o.name === outletName);
-    
-    if (!outlet) {
-      setOutletCreditStatus(null);
+  const checkStoreCredit = (store, invoiceAmount) => {
+    if (!store) {
+      setStoreCreditStatus(null);
       return;
     }
 
-    const newCreditUsed = outlet.creditUsed + invoiceAmount;
-    const percentage = Math.round((newCreditUsed / outlet.creditLimit) * 100);
-    const isBlocked = newCreditUsed >= outlet.creditLimit;
+    const currentCredit = parseFloat(store.currentCredit) || 0;
+    const creditLimit = parseFloat(store.creditLimit) || 0;
+    
+    // For credit invoices, check if store has enough credit
+    const newCreditUsed = currentCredit + invoiceAmount;
+    const percentage = Math.round((newCreditUsed / creditLimit) * 100);
+    const isBlocked = newCreditUsed >= creditLimit;
     const isNearLimit = percentage >= 80 && percentage < 100;
     
-    setOutletCreditStatus({
-      outlet,
+    setStoreCreditStatus({
+      store,
+      currentCredit,
       newCreditUsed,
       percentage,
       isBlocked,
       isNearLimit,
-      availableCredit: outlet.creditLimit - outlet.creditUsed
+      availableCredit: creditLimit - currentCredit
     });
   };
 
   const handleViewDetails = (invoice) => {
     setSelectedInvoice(invoice);
-    if (invoice.outletName) {
-      checkOutletCredit(invoice.outletName, invoice.totalAmount);
+    if (invoice.type === 'credit' && invoice.Store) {
+      checkStoreCredit(invoice.Store, invoice.totalAmount);
     }
   };
 
   const handleCloseDetails = () => {
     setSelectedInvoice(null);
-    setOutletCreditStatus(null);
+    setStoreCreditStatus(null);
     if (id) {
       navigate('/invoices');
     }
   };
 
-  const handleApproveInvoice = (invoiceId) => {
-    const invoice = storage.getInvoiceById(invoiceId);
-    
-    // Check if this is a credit invoice
-    if (invoice.paymentType === 'Credit') {
-      const outlets = storage.getOutlets();
-      const outlet = outlets.find(o => o.name === invoice.outletName);
+  const handleApproveInvoice = async (invoiceId) => {
+    try {
+      // Find the original invoice to get the database ID
+      const invoice = invoices.find(inv => inv.id === invoiceId);
       
-      if (outlet) {
-        // Calculate new credit used
-        const newCreditUsed = outlet.creditUsed + invoice.totalAmount;
-        const percentage = Math.round((newCreditUsed / outlet.creditLimit) * 100);
-        
-        // Check if exceeds credit limit
-        if (percentage >= 100) {
-          // Auto-block outlet
-          const updatedOutlets = outlets.map(o => {
-            if (o.id === outlet.id) {
-              return {
-                ...o,
-                status: 'Blocked',
-                blockedAt: new Date().toISOString(),
-                blockedReason: 'Credit limit exceeded after invoice approval',
-                creditUsed: newCreditUsed
-              };
-            }
-            return o;
-          });
+      if (!invoice) {
+        alert('Invoice not found');
+        return;
+      }
+
+      // Check if this is a credit invoice
+      if (invoice.type === 'credit' || invoice.paymentMethod === 'credit') {
+        if (invoice.Store) {
+          // Calculate new credit used
+          const currentCredit = parseFloat(invoice.Store.currentCredit) || 0;
+          const creditLimit = parseFloat(invoice.Store.creditLimit) || 0;
+          const newCreditUsed = currentCredit + invoice.totalAmount;
+          const percentage = Math.round((newCreditUsed / creditLimit) * 100);
           
-          storage.saveOutlets(updatedOutlets);
-          
-          // Add to credit history
-          if (!outlet.creditHistory) outlet.creditHistory = [];
-          outlet.creditHistory.unshift({
-            date: new Date().toISOString().split('T')[0],
-            type: 'Invoice',
-            invoiceId: invoiceId,
-            amount: invoice.totalAmount,
-            balance: outlet.creditLimit - newCreditUsed
-          });
-          
-          // Show alert
-          alert(`⚠️ Outlet "${outlet.name}" has been automatically blocked due to exceeding credit limit (${percentage}%)`);
-        } else {
-          // Update credit used
-          const updatedOutlets = outlets.map(o => {
-            if (o.id === outlet.id) {
-              return {
-                ...o,
-                creditUsed: newCreditUsed
-              };
-            }
-            return o;
-          });
-          
-          storage.saveOutlets(updatedOutlets);
+          // Check if exceeds credit limit
+          if (percentage >= 100) {
+            alert(`⚠️ Store "${invoice.storeName}" credit limit would be exceeded (${percentage}%) if this invoice is approved.`);
+            return;
+          }
           
           if (percentage >= 80) {
-            alert(`⚠️ Warning: Outlet "${outlet.name}" credit usage is at ${percentage}% (near limit)`);
+            const confirmProceed = window.confirm(
+              `⚠️ Warning: Store "${invoice.storeName}" credit usage would be at ${percentage}% (near limit). Do you want to proceed?`
+            );
+            if (!confirmProceed) return;
           }
         }
       }
-    }
-    
-    // Approve the invoice
-    storage.approveInvoice(invoiceId);
-    loadInvoices();
-    
-    if (selectedInvoice && selectedInvoice.id === invoiceId) {
-      const updatedInvoice = storage.getInvoiceById(invoiceId);
-      setSelectedInvoice(updatedInvoice);
-      if (updatedInvoice.outletName) {
-        checkOutletCredit(updatedInvoice.outletName, updatedInvoice.totalAmount);
+
+      // Update invoice status to 'completed'
+      const response = await ApiService.patch(
+        `/invoice/updateStatus/${invoice.invoiceId}`,
+        { status: 'completed' },
+        {
+          headers: {
+            Authorization: `Bearer ${clientToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (response) {
+        alert('Invoice approved successfully!');
+        loadInvoices(); // Reload invoices
+        
+        if (selectedInvoice && selectedInvoice.id === invoiceId) {
+          const updatedInvoice = { ...selectedInvoice, status: 'completed' };
+          setSelectedInvoice(updatedInvoice);
+        }
       }
+    } catch (error) {
+      console.error('Error approving invoice:', error);
+      alert('Failed to approve invoice. Please try again.');
     }
   };
 
-  const handleRejectInvoice = (invoiceId) => {
-    storage.rejectInvoice(invoiceId);
-    loadInvoices();
-    if (selectedInvoice && selectedInvoice.id === invoiceId) {
-      setSelectedInvoice(storage.getInvoiceById(invoiceId));
+  const handleRejectInvoice = async (invoiceId) => {
+    try {
+      // Find the original invoice to get the database ID
+      const invoice = invoices.find(inv => inv.id === invoiceId);
+      
+      if (!invoice) {
+        alert('Invoice not found');
+        return;
+      }
+
+      // Update invoice status to 'cancelled'
+      const response = await ApiService.patch(
+        `/invoice/updateStatus/${invoice.invoiceId}`,
+        { status: 'cancelled' },
+        {
+          headers: {
+            Authorization: `Bearer ${clientToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (response) {
+        alert('Invoice rejected successfully!');
+        loadInvoices(); // Reload invoices
+        
+        if (selectedInvoice && selectedInvoice.id === invoiceId) {
+          const updatedInvoice = { ...selectedInvoice, status: 'cancelled' };
+          setSelectedInvoice(updatedInvoice);
+        }
+      }
+    } catch (error) {
+      console.error('Error rejecting invoice:', error);
+      alert('Failed to reject invoice. Please try again.');
     }
   };
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'Approved': return 'bg-green-100 text-green-800';
-      case 'Pending': return 'bg-yellow-100 text-yellow-800';
-      case 'Rejected': return 'bg-red-100 text-red-800';
+      case 'completed': return 'bg-green-100 text-green-800';
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'cancelled': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getTypeColor = (type) => {
+    switch (type) {
+      case 'outlet_sale': return 'bg-purple-100 text-purple-800';
+      case 'credit': return 'bg-blue-100 text-blue-800';
+      case 'paid':
+      case 'distribution': 
+        return 'bg-green-100 text-green-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -186,15 +287,20 @@ const InvoiceManagement = ({ onLogout }) => {
     switch (paymentType) {
       case 'Paid': return 'bg-green-50 text-green-700 border border-green-200';
       case 'Credit': return 'bg-blue-50 text-blue-700 border border-blue-200';
+      case 'Mixed': return 'bg-purple-50 text-purple-700 border border-purple-200';
       default: return 'bg-gray-50 text-gray-700 border border-gray-200';
     }
   };
 
   const filteredInvoices = invoices.filter(invoice => {
-    const matchesSearch = invoice.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         invoice.outletName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         invoice.managerName.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = 
+      invoice.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      invoice.outletName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      invoice.storeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      invoice.managerName.toLowerCase().includes(searchTerm.toLowerCase());
+    
     const matchesStatus = statusFilter === 'All' || invoice.status === statusFilter;
+    
     return matchesSearch && matchesStatus;
   });
 
@@ -212,9 +318,16 @@ const InvoiceManagement = ({ onLogout }) => {
               <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto my-8">
                 <div className="p-6">
                   <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-2xl font-bold text-gray-900">
-                      Invoice Details - {selectedInvoice.id}
-                    </h2>
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-900">
+                        Invoice Details - {selectedInvoice.id}
+                      </h2>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Type: <span className={`px-2 py-1 text-xs font-medium rounded ${getTypeColor(selectedInvoice.type)}`}>
+                          {selectedInvoice.type}
+                        </span>
+                      </p>
+                    </div>
                     <button
                       onClick={handleCloseDetails}
                       className="text-gray-400 hover:text-gray-600 text-xl"
@@ -224,37 +337,37 @@ const InvoiceManagement = ({ onLogout }) => {
                   </div>
 
                   {/* Credit Warning for Credit Invoices */}
-                  {selectedInvoice.paymentType === 'Credit' && outletCreditStatus && (
+                  {selectedInvoice.type === 'credit' && storeCreditStatus && (
                     <div className={`mb-6 p-4 rounded-lg border ${
-                      outletCreditStatus.isBlocked 
+                      storeCreditStatus.isBlocked 
                         ? 'bg-red-50 border-red-200' 
-                        : outletCreditStatus.isNearLimit
+                        : storeCreditStatus.isNearLimit
                         ? 'bg-yellow-50 border-yellow-200'
                         : 'bg-blue-50 border-blue-200'
                     }`}>
                       <div className="flex items-start space-x-3">
                         <FaExclamationTriangle className={`text-lg mt-1 ${
-                          outletCreditStatus.isBlocked 
+                          storeCreditStatus.isBlocked 
                             ? 'text-red-600' 
-                            : outletCreditStatus.isNearLimit
+                            : storeCreditStatus.isNearLimit
                             ? 'text-yellow-600'
                             : 'text-blue-600'
                         }`} />
                         <div className="flex-1">
-                          <h4 className="font-semibold mb-1">Credit Status for {selectedInvoice.outletName}</h4>
-                          <div className="text-sm">
-                            <p>Current Credit Used: ${outletCreditStatus.outlet.creditUsed.toLocaleString()}</p>
+                          <h4 className="font-semibold mb-1">Credit Status for {selectedInvoice.storeName}</h4>
+                          <div className="text-sm space-y-1">
+                            <p>Current Credit Used: ${storeCreditStatus.currentCredit.toLocaleString()}</p>
                             <p>Invoice Amount: ${selectedInvoice.totalAmount.toLocaleString()}</p>
-                            <p>New Credit Used: ${outletCreditStatus.newCreditUsed.toLocaleString()} ({outletCreditStatus.percentage}% of limit)</p>
-                            <p>Credit Limit: ${outletCreditStatus.outlet.creditLimit.toLocaleString()}</p>
-                            {outletCreditStatus.isBlocked && (
+                            <p>New Credit Used: ${storeCreditStatus.newCreditUsed.toLocaleString()} ({storeCreditStatus.percentage}% of limit)</p>
+                            <p>Credit Limit: ${storeCreditStatus.store.creditLimit.toLocaleString()}</p>
+                            {storeCreditStatus.isBlocked && (
                               <p className="font-bold text-red-700 mt-2">
-                                ⚠️ This outlet will be automatically blocked if invoice is approved!
+                                ⚠️ This store's credit limit will be exceeded if invoice is approved!
                               </p>
                             )}
-                            {outletCreditStatus.isNearLimit && !outletCreditStatus.isBlocked && (
+                            {storeCreditStatus.isNearLimit && !storeCreditStatus.isBlocked && (
                               <p className="font-bold text-yellow-700 mt-2">
-                                ⚠️ This outlet is near credit limit ({outletCreditStatus.percentage}%)
+                                ⚠️ This store is near credit limit ({storeCreditStatus.percentage}%)
                               </p>
                             )}
                           </div>
@@ -266,16 +379,21 @@ const InvoiceManagement = ({ onLogout }) => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                     <div className="space-y-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-500 mb-1">Outlet</label>
-                        <p className="text-lg font-semibold text-gray-900">{selectedInvoice.outletName}</p>
+                        <label className="block text-sm font-medium text-gray-500 mb-1">Store</label>
+                        <p className="text-lg font-semibold text-gray-900">{selectedInvoice.storeName}</p>
+                        {selectedInvoice.outletName && selectedInvoice.outletName !== 'N/A' && (
+                          <p className="text-sm text-gray-600 mt-1">Outlet: {selectedInvoice.outletName}</p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-500 mb-1">Manager</label>
                         <p className="text-lg font-semibold text-gray-900">{selectedInvoice.managerName}</p>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-500 mb-1">Store</label>
-                        <p className="text-lg font-semibold text-gray-900">{selectedInvoice.storeName}</p>
+                        <label className="block text-sm font-medium text-gray-500 mb-1">Invoice Type</label>
+                        <span className={`px-3 py-1 text-sm font-medium rounded ${getTypeColor(selectedInvoice.type)}`}>
+                          {selectedInvoice.type}
+                        </span>
                       </div>
                     </div>
                     
@@ -289,6 +407,16 @@ const InvoiceManagement = ({ onLogout }) => {
                         <span className={`px-3 py-1 text-sm font-medium rounded ${getPaymentColor(selectedInvoice.paymentType)}`}>
                           {selectedInvoice.paymentType}
                         </span>
+                        {selectedInvoice.creditAmount > 0 && (
+                          <p className="text-sm text-blue-600 mt-1">
+                            Credit Amount: ${selectedInvoice.creditAmount.toFixed(2)}
+                          </p>
+                        )}
+                        {selectedInvoice.paidAmount > 0 && (
+                          <p className="text-sm text-green-600 mt-1">
+                            Paid Amount: ${selectedInvoice.paidAmount.toFixed(2)}
+                          </p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-500 mb-1">Status</label>
@@ -301,13 +429,14 @@ const InvoiceManagement = ({ onLogout }) => {
 
                   {/* Products Table */}
                   <div className="mb-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Products</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Products ({selectedInvoice.totalItems} items)</h3>
                     <div className="bg-gray-50 rounded-lg overflow-hidden">
                       <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-gray-200">
                           <thead className="bg-gray-100">
                             <tr>
                               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Product</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">SKU</th>
                               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Quantity</th>
                               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Price</th>
                               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Total</th>
@@ -317,6 +446,7 @@ const InvoiceManagement = ({ onLogout }) => {
                             {selectedInvoice.products.map((product, index) => (
                               <tr key={index}>
                                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{product.productName}</td>
+                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{product.sku}</td>
                                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{product.quantity}</td>
                                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${product.price.toFixed(2)}</td>
                                 <td className="px-4 py-3 whitespace-nowrap text-sm font-semibold text-gray-900">${product.total.toFixed(2)}</td>
@@ -325,7 +455,7 @@ const InvoiceManagement = ({ onLogout }) => {
                           </tbody>
                           <tfoot className="bg-gray-100">
                             <tr>
-                              <td colSpan="3" className="px-4 py-3 text-right text-sm font-medium text-gray-900 whitespace-nowrap">Total Amount:</td>
+                              <td colSpan="4" className="px-4 py-3 text-right text-sm font-medium text-gray-900 whitespace-nowrap">Total Amount:</td>
                               <td className="px-4 py-3 text-lg font-bold text-gray-900">${selectedInvoice.totalAmount.toFixed(2)}</td>
                             </tr>
                           </tfoot>
@@ -334,17 +464,9 @@ const InvoiceManagement = ({ onLogout }) => {
                     </div>
                   </div>
 
-                  {/* Notes */}
-                  {selectedInvoice.notes && (
-                    <div className="mb-6">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Notes</h3>
-                      <p className="text-gray-700 bg-gray-50 p-4 rounded-lg">{selectedInvoice.notes}</p>
-                    </div>
-                  )}
-
                   {/* Action Buttons */}
                   <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
-                    {selectedInvoice.status === 'Pending' && (
+                    {selectedInvoice.status === 'pending' && (
                       <>
                         <button
                           onClick={() => handleRejectInvoice(selectedInvoice.id)}
@@ -356,7 +478,7 @@ const InvoiceManagement = ({ onLogout }) => {
                         <button
                           onClick={() => handleApproveInvoice(selectedInvoice.id)}
                           className="flex items-center space-x-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 whitespace-nowrap"
-                          disabled={outletCreditStatus?.outlet?.status === 'Blocked' && selectedInvoice.paymentType === 'Credit'}
+                          disabled={storeCreditStatus?.isBlocked && selectedInvoice.type === 'credit'}
                         >
                           <FaCheckCircle />
                           <span>Approve Invoice</span>
@@ -389,23 +511,23 @@ const InvoiceManagement = ({ onLogout }) => {
                 <div className="text-2xl font-bold text-gray-800">{stats.total}</div>
               </div>
               <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
-                   onClick={() => setStatusFilter('Pending')}>
-                <div className="text-sm text-gray-500 mb-1">Pending</div>
-                <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
+                   onClick={() => setStatusFilter('outlet_sale')}>
+                <div className="text-sm text-gray-500 mb-1">Outlet Sales</div>
+                <div className="text-2xl font-bold text-purple-600">{stats.outlet_sale}</div>
               </div>
               <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
-                   onClick={() => setStatusFilter('Approved')}>
-                <div className="text-sm text-gray-500 mb-1">Approved</div>
-                <div className="text-2xl font-bold text-green-600">{stats.approved}</div>
+                   onClick={() => setStatusFilter('credit')}>
+                <div className="text-sm text-gray-500 mb-1">Credit</div>
+                <div className="text-2xl font-bold text-blue-600">{stats.credit}</div>
               </div>
               <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
-                   onClick={() => setStatusFilter('Rejected')}>
-                <div className="text-sm text-gray-500 mb-1">Rejected</div>
-                <div className="text-2xl font-bold text-red-600">{stats.rejected}</div>
+                   onClick={() => setStatusFilter('paid')}>
+                <div className="text-sm text-gray-500 mb-1">Paid/Distribution</div>
+                <div className="text-2xl font-bold text-green-600">{stats.paid}</div>
               </div>
               <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
                 <div className="text-sm text-gray-500 mb-1">Total Value</div>
-                <div className="text-2xl font-bold text-gray-800">${stats.totalValue.toFixed(2)}</div>
+                <div className="text-2xl font-bold text-gray-800">${stats.totalValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
               </div>
             </div>
             
@@ -417,7 +539,7 @@ const InvoiceManagement = ({ onLogout }) => {
                     <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                     <input
                       type="text"
-                      placeholder="Search invoices by ID, outlet, or manager..."
+                      placeholder="Search invoices by ID, store, outlet, or manager..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -431,93 +553,115 @@ const InvoiceManagement = ({ onLogout }) => {
                     onChange={(e) => setStatusFilter(e.target.value)}
                     className="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value="All">All (5)</option>
-                    <option value="Pending">Pending ({stats.pending})</option>
-                    <option value="Approved">Approved ({stats.approved})</option>
-                    <option value="Rejected">Rejected ({stats.rejected})</option>
+                    <option value="All">All Status</option>
+                    <option value="pending">Pending</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
                   </select>
                 </div>
               </div>
             </div>
             
             {/* Invoices Table */}
-            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">INVOICE ID</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">OUTLET</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">MANAGER</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">STORE</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">DATE</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">ITEMS</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">AMOUNT</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">PAYMENT</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">STATUS</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">ACTIONS</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredInvoices.map((invoice) => (
-                      <tr key={invoice.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4">
-                          <div className="font-medium text-gray-900">{invoice.id}</div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm font-medium text-gray-900">{invoice.outletName}</div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm text-gray-900">{invoice.managerName}</div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm text-gray-900">{invoice.storeName}</div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm text-gray-500">{invoice.date}</div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm text-gray-900">{invoice.totalItems} items</div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm font-semibold text-gray-900">${invoice.totalAmount.toFixed(2)}</div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`px-2 py-1 text-xs font-medium rounded ${getPaymentColor(invoice.paymentType)} whitespace-nowrap`}>
-                            {invoice.paymentType}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(invoice.status)} whitespace-nowrap`}>
-                            {invoice.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-sm font-medium">
-                          <button
-                            onClick={() => handleViewDetails(invoice)}
-                            className="text-blue-600 hover:text-blue-900 whitespace-nowrap"
-                          >
-                            <FaEye className="inline-block mr-1" />
-                            View Details
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                
-                {filteredInvoices.length === 0 && (
-                  <div className="text-center py-12">
-                    <div className="text-gray-400 mb-2">No invoices found</div>
-                    <div className="text-gray-500 text-sm">
-                      {searchTerm || statusFilter !== 'All' 
-                        ? 'Try adjusting your search or filters' 
-                        : 'No invoices available'}
-                    </div>
-                  </div>
-                )}
+            {loading ? (
+              <div className="text-center py-12">
+                <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
+                <p className="mt-4 text-gray-600">Loading invoices...</p>
               </div>
-            </div>
+            ) : (
+              <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">INVOICE NUMBER</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">STORE</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">OUTLET</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">MANAGER</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">DATE</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">ITEMS</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">AMOUNT</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">TYPE</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">PAYMENT</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">STATUS</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">ACTIONS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {filteredInvoices.map((invoice) => (
+                        <tr key={invoice.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4">
+                            <div className="font-medium text-gray-900">{invoice.id}</div>
+                            <div className="text-xs text-gray-500">
+                              {new Date(invoice.createdAt).toLocaleDateString()}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm font-medium text-gray-900">{invoice.storeName}</div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm text-gray-900">{invoice.outletName}</div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm text-gray-900">{invoice.managerName}</div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm text-gray-500">{invoice.date}</div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm text-gray-900">{invoice.totalItems} items</div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm font-semibold text-gray-900">${invoice.totalAmount.toFixed(2)}</div>
+                            {invoice.creditAmount > 0 && (
+                              <div className="text-xs text-blue-600">Credit: ${invoice.creditAmount.toFixed(2)}</div>
+                            )}
+                            {invoice.paidAmount > 0 && (
+                              <div className="text-xs text-green-600">Paid: ${invoice.paidAmount.toFixed(2)}</div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`px-2 py-1 text-xs font-medium rounded ${getTypeColor(invoice.type)} whitespace-nowrap`}>
+                              {invoice.type}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`px-2 py-1 text-xs font-medium rounded ${getPaymentColor(invoice.paymentType)} whitespace-nowrap`}>
+                              {invoice.paymentType}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(invoice.status)} whitespace-nowrap`}>
+                              {invoice.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-sm font-medium">
+                            <button
+                              onClick={() => handleViewDetails(invoice)}
+                              className="text-blue-600 hover:text-blue-900 whitespace-nowrap"
+                            >
+                              <FaEye className="inline-block mr-1" />
+                              View Details
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  
+                  {filteredInvoices.length === 0 && (
+                    <div className="text-center py-12">
+                      <div className="text-gray-400 mb-2">No invoices found</div>
+                      <div className="text-gray-500 text-sm">
+                        {searchTerm || statusFilter !== 'All' 
+                          ? 'Try adjusting your search or filters' 
+                          : 'No invoices available'}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

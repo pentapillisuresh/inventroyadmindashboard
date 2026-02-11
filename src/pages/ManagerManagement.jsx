@@ -1,150 +1,113 @@
 import React, { useState, useEffect } from 'react';
-import {
-  FaPhone,
-  FaEnvelope,
-  FaStore,
-  FaUserTie,
-  FaPlus,
-  FaEdit,
-  FaTrash,
-  FaRedo,
-  FaSearch,
-  FaCheckCircle,
-  FaTimesCircle,
-  FaEye,
-  FaUserCircle,
-  FaBell,
-  FaCog,
-  FaSignOutAlt,
-  FaTachometerAlt,
-  FaShoppingBag,
-  FaBox,
-  FaTruck,
-  FaFileInvoice,
-  FaMoneyBill,
-  FaChartBar
-} from 'react-icons/fa';
-import { NavLink } from 'react-router-dom';
+import {FaPhone,FaEnvelope,FaStore,FaUserTie,FaPlus,FaEdit,FaTrash,FaRedo,FaSearch,FaCheckCircle,FaTimesCircle,FaEye,FaUserCircle,FaBell,FaCog,FaSignOutAlt,FaTachometerAlt,FaShoppingBag,FaBox,FaTruck,FaFileInvoice,FaMoneyBill,FaChartBar, FaLock} from 'react-icons/fa';
+import Header from './Header';
 import { storage } from '../data/storage';
 import Sidebar from './Sidebar';
-
-
-
-// Header Component
-const Header = ({ title }) => {
-  const currentDate = new Date().toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
-
-  return (
-    <header className="bg-white border-b border-gray-200 px-6 py-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">{title}</h1>
-          <p className="text-sm text-gray-600">{currentDate}</p>
-        </div>
-        
-        <div className="flex items-center space-x-4">
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Type here to search..."
-              className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-64"
-            />
-            <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-          </div>
-          
-          <button className="p-2 hover:bg-gray-100 rounded-lg relative">
-            <FaBell className="text-gray-600 text-lg" />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-          </button>
-          
-          <button className="p-2 hover:bg-gray-100 rounded-lg">
-            <FaCog className="text-gray-600 text-lg" />
-          </button>
-          
-          <div className="flex items-center space-x-3">
-            <FaUserCircle className="text-gray-600 text-2xl" />
-            <div>
-              <p className="text-sm font-medium">Admin User</p>
-              <p className="text-xs text-gray-500">Administrator</p>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      {/* Bottom Bar */}
-      <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
-        <div className="flex items-center space-x-6">
-          <span>ENG</span>
-          <span>23°C</span>
-        </div>
-        <div className="flex items-center space-x-4">
-          <span>21:32</span>
-          <span>14-01-2026</span>
-        </div>
-      </div>
-    </header>
-  );
-};
+import ApiService from '../components/ApiService';
 
 // Create Manager Modal
-const CreateManagerModal = ({ isOpen, onClose, manager, onSubmit }) => {
+const CreateManagerModal = ({ isOpen, onClose, manager, onSubmit, stores }) => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    phone: '',
+    phoneNumber: '',
     storeId: '',
-    credentialMethod: 'auto-generate',
-    deliveryMethod: 'email'
+    password: '',
+    permissions: {
+      create_store: false,
+      create_invoices: false,
+      expenditure_management: false,
+      create_outlets: false
+    },
+    expiryDate: ''
   });
 
-  const stores = storage.getStores();
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (manager) {
       setFormData({
         name: manager.name || '',
         email: manager.email || '',
-        phone: manager.phone || '',
+        phoneNumber: manager.phoneNumber || '',
         storeId: manager.storeId || '',
-        credentialMethod: manager.credentialMethod || 'auto-generate',
-        deliveryMethod: manager.deliveryMethod || 'email'
+        password: '',
+        permissions: manager.permissions || {
+          create_store: false,
+          create_invoices: false,
+          expenditure_management: false,
+          create_outlets: false
+        },
+        expiryDate: manager.expiryDate || ''
       });
     } else {
       setFormData({
         name: '',
         email: '',
-        phone: '',
+        phoneNumber: '',
         storeId: '',
-        credentialMethod: 'auto-generate',
-        deliveryMethod: 'email'
+        password: '',
+        permissions: {
+          create_store: false,
+          create_invoices: false,
+          expenditure_management: false,
+          create_outlets: false
+        },
+        expiryDate: ''
       });
     }
   }, [manager, isOpen]);
 
   const handleChange = (e) => {
-    const { name, value, type } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'radio' ? value : value
-    }));
+    const { name, value, type, checked } = e.target;
+    
+    if (name.startsWith('permissions.')) {
+      const permissionName = name.split('.')[1];
+      setFormData(prev => ({
+        ...prev,
+        permissions: {
+          ...prev.permissions,
+          [permissionName]: checked
+        }
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: type === 'checkbox' ? checked : value
+      }));
+    }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    onSubmit(formData);
-    onClose();
+    setLoading(true);
+    
+    // Prepare the data for API
+    const submitData = {
+      name: formData.name,
+      email: formData.email,
+      phoneNumber: formData.phoneNumber,
+      storeId: parseInt(formData.storeId),
+      password: formData.password,
+      permissions: formData.permissions,
+      expiryDate: formData.expiryDate || null
+    };
+    
+    try {
+      await onSubmit(submitData);
+      onClose();
+    } catch (error) {
+      console.error('Error submitting form:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl w-full max-w-sm">
+      <div className="bg-white rounded-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
         <div className="p-5">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-bold text-gray-800">
@@ -162,7 +125,7 @@ const CreateManagerModal = ({ isOpen, onClose, manager, onSubmit }) => {
             <div className="space-y-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Manager Name
+                  Manager Name *
                 </label>
                 <input
                   type="text"
@@ -195,17 +158,18 @@ const CreateManagerModal = ({ isOpen, onClose, manager, onSubmit }) => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Phone
+                  Phone *
                 </label>
                 <div className="relative">
                   <FaPhone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                   <input
                     type="tel"
-                    name="phone"
-                    value={formData.phone}
+                    name="phoneNumber"
+                    value={formData.phoneNumber}
                     onChange={handleChange}
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="+1 (555) 123-4567"
+                    required
                   />
                 </div>
               </div>
@@ -230,94 +194,82 @@ const CreateManagerModal = ({ isOpen, onClose, manager, onSubmit }) => {
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Credential Method *
-                </label>
-                <div className="space-y-2">
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      name="credentialMethod"
-                      value="auto-generate"
-                      checked={formData.credentialMethod === 'auto-generate'}
-                      onChange={handleChange}
-                      className="mr-2"
-                      required
-                    />
-                    Auto-generate Password
+              {!manager && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Password *
                   </label>
-                  <label className="flex items-center">
+                  <div className="relative">
+                    <FaLock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                     <input
-                      type="radio"
-                      name="credentialMethod"
-                      value="invite-link"
-                      checked={formData.credentialMethod === 'invite-link'}
+                      type="password"
+                      name="password"
+                      value={formData.password}
                       onChange={handleChange}
-                      className="mr-2"
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Enter password"
+                      required={!manager}
                     />
-                    Send Invite Link
-                  </label>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Delivery Method *
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Expiry Date (Optional)
                 </label>
-                <div className="space-y-2">
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      name="deliveryMethod"
-                      value="email"
-                      checked={formData.deliveryMethod === 'email'}
-                      onChange={handleChange}
-                      className="mr-2"
-                      required
-                    />
-                    Email
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      name="deliveryMethod"
-                      value="sms"
-                      checked={formData.deliveryMethod === 'sms'}
-                      onChange={handleChange}
-                      className="mr-2"
-                    />
-                    SMS
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      name="deliveryMethod"
-                      value="whatsapp"
-                      checked={formData.deliveryMethod === 'whatsapp'}
-                      onChange={handleChange}
-                      className="mr-2"
-                    />
-                    WhatsApp
-                  </label>
-                </div>
+                <input
+                  type="date"
+                  name="expiryDate"
+                  value={formData.expiryDate}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
               </div>
 
-              {/* What happens next section */}
-              {/* <div className="bg-blue-50 rounded-lg p-4 mt-4">
-                <h3 className="font-medium text-blue-800 mb-2">What happens next?</h3>
-                <ul className="text-sm text-blue-700 space-y-1">
-                  <li>• Manager account will be created</li>
-                  <li>• Credentials will be sent via selected method</li>
-                </ul>
-              </div> */}
+              {/* Permissions Section */}
+              <div className="pt-4">
+                <h3 className="text-lg font-medium text-gray-700 mb-3">Permissions</h3>
+                <div className="grid grid-cols-1 gap-2">
+                  {Object.keys(formData.permissions).map(permission => (
+                    <div key={permission} className="flex items-center">
+                      <input
+                        type="checkbox"
+                        id={`permission-${permission}`}
+                        name={`permissions.${permission}`}
+                        checked={formData.permissions[permission]}
+                        onChange={handleChange}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                      <label htmlFor={`permission-${permission}`} className="ml-2 text-sm text-gray-700">
+                        {permission.split('_').map(word => 
+                          word.charAt(0).toUpperCase() + word.slice(1)
+                        ).join(' ')}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
 
               <div className="pt-4">
                 <button
                   type="submit"
-                  className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition font-medium"
+                  disabled={loading}
+                  className={`w-full ${
+                    loading ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'
+                  } text-white py-3 rounded-lg transition font-medium flex items-center justify-center`}
                 >
-                  {manager ? 'Update Manager' : 'Create Manager'}
+                  {loading ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Processing...
+                    </>
+                  ) : (
+                    manager ? 'Update Manager' : 'Create Manager'
+                  )}
                 </button>
               </div>
             </div>
@@ -331,17 +283,102 @@ const CreateManagerModal = ({ isOpen, onClose, manager, onSubmit }) => {
 // Main ManagerManagement Component
 const ManagerManagement = ({ onLogout }) => {
   const [managers, setManagers] = useState([]);
+  const [stores, setStores] = useState([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [currentManager, setCurrentManager] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-
+  const [loading, setLoading] = useState(true);
+  const clientToken = localStorage.getItem('token');
   useEffect(() => {
     loadManagers();
+    loadStores();
   }, []);
 
-  const loadManagers = () => {
-    const loadedManagers = storage.getManagers();
-    setManagers(loadedManagers);
+  const loadStores = async () => {
+      // You might need to fetch stores from an API here
+      try {      
+        const response = await ApiService.get('users/UnassignedStores', {
+          headers: {
+            Authorization: `Bearer ${clientToken}`,
+            'Content-Type': 'application/json',
+          }
+        });
+  
+        if (!response) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        if (response.success) {
+          // Transform API data to match UI format
+          const transformedStore = response.data.map(store => ({
+            id: store.id,
+            name: store.name,
+            email: store.email,
+            phone: store.phoneNumber,
+            phoneNumber: store.phoneNumber,
+            address: store.address,
+            status: store.isActive ? 'Active' : 'Inactive',
+            isActive: store.isActive
+          }));
+          setStores(transformedStore);
+        } else {
+          console.error('API returned unsuccessful:', result);
+          setStores([]);
+        }
+      } catch (error) {
+        console.error('Error loading managers:', error);
+        // Fallback to local storage if API fails
+      } finally {
+        setLoading(false);
+      }
+    };
+
+  const loadManagers = async () => {
+    setLoading(true);
+    try {      
+      const response = await ApiService.get('users/admin/all/store-managers', {
+        headers: {
+          Authorization: `Bearer ${clientToken}`,
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (!response) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      if (response.success) {
+        // Transform API data to match UI format
+        const transformedManagers = response.data.map(manager => ({
+          id: manager.id,
+          name: manager.name,
+          email: manager.email,
+          phone: manager.phoneNumber,
+          phoneNumber: manager.phoneNumber,
+          storeId: manager.storeId || '',
+          storeName: manager.storeName || 'No Store Assigned',
+          status: manager.isActive ? 'Active' : 'Inactive',
+          lastLogin: manager.lastLogin || 'Never',
+          invoices: manager.invoiceCount || 0,
+          permissions: manager.permissions,
+          expiryDate: manager.expiryDate,
+          isActive: manager.isActive,
+          createdBy: manager.createdBy
+        }));
+        
+        setManagers(transformedManagers);
+      } else {
+        console.error('API returned unsuccessful:', result);
+        setManagers([]);
+      }
+    } catch (error) {
+      console.error('Error loading managers:', error);
+      // Fallback to local storage if API fails
+      const loadedManagers = storage.getManagers();
+      setManagers(loadedManagers);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCreateManager = () => {
@@ -354,30 +391,92 @@ const ManagerManagement = ({ onLogout }) => {
     setShowCreateModal(true);
   };
 
-  const handleDeleteManager = (manager) => {
+  const handleDeleteManager = async (manager) => {
     if (window.confirm(`Are you sure you want to delete "${manager.name}"?`)) {
-      storage.deleteManager(manager.id);
-      loadManagers();
+      try {        
+        const response = await ApiService.delete(`/users/store-managers/${manager.id}`, {
+          headers: {
+            Authorization: `Bearer ${clientToken}`,
+            'Content-Type': 'application/json',
+          }
+          });
+
+        if (!response) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        if (response.success) {
+          alert(`Manager "${manager.name}" deleted successfully`);
+          loadManagers();
+        } else {
+          alert(`Failed to delete manager: ${response.message}`);
+        }
+      } catch (error) {
+        console.error('Error deleting manager:', error);
+        alert('Error deleting manager. Please try again.');
+      }
     }
   };
 
-  const handleResendCredentials = (manager) => {
-    if (window.confirm(`Resend credentials to ${manager.name}?`)) {
-      storage.resendCredentials(manager.id);
-      alert(`Credentials resent to ${manager.name}`);
-      loadManagers();
+  const handleResendCredentials = async (manager) => {
+    if (window.confirm(`Resend credentials to ${manager.email}?`)) {
+      try {        
+        const response = await ApiService.post(`/users/resend-credentials/${manager.id}`, {
+          headers: {
+            Authorization: `Bearer ${clientToken}`,
+            'Content-Type': 'application/json',
+          }
+        });
+
+        if (!response) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        if (response.success) {
+          alert(`Credentials resent to ${manager.email}`);
+        } else {
+          alert(`Failed to resend credentials: ${response.message}`);
+        }
+      } catch (error) {
+        console.error('Error resending credentials:', error);
+        alert('Error resending credentials. Please try again.');
+      }
     }
   };
 
-  const handleModalSubmit = (formData) => {
-    if (currentManager) {
-      storage.updateManager(currentManager.id, formData);
-    } else {
-      storage.addManager(formData);
+  const handleModalSubmit = async (formData) => {
+    try {
+      const url = currentManager
+        ? `/users/store-managers/${currentManager.id}`
+        : '/users/store-managers';
+  
+      const method = currentManager ? 'put' : 'post';
+  
+      const response = await ApiService[method](url, formData, {
+        headers: {
+          Authorization: `Bearer ${clientToken}`,
+          'Content-Type': 'application/json',
+        }
+      });
+  
+      if (!response) {
+        throw new Error('No response from server');
+      }
+  
+      if (response.success) {
+        alert(`Manager ${currentManager ? 'updated' : 'created'} successfully!`);
+        loadManagers();
+      } else {
+        throw new Error(response.message || 'Failed to save manager');
+      }
+  
+    } catch (error) {
+      console.error('Error saving manager:', error);
+      alert(`Error: ${error.message}`);
+      throw error;
     }
-    loadManagers();
   };
-
+  
   const filteredManagers = managers.filter(manager =>
     manager.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     manager.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -423,122 +522,129 @@ const ManagerManagement = ({ onLogout }) => {
             </div>
           </div>
 
-          {/* Managers Table */}
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      MANAGER
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      CONTACT
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      ASSIGNED STORE
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      STATUS
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      LAST LOGIN
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      INVOICES
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      ACTION
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {filteredManagers.length === 0 ? (
+          {/* Loading State */}
+          {loading ? (
+            <div className="flex justify-center items-center h-64">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+          ) : (
+            /* Managers Table */
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
                     <tr>
-                      <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
-                        No managers found
-                      </td>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        MANAGER
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        CONTACT
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        ASSIGNED STORE
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        STATUS
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        LAST LOGIN
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        INVOICES
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        ACTION
+                      </th>
                     </tr>
-                  ) : (
-                    filteredManagers.map((manager) => (
-                      <tr key={manager.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center">
-                            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
-                              <FaUserTie className="text-blue-600" />
-                            </div>
-                            <div>
-                              <div className="font-medium text-gray-900">{manager.name}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="space-y-1">
-                            <div className="flex items-center text-sm text-gray-600">
-                              <FaEnvelope className="mr-2 text-gray-400" />
-                              {manager.email}
-                            </div>
-                            <div className="flex items-center text-sm text-gray-600">
-                              <FaPhone className="mr-2 text-gray-400" />
-                              {manager.phone}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center">
-                            <FaStore className="mr-2 text-gray-400" />
-                            <span className="text-gray-900">{manager.storeName}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                            manager.status === 'Active'
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-gray-100 text-gray-800'
-                          }`}>
-                            {manager.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-900">
-                          {manager.lastLogin}
-                        </td>
-                        <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                          {manager.invoices}
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center space-x-2">
-                            <button
-                              onClick={() => handleEditManager(manager)}
-                              className="text-blue-600 hover:text-blue-900 text-sm font-medium flex items-center"
-                            >
-                              <FaEdit className="mr-1" />
-                              Edit
-                            </button>
-                            {manager.status === 'Not Logged In' && (
-                              <button
-                                onClick={() => handleResendCredentials(manager)}
-                                className="text-green-600 hover:text-green-900 text-sm font-medium flex items-center"
-                              >
-                                <FaRedo className="mr-1" />
-                                Resend
-                              </button>
-                            )}
-                            <button
-                              onClick={() => handleDeleteManager(manager)}
-                              className="text-red-600 hover:text-red-900 text-sm font-medium flex items-center"
-                            >
-                              <FaTrash className="mr-1" />
-                              Delete
-                            </button>
-                          </div>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {filteredManagers.length === 0 ? (
+                      <tr>
+                        <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
+                          No managers found
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                    ) : (
+                      filteredManagers.map((manager) => (
+                        <tr key={manager.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center">
+                              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+                                <FaUserTie className="text-blue-600" />
+                              </div>
+                              <div>
+                                <div className="font-medium text-gray-900">{manager.name}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="space-y-1">
+                              <div className="flex items-center text-sm text-gray-600">
+                                <FaEnvelope className="mr-2 text-gray-400" />
+                                {manager.email}
+                              </div>
+                              <div className="flex items-center text-sm text-gray-600">
+                                <FaPhone className="mr-2 text-gray-400" />
+                                {manager.phone || manager.phoneNumber}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center">
+                              <FaStore className="mr-2 text-gray-400" />
+                              <span className="text-gray-900">{manager.storeName}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                              manager.isActive
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-gray-100 text-gray-800'
+                            }`}>
+                              {manager.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-900">
+                            {manager.lastLogin}
+                          </td>
+                          <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                            {manager.invoices}
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center space-x-2">
+                              <button
+                                onClick={() => handleEditManager(manager)}
+                                className="text-blue-600 hover:text-blue-900 text-sm font-medium flex items-center"
+                              >
+                                <FaEdit className="mr-1" />
+                                Edit
+                              </button>
+                              {manager.status === 'Not Logged In' && (
+                                <button
+                                  onClick={() => handleResendCredentials(manager)}
+                                  className="text-green-600 hover:text-green-900 text-sm font-medium flex items-center"
+                                >
+                                  <FaRedo className="mr-1" />
+                                  Resend
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleDeleteManager(manager)}
+                                className="text-red-600 hover:text-red-900 text-sm font-medium flex items-center"
+                              >
+                                <FaTrash className="mr-1" />
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          )}
         </main>
       </div>
 
@@ -551,6 +657,7 @@ const ManagerManagement = ({ onLogout }) => {
         }}
         manager={currentManager}
         onSubmit={handleModalSubmit}
+        stores={stores}
       />
     </div>
   );

@@ -1,110 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import {
-  FaPhone,
-  FaShoppingCart,
-  FaCalendarAlt,
-  FaEye,
-  FaEdit,
-  FaTrash,
-  FaPlus,
-  FaDollarSign,
-  FaCheckCircle,
-  FaTimes,
-  FaSearch,
-  FaHistory,
-  FaTachometerAlt,
-  FaStore,
-  FaShoppingBag,
-  FaUserTie,
-  FaBox,
-  FaTruck,
-  FaFileInvoice,
-  FaMoneyBill,
-  FaChartBar,
-  FaSignOutAlt,
-  FaUserCircle,
-  FaBell,
-  FaCog,
-  FaCreditCard,
-  FaExclamationTriangle,
-  FaUnlock,
-  FaLock
-} from 'react-icons/fa';
-import { NavLink } from 'react-router-dom';
+import { FaPhone, FaShoppingCart, FaCalendarAlt, FaEye, FaEdit, FaTrash, FaPlus, FaDollarSign, FaCheckCircle, FaTimes, FaSearch, FaHistory, FaStore, FaExclamationTriangle, FaUnlock, FaLock, FaSpinner } from 'react-icons/fa';
+import Header from './Header';
 import { storage } from '../data/storage';
 import Sidebar from './Sidebar';
+import axios from 'axios';
+import ApiService from '../components/ApiService';
 
+const API_BASE_URL = 'http://localhost:5001/api';
+const clientToken = localStorage.getItem('token');
+// Add Test Order Modal Component (UPDATED WITH API)
 
-
-
-// Header Component
-const Header = ({ title }) => {
-  const currentDate = new Date().toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
-
-  return (
-    <header className="bg-white border-b border-gray-200 px-6 py-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">{title}</h1>
-          <p className="text-sm text-gray-600">{currentDate}</p>
-        </div>
-        
-        <div className="flex items-center space-x-4">
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Type here to search..."
-              className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-64"
-            />
-            <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-          </div>
-          
-          <button className="p-2 hover:bg-gray-100 rounded-lg relative">
-            <FaBell className="text-gray-600 text-lg" />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-          </button>
-          
-          <button className="p-2 hover:bg-gray-100 rounded-lg">
-            <FaCog className="text-gray-600 text-lg" />
-          </button>
-          
-          <div className="flex items-center space-x-3">
-            <FaUserCircle className="text-gray-600 text-2xl" />
-            <div>
-              <p className="text-sm font-medium">Admin User</p>
-              <p className="text-xs text-gray-500">Administrator</p>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      {/* Bottom Bar */}
-      <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
-        <div className="flex items-center space-x-6">
-          <span>ENG</span>
-          <span>26°C</span>
-        </div>
-        <div className="flex items-center space-x-4">
-          <span>{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-          <span>{new Date().toLocaleDateString('en-GB').split('/').join('-')}</span>
-        </div>
-      </div>
-    </header>
-  );
-};
-
-// Add Test Order Modal Component
 const AddTestOrderModal = ({ isOpen, onClose, outlet, onSubmit }) => {
   const [orderData, setOrderData] = useState({
     items: 1,
     amount: 100,
     status: 'Delivered'
   });
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -114,10 +26,35 @@ const AddTestOrderModal = ({ isOpen, onClose, outlet, onSubmit }) => {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    onSubmit(orderData);
-    onClose();
+    setLoading(true);
+    
+    try {
+      // API call to create invoice/order
+      const response = await ApiService.post(`/stores/${outlet.storeId}/invoices`, {
+        outletId: outlet.id,
+        totalAmount: orderData.amount,
+        items: Array(orderData.items).fill().map((_, i) => ({
+          productId: i + 1,
+          quantity: 1,
+          price: orderData.amount / orderData.items
+        }))
+      },{ 
+        headers: {
+        Authorization: `Bearer ${clientToken}`,
+        'Content-Type': 'application/json',
+      }});
+      
+      onSubmit(response);
+      alert(`✅ Test order added successfully!\n\nInvoice: ${response.data.invoice.invoiceNumber}\nAmount: $${orderData.amount}`);
+    } catch (error) {
+      console.error('Error adding test order:', error);
+      alert('❌ Failed to add test order. Please try again.');
+    } finally {
+      setLoading(false);
+      onClose();
+    }
   };
 
   if (!isOpen) return null;
@@ -133,6 +70,7 @@ const AddTestOrderModal = ({ isOpen, onClose, outlet, onSubmit }) => {
             <button 
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600"
+              disabled={loading}
             >
               <FaTimes className="text-xl" />
             </button>
@@ -153,6 +91,7 @@ const AddTestOrderModal = ({ isOpen, onClose, outlet, onSubmit }) => {
                   placeholder="Enter number of items"
                   required
                   min="1"
+                  disabled={loading}
                 />
               </div>
 
@@ -169,6 +108,7 @@ const AddTestOrderModal = ({ isOpen, onClose, outlet, onSubmit }) => {
                   placeholder="Enter order amount"
                   required
                   min="0"
+                  disabled={loading}
                 />
               </div>
 
@@ -181,6 +121,7 @@ const AddTestOrderModal = ({ isOpen, onClose, outlet, onSubmit }) => {
                   value={orderData.status}
                   onChange={handleChange}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  disabled={loading}
                 >
                   <option value="Delivered">Delivered</option>
                   <option value="Pending">Pending</option>
@@ -192,9 +133,17 @@ const AddTestOrderModal = ({ isOpen, onClose, outlet, onSubmit }) => {
               <div className="pt-4">
                 <button
                   type="submit"
-                  className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition font-medium"
+                  disabled={loading}
+                  className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition font-medium flex items-center justify-center"
                 >
-                  Add Test Order
+                  {loading ? (
+                    <>
+                      <FaSpinner className="animate-spin mr-2" />
+                      Processing...
+                    </>
+                  ) : (
+                    'Add Test Order'
+                  )}
                 </button>
               </div>
             </div>
@@ -205,38 +154,73 @@ const AddTestOrderModal = ({ isOpen, onClose, outlet, onSubmit }) => {
   );
 };
 
-// Create Outlet Modal (updated with store dropdown)
+// Create Outlet Modal (UPDATED WITH API)
 const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
   const [stores, setStores] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
-    type: 'Official',
-    phone: '',
-    creditLimit: 15000,
-    storeId: '' // Added storeId field
+    storeId: '',
+    address: '',
+    contactPerson: '',
+    phoneNumber: '',
+    creditLimit: 0
   });
 
+  // const createOutlets = async () => {
+  //   try {
+  //     const response = await ApiService.post(`/outlets`,{ 
+  //       headers: {
+  //       Authorization: `Bearer ${clientToken}`,
+  //       'Content-Type': 'application/json',
+  //     }});
+  //   } catch (error) {
+  //     console.error('Error loading stores:', error);
+  //     setStores([]);
+  //   }
+  // };
+
+  const loadStores = async () => {
+    try {
+      const storeResponse = await ApiService.get(`/stores`,{ 
+        headers: {
+        Authorization: `Bearer ${clientToken}`,
+        'Content-Type': 'application/json',
+      }});
+      console.log("rrr:",storeResponse.data)
+      setStores(storeResponse.data)
+    } catch (error) {
+      console.error('Error loading stores:', error);
+      setStores([]);
+    }
+  };
+
   useEffect(() => {
-    // Load stores from localStorage
-    const storesData = storage.getStores();
-    setStores(storesData);
-    
-    if (outlet) {
-      setFormData({
-        name: outlet.name || '',
-        type: outlet.type || 'Official',
-        phone: outlet.phone || '',
-        creditLimit: outlet.creditLimit || 15000,
-        storeId: outlet.storeId || ''
-      });
-    } else {
-      setFormData({
-        name: '',
-        type: 'Official',
-        phone: '',
-        creditLimit: 15000,
-        storeId: storesData.length > 0 ? storesData[0].id : ''
-      });
+    // Load stores from API
+
+    if (isOpen) {
+      loadStores();
+      
+      if (outlet) {
+        setFormData({
+          name: outlet.name || '',
+          storeId: outlet.storeId || '',
+          address: outlet.address || '',
+          contactPerson: outlet.contactPerson || '',
+          phoneNumber: outlet.phoneNumber || '',
+          creditLimit: outlet.creditLimit || 0,
+          currentCredit: outlet.currentCredit || 0
+        });
+      } else {
+        setFormData({
+          name: '',
+          storeId: '',
+          address: '',
+          contactPerson: '',
+          phoneNumber: '',
+          creditLimit: 300000
+        });
+      }
     }
   }, [outlet, isOpen]);
 
@@ -244,24 +228,44 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: name === 'creditLimit' || name === 'storeId' ? parseFloat(value) || 0 : value
+      [name]: name === 'creditLimit' || name === 'storeId' || name === 'currentCredit' 
+        ? parseFloat(value) || 0 
+        : value
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
     
-    // Find selected store name
-    const selectedStore = stores.find(store => store.id === parseInt(formData.storeId));
-    
-    // Prepare data with storeName
-    const submitData = {
-      ...formData,
-      storeName: selectedStore ? selectedStore.name : 'Unassigned'
-    };
-    
-    onSubmit(submitData);
-    onClose();
+    try {
+      // Prepare data for API
+      const submitData = {
+        name: formData.name,
+        storeId: parseInt(formData.storeId),
+        address: formData.address,
+        contactPerson: formData.contactPerson,
+        phoneNumber: formData.phoneNumber,
+        creditLimit: parseFloat(formData.creditLimit),
+        type: 'custom'
+      };
+      
+      if (outlet) {
+        // Edit existing outlet
+        submitData.currentCredit = parseFloat(formData.currentCredit) || 0;
+        await onSubmit(submitData);
+      } else {
+        // Create new outlet
+        await onSubmit(submitData);
+      }
+      
+      onClose();
+    } catch (error) {
+      console.error('Error submitting form:', error);
+      alert('❌ Failed to save outlet. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -277,6 +281,7 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
             <button 
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600"
+              disabled={loading}
             >
               <FaTimes className="text-xl" />
             </button>
@@ -296,37 +301,61 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Enter outlet name"
                   required
+                  disabled={loading}
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Outlet Type *
+                  Associated Store *
                 </label>
-                <div className="flex space-x-4">
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      name="type"
-                      value="Official"
-                      checked={formData.type === 'Official'}
-                      onChange={handleChange}
-                      className="mr-2"
-                    />
-                    Official
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      name="type"
-                      value="Dummy"
-                      checked={formData.type === 'Dummy'}
-                      onChange={handleChange}
-                      className="mr-2"
-                    />
-                    Dummy
-                  </label>
-                </div>
+                <select
+                  name="storeId"
+                  value={formData.storeId}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                  disabled={loading}
+                >
+                  <option value="">Select Store</option>
+                  {stores?.map(store => (
+                    <option key={store.id} value={store.id}>
+                      {store.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Address *
+                </label>
+                <textarea
+                  name="address"
+                  value={formData.address}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter outlet address"
+                  required
+                  rows="3"
+                  disabled={loading}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Contact Person *
+                </label>
+                <input
+                  type="text"
+                  name="contactPerson"
+                  value={formData.contactPerson}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter contact person name"
+                  required
+                  disabled={loading}
+                />
               </div>
 
               <div>
@@ -337,38 +366,20 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
                   <FaPhone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                   <input
                     type="tel"
-                    name="phone"
-                    value={formData.phone}
+                    name="phoneNumber"
+                    value={formData.phoneNumber}
                     onChange={handleChange}
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="+1 (555) 123-4567"
                     required
+                    disabled={loading}
                   />
                 </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Associated Store
-                </label>
-                <select
-                  name="storeId"
-                  value={formData.storeId}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="">Select Store</option>
-                  {stores.map(store => (
-                    <option key={store.id} value={store.id}>
-                      {store.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Credit Limit *
+                  Credit Limit ($) *
                 </label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-700">$</span>
@@ -378,10 +389,11 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
                     value={formData.creditLimit}
                     onChange={handleChange}
                     className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="15000"
+                    placeholder="300000"
                     required
                     min="0"
-                    max="1000000"
+                    step="0.01"
+                    disabled={loading}
                   />
                 </div>
                 <p className="mt-1 text-sm text-gray-500">
@@ -389,12 +401,42 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
                 </p>
               </div>
 
+              {outlet && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Current Credit ($)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-700">$</span>
+                    <input
+                      type="number"
+                      name="currentCredit"
+                      value={formData.currentCredit || 0}
+                      onChange={handleChange}
+                      className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="0"
+                      min="0"
+                      step="0.01"
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="pt-4">
                 <button
                   type="submit"
-                  className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition font-medium"
+                  disabled={loading}
+                  className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition font-medium flex items-center justify-center"
                 >
-                  {outlet ? 'Update Outlet' : 'Create Outlet'}
+                  {loading ? (
+                    <>
+                      <FaSpinner className="animate-spin mr-2" />
+                      {outlet ? 'Updating...' : 'Creating...'}
+                    </>
+                  ) : (
+                    outlet ? 'Update Outlet' : 'Create Outlet'
+                  )}
                 </button>
               </div>
             </div>
@@ -405,107 +447,220 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
   );
 };
 
-// View Details Modal (updated without Credit Dues Control section)
+// View Details Modal (UPDATED WITH API)
 const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
   const [activeTab, setActiveTab] = useState('orders');
   const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('paid');
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [showAddOrderModal, setShowAddOrderModal] = useState(false);
+  const [orders, setOrders] = useState([]);
+  const [invoices, setInvoices] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && outlet) {
+      loadOutletOrders();
+    }
+  }, [isOpen, outlet]);
+
+  const loadOutletOrders = async () => {
+    if (!outlet?.storeId || !outlet?.id) return;
+    
+    try {
+      const response = await ApiService.get(`/stores/${outlet.storeId}/outlets/${outlet.id}/orders`,{ 
+        headers: {
+        Authorization: `Bearer ${clientToken}`,
+        'Content-Type': 'application/json',
+      }});
+      
+      if (response.success) {
+        setOrders(response.outletsOrders || []);
+        setInvoices(response.outletsInvoice || []);
+      }
+    } catch (error) {
+      console.error('Error loading outlet orders:', error);
+      setOrders([]);
+      setInvoices([]);
+    }
+  };
 
   if (!isOpen || !outlet) return null;
 
   const calculatePercentage = (used, limit) => {
+    if (!limit) return 0;
     return Math.round((used / limit) * 100);
   };
 
-  const handleAddOrder = (orderData) => {
-    // Add test order
-    storage.addOutletOrder(outlet.id, {
-      ...orderData,
-      invoiceId: `INV-${String(Date.now()).slice(-6)}`
-    });
-    
-    // Show success message
-    alert(`✅ Test order added successfully!\n\nInvoice: ${`INV-${String(Date.now()).slice(-6)}`}\nItems: ${orderData.items}\nAmount: $${orderData.amount}\nStatus: ${orderData.status}`);
-    
-    onUpdate();
+  const handleAddOrder = async (orderData) => {
+    try {
+      await onUpdate();
+      loadOutletOrders();
+    } catch (error) {
+      console.error('Error after adding order:', error);
+    }
   };
 
-  const handleProcessPayment = () => {
+  const handleProcessPayment = async () => {
     if (!paymentAmount || isNaN(paymentAmount) || parseFloat(paymentAmount) <= 0) {
       alert('Please enter a valid payment amount');
       return;
     }
 
-    const paymentAmt = parseFloat(paymentAmount);
-    storage.addPayment(outlet.id, { amount: paymentAmt });
-    
-    // Check if outlet should be unblocked
-    const outlets = storage.getOutlets();
-    const updatedOutlets = outlets.map(o => {
-      if (o.id === outlet.id) {
-        const newCreditUsed = Math.max(0, outlet.creditUsed - paymentAmt);
-        const shouldUnblock = outlet.status === 'Blocked' && newCreditUsed < outlet.creditLimit;
-        
-        return {
-          ...o,
-          creditUsed: newCreditUsed,
-          status: shouldUnblock ? 'Active' : outlet.status,
-          blockedAt: shouldUnblock ? null : outlet.blockedAt,
-          blockedReason: shouldUnblock ? null : outlet.blockedReason
-        };
-      }
-      return o;
-    });
-    
-    storage.saveOutlets(updatedOutlets);
-    
-    // Show success message
-    if (outlet.status === 'Blocked' && paymentAmt > outlet.creditUsed - outlet.creditLimit) {
-      alert(`✅ Outlet "${outlet.name}" has been automatically unblocked!`);
-    } else {
-      alert(`✅ Payment of $${paymentAmt} processed successfully`);
+    if (!outlet?.storeId || !outlet?.id) {
+      alert('Invalid outlet information');
+      return;
     }
-    
-    setPaymentAmount('');
-    setShowPaymentForm(false);
-    onUpdate();
+
+    setLoading(true);
+    const paymentAmt = parseFloat(paymentAmount);
+
+    try {
+      // Call payment API
+      const response = await ApiService.post(`/stores/${outlet.storeId}/invoices/payment/${outlet.id}`,
+        {
+          paymentMethod: paymentMethod,
+          paidAmount: paymentAmt
+        },{ 
+          headers: {
+          Authorization: `Bearer ${clientToken}`,
+          'Content-Type': 'application/json',
+        }}
+      );
+
+      if (response.message) {
+        alert(`✅ ${response.message}\n\nInvoice: ${response.invoice?.invoiceNumber}\nAmount: $${paymentAmt}`);
+        
+        // Update outlet data
+        const newCredit = Math.max(0, (outlet.currentCredit || 0) - paymentAmt);
+        
+        // Check if outlet should be unblocked
+        const shouldUnblock = outlet.status === 'Blocked' && newCredit < outlet.creditLimit;
+        
+        if (shouldUnblock) {
+          // Update outlet status
+          const updateData = {
+            name: outlet.name,
+            storeId: outlet.storeId,
+            address: outlet.address,
+            contactPerson: outlet.contactPerson,
+            phoneNumber: outlet.phoneNumber,
+            creditLimit: outlet.creditLimit,
+            currentCredit: newCredit,
+            type: 'custom'
+          };
+          
+          try {
+            await ApiService.put(`/outlets/${outlet.id}`, updateData,{ 
+              headers: {
+              Authorization: `Bearer ${clientToken}`,
+              'Content-Type': 'application/json',
+            }});
+          } catch (updateError) {
+            console.error('Error updating outlet status:', updateError);
+          }
+        }
+        
+        setPaymentAmount('');
+        setShowPaymentForm(false);
+        await onUpdate();
+        loadOutletOrders();
+      }
+    } catch (error) {
+      console.error('Error processing payment:', error);
+      alert('❌ Failed to process payment. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleBlockOutlet = () => {
+  const handleBlockOutlet = async () => {
     if (window.confirm(`Are you sure you want to block "${outlet.name}"? This will prevent any new credit invoices.`)) {
+      setLoading(true);
+      try {
+        const updateData = {
+          name: outlet.name,
+          storeId: outlet.storeId,
+          address: outlet.address,
+          contactPerson: outlet.contactPerson,
+          phoneNumber: outlet.phoneNumber,
+          creditLimit: outlet.creditLimit,
+          currentCredit: outlet.currentCredit,
+          type: 'custom',
+          isActive:false
+        };
+        
+        await ApiService.put(`/outlets/${outlet.id}`, updateData,{ 
+          headers: {
+          Authorization: `Bearer ${clientToken}`,
+          'Content-Type': 'application/json',
+        }});
+        
+        // Update local storage for status
+        const outlets = storage.getOutlets();
+        const updatedOutlets = outlets.map(o => {
+          if (o.id === outlet.id) {
+            return {
+              ...o,
+              status: 'Blocked',
+              blockedAt: new Date().toISOString(),
+              blockedReason: 'Manual block by admin'
+            };
+          }
+          return o;
+        });
+        storage.saveOutlets(updatedOutlets);
+        
+        await onUpdate();
+      } catch (error) {
+        console.error('Error blocking outlet:', error);
+        alert('❌ Failed to block outlet. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  const handleUnblockOutlet = async () => {
+    setLoading(true);
+    try {
+      const updateData = {
+        name: outlet.name,
+        storeId: outlet.storeId,
+        address: outlet.address,
+        contactPerson: outlet.contactPerson,
+        phoneNumber: outlet.phoneNumber,
+        creditLimit: outlet.creditLimit,
+        currentCredit: outlet.currentCredit,
+        type: 'custom'
+      };
+      
+      await ApiService.put(`/outlets/${outlet.id}`, updateData,{ 
+        headers: {
+        Authorization: `Bearer ${clientToken}`,
+        'Content-Type': 'application/json',
+      }});
+      
+      // Update local storage for status
       const outlets = storage.getOutlets();
       const updatedOutlets = outlets.map(o => {
         if (o.id === outlet.id) {
           return {
             ...o,
-            status: 'Blocked',
-            blockedAt: new Date().toISOString(),
-            blockedReason: 'Manual block by admin'
+            status: 'Active',
           };
         }
         return o;
       });
       storage.saveOutlets(updatedOutlets);
-      onUpdate();
+      
+      await onUpdate();
+    } catch (error) {
+      console.error('Error unblocking outlet:', error);
+      alert('❌ Failed to unblock outlet. Please try again.');
+    } finally {
+      setLoading(false);
     }
-  };
-
-  const handleUnblockOutlet = () => {
-    const outlets = storage.getOutlets();
-    const updatedOutlets = outlets.map(o => {
-      if (o.id === outlet.id) {
-        return {
-          ...o,
-          status: 'Active',
-          blockedAt: null,
-          blockedReason: null
-        };
-      }
-      return o;
-    });
-    storage.saveOutlets(updatedOutlets);
-    onUpdate();
   };
 
   return (
@@ -517,6 +672,7 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
             <button 
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600"
+              disabled={loading}
             >
               <FaTimes className="text-xl" />
             </button>
@@ -526,7 +682,7 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
           <div className={`mb-6 p-4 rounded-lg border ${
             outlet.status === 'Blocked' 
               ? 'bg-red-50 border-red-200' 
-              : calculatePercentage(outlet.creditUsed, outlet.creditLimit) >= 80
+              : calculatePercentage(outlet.currentCredit || 0, outlet.creditLimit || 0) >= 80
               ? 'bg-yellow-50 border-yellow-200'
               : 'bg-blue-50 border-blue-200'
           }`}>
@@ -534,37 +690,39 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
               <div className="flex items-center space-x-3">
                 {outlet.status === 'Blocked' ? (
                   <FaLock className="text-red-600 text-xl" />
-                ) : calculatePercentage(outlet.creditUsed, outlet.creditLimit) >= 80 ? (
+                ) : calculatePercentage(outlet.currentCredit || 0, outlet.creditLimit || 0) >= 80 ? (
                   <FaExclamationTriangle className="text-yellow-600 text-xl" />
                 ) : (
-                  <FaCreditCard className="text-blue-600 text-xl" />
+                  <FaCheckCircle className="text-blue-600 text-xl" />
                 )}
                 <div>
                   <h3 className="font-semibold">
                     {outlet.status === 'Blocked' ? 'BLOCKED' : 
-                     calculatePercentage(outlet.creditUsed, outlet.creditLimit) >= 80 ? 'NEAR LIMIT' : 'ACTIVE'}
+                     calculatePercentage(outlet.currentCredit || 0, outlet.creditLimit || 0) >= 80 ? 'NEAR LIMIT' : 'ACTIVE'}
                   </h3>
                   <p className="text-sm">
-                    Credit: ${outlet.creditUsed?.toLocaleString() || 0} / ${outlet.creditLimit?.toLocaleString() || 0} 
-                    ({calculatePercentage(outlet.creditUsed || 0, outlet.creditLimit || 1)}%)
+                    Credit: ${(outlet.currentCredit || 0).toLocaleString()} / ${(outlet.creditLimit || 0).toLocaleString()} 
+                    ({calculatePercentage(outlet.currentCredit || 0, outlet.creditLimit || 1)}%)
                   </p>
                 </div>
               </div>
               {outlet.status === 'Blocked' ? (
                 <button
                   onClick={handleUnblockOutlet}
+                  disabled={loading}
                   className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center space-x-2"
                 >
-                  <FaUnlock />
-                  <span>Unblock Outlet</span>
+                  {loading ? <FaSpinner className="animate-spin" /> : <FaUnlock />}
+                  <span>{loading ? 'Processing...' : 'Unblock Outlet'}</span>
                 </button>
               ) : (
                 <button
                   onClick={handleBlockOutlet}
+                  disabled={loading}
                   className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 flex items-center space-x-2"
                 >
-                  <FaLock />
-                  <span>Block Outlet</span>
+                  {loading ? <FaSpinner className="animate-spin" /> : <FaLock />}
+                  <span>{loading ? 'Processing...' : 'Block Outlet'}</span>
                 </button>
               )}
             </div>
@@ -581,19 +739,15 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Type:</span>
-                  <span className={`px-2 py-1 rounded text-sm ${
-                    outlet.type === 'Official' 
-                      ? 'bg-blue-100 text-blue-800' 
-                      : 'bg-orange-100 text-orange-800'
-                  }`}>
-                    {outlet.type}
+                  <span className={`px-2 py-1 rounded text-sm bg-blue-100 text-blue-800`}>
+                    {outlet.type || 'custom'}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Phone:</span>
                   <span className="font-medium flex items-center space-x-1">
                     <FaPhone className="text-sm" />
-                    <span>{outlet.phone}</span>
+                    <span>{outlet.phoneNumber}</span>
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -606,12 +760,12 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
                     {outlet.status}
                   </span>
                 </div>
-                {outlet.storeName && (
+                {outlet.Store?.name && (
                   <div className="flex justify-between">
                     <span className="text-gray-600">Store:</span>
                     <span className="font-medium flex items-center space-x-1">
                       <FaStore className="text-sm" />
-                      <span>{outlet.storeName}</span>
+                      <span>{outlet.Store.name}</span>
                     </span>
                   </div>
                 )}
@@ -620,45 +774,69 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
 
             {/* Order Stats */}
             <div className="bg-gray-50 rounded-lg p-4">
-              <h3 className="font-semibold text-gray-700 mb-2">Order Statistics</h3>
+              <h3 className="font-semibold text-gray-700 mb-2">Credit Information</h3>
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <span className="text-gray-600 flex items-center space-x-1">
-                    <FaShoppingCart className="text-sm" />
-                    <span>Total Orders:</span>
+                    <FaDollarSign className="text-sm" />
+                    <span>Credit Limit:</span>
                   </span>
-                  <span className="font-medium">{outlet.totalOrders || 0}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 flex items-center space-x-1">
-                    <FaCalendarAlt className="text-sm" />
-                    <span>Last Order:</span>
-                  </span>
-                  <span className="font-medium">{outlet.lastOrder || 'No orders yet'}</span>
+                  <span className="font-medium">${(outlet.creditLimit || 0).toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600 flex items-center space-x-1">
                     <FaDollarSign className="text-sm" />
-                    <span>Credit Used:</span>
+                    <span>Current Credit:</span>
                   </span>
-                  <span className="font-medium">${outlet.creditUsed?.toLocaleString() || 0}</span>
+                  <span className="font-medium">${(outlet.currentCredit || 0).toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600 flex items-center space-x-1">
-                    <FaCreditCard className="text-sm" />
-                    <span>Credit Limit:</span>
+                    <FaDollarSign className="text-sm" />
+                    <span>Available Credit:</span>
                   </span>
-                  <span className="font-medium">${outlet.creditLimit?.toLocaleString() || 0}</span>
+                  <span className="font-medium">
+                    ${((outlet.creditLimit || 0) - (outlet.currentCredit || 0)).toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Contact Person:</span>
+                  <span className="font-medium">{outlet.contactPerson}</span>
                 </div>
               </div>
             </div>
           </div>
+
+          {/* Address Section */}
+          {outlet.address && (
+            <div className="mb-6">
+              <h3 className="font-semibold text-gray-700 mb-2">Address</h3>
+              <div className="bg-gray-50 rounded-lg p-4">
+                <p className="text-gray-800">{outlet.address}</p>
+              </div>
+            </div>
+          )}
 
           {/* Payment Form */}
           {showPaymentForm && (
             <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
               <h3 className="font-semibold text-gray-700 mb-3">Receive Payment</h3>
               <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Payment Method
+                  </label>
+                  <select
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                    disabled={loading}
+                  >
+                    <option value="paid">Cash</option>
+                    <option value="credit">Credit Card</option>
+                    <option value="bank_transfer">Bank Transfer</option>
+                  </select>
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Payment Amount ($)
@@ -670,18 +848,31 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg"
                     placeholder="Enter amount"
                     min="0"
-                    max={outlet.creditUsed || 0}
+                    max={outlet.currentCredit || 0}
+                    disabled={loading}
                   />
                 </div>
                 <div className="flex space-x-3">
                   <button
                     onClick={handleProcessPayment}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                    disabled={loading || !paymentAmount}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center space-x-2"
                   >
-                    Process Payment
+                    {loading ? (
+                      <>
+                        <FaSpinner className="animate-spin" />
+                        <span>Processing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <FaDollarSign />
+                        <span>Process Payment</span>
+                      </>
+                    )}
                   </button>
                   <button
                     onClick={() => setShowPaymentForm(false)}
+                    disabled={loading}
                     className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400"
                   >
                     Cancel
@@ -691,56 +882,25 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
             </div>
           )}
 
-          {/* Credit Information */}
+          {/* Credit Progress */}
           <div className="mb-8">
-            <h3 className="font-semibold text-gray-700 mb-4">Credit Information</h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-              <div className="bg-blue-50 rounded-lg p-4">
-                <div className="flex items-center space-x-2 mb-2">
-                  <FaDollarSign className="text-blue-600" />
-                  <span className="text-gray-700">Credit Limit</span>
-                </div>
-                <p className="text-2xl font-bold">${outlet.creditLimit?.toLocaleString() || 0}</p>
-              </div>
-              
-              <div className="bg-orange-50 rounded-lg p-4">
-                <div className="flex items-center space-x-2 mb-2">
-                  <FaDollarSign className="text-orange-600" />
-                  <span className="text-gray-700">Credit Used</span>
-                </div>
-                <p className="text-2xl font-bold">${outlet.creditUsed?.toLocaleString() || 0}</p>
-              </div>
-              
-              <div className="bg-green-50 rounded-lg p-4">
-                <div className="flex items-center space-x-2 mb-2">
-                  <FaDollarSign className="text-green-600" />
-                  <span className="text-gray-700">Available Credit</span>
-                </div>
-                <p className="text-2xl font-bold">${((outlet.creditLimit || 0) - (outlet.creditUsed || 0)).toLocaleString()}</p>
-              </div>
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-sm text-gray-600">Credit Usage</span>
+              <span className="text-sm font-medium">
+                {calculatePercentage(outlet.currentCredit || 0, outlet.creditLimit || 1)}% used
+              </span>
             </div>
-
-            {/* Credit Progress */}
-            <div className="mt-4">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-sm text-gray-600">Credit Usage</span>
-                <span className="text-sm font-medium">
-                  {calculatePercentage(outlet.creditUsed || 0, outlet.creditLimit || 1)}% used
-                </span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-3">
-                <div
-                  className={`h-3 rounded-full ${
-                    calculatePercentage(outlet.creditUsed || 0, outlet.creditLimit || 1) > 80 
-                      ? 'bg-red-600' 
-                      : calculatePercentage(outlet.creditUsed || 0, outlet.creditLimit || 1) > 50 
-                      ? 'bg-yellow-500' 
-                      : 'bg-green-600'
-                  }`}
-                  style={{ width: `${calculatePercentage(outlet.creditUsed || 0, outlet.creditLimit || 1)}%` }}
-                ></div>
-              </div>
+            <div className="w-full bg-gray-200 rounded-full h-3">
+              <div
+                className={`h-3 rounded-full ${
+                  calculatePercentage(outlet.currentCredit || 0, outlet.creditLimit || 1) > 80 
+                    ? 'bg-red-600' 
+                    : calculatePercentage(outlet.currentCredit || 0, outlet.creditLimit || 1) > 50 
+                    ? 'bg-yellow-500' 
+                    : 'bg-green-600'
+                }`}
+                style={{ width: `${calculatePercentage(outlet.currentCredit || 0, outlet.creditLimit || 1)}%` }}
+              ></div>
             </div>
           </div>
 
@@ -759,14 +919,14 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
                   Order History
                 </button>
                 <button
-                  onClick={() => setActiveTab('credit')}
+                  onClick={() => setActiveTab('invoices')}
                   className={`pb-2 px-1 ${
-                    activeTab === 'credit'
+                    activeTab === 'invoices'
                       ? 'border-b-2 border-blue-600 text-blue-600'
                       : 'text-gray-600 hover:text-gray-900'
                   }`}
                 >
-                  Credit History
+                  Invoice History
                 </button>
               </div>
             </div>
@@ -776,12 +936,12 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
           <div className="mb-8">
             {activeTab === 'orders' ? (
               <div>
-                {outlet.orderHistory && outlet.orderHistory.length > 0 ? (
+                {orders.length > 0 ? (
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead>
                         <tr className="bg-gray-50">
-                          <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Invoice ID</th>
+                          <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Order ID</th>
                           <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Date</th>
                           <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Items</th>
                           <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Amount</th>
@@ -789,23 +949,25 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
-                        {outlet.orderHistory.map((order, index) => (
+                        {orders.map((order, index) => (
                           <tr key={index}>
-                            <td className="px-4 py-3 font-medium">{order.id || order.invoiceId || `ORDER-${index + 1}`}</td>
-                            <td className="px-4 py-3">{order.date || new Date().toISOString().split('T')[0]}</td>
-                            <td className="px-4 py-3">{order.items || order.totalItems || 0}</td>
-                            <td className="px-4 py-3">${(order.amount || order.totalAmount || 0).toLocaleString()}</td>
+                            <td className="px-4 py-3 font-medium">{order.id || `ORDER-${index + 1}`}</td>
+                            <td className="px-4 py-3">
+                              {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'N/A'}
+                            </td>
+                            <td className="px-4 py-3">{order.items?.length || 0}</td>
+                            <td className="px-4 py-3">${(order.totalAmount || 0).toLocaleString()}</td>
                             <td className="px-4 py-3">
                               <span className={`px-2 py-1 rounded text-sm ${
-                                (order.status || 'Delivered') === 'Delivered' 
+                                (order.status || 'pending') === 'completed' 
                                   ? 'bg-green-100 text-green-800' 
-                                  : (order.status || 'Delivered') === 'Pending'
+                                  : (order.status || 'pending') === 'pending'
                                   ? 'bg-yellow-100 text-yellow-800'
-                                  : (order.status || 'Delivered') === 'Processing'
+                                  : (order.status || 'pending') === 'processing'
                                   ? 'bg-blue-100 text-blue-800'
                                   : 'bg-red-100 text-red-800'
                               }`}>
-                                {order.status || 'Delivered'}
+                                {order.status || 'pending'}
                               </span>
                             </td>
                           </tr>
@@ -819,39 +981,45 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
               </div>
             ) : (
               <div>
-                {outlet.creditHistory && outlet.creditHistory.length > 0 ? (
+                {invoices.length > 0 ? (
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead>
                         <tr className="bg-gray-50">
+                          <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Invoice Number</th>
                           <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Date</th>
                           <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Type</th>
                           <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Amount</th>
-                          <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Balance</th>
+                          <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Payment Method</th>
+                          <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Status</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
-                        {outlet.creditHistory.map((credit, index) => (
+                        {invoices.map((invoice, index) => (
                           <tr key={index}>
-                            <td className="px-4 py-3">{credit.date || new Date().toISOString().split('T')[0]}</td>
+                            <td className="px-4 py-3 font-medium">{invoice.invoiceNumber}</td>
+                            <td className="px-4 py-3">
+                              {invoice.invoiceDate ? new Date(invoice.invoiceDate).toLocaleDateString() : 'N/A'}
+                            </td>
+                            <td className="px-4 py-3">{invoice.type}</td>
+                            <td className="px-4 py-3">${(invoice.totalAmount || 0).toLocaleString()}</td>
+                            <td className="px-4 py-3">{invoice.paymentMethod}</td>
                             <td className="px-4 py-3">
                               <span className={`px-2 py-1 rounded text-sm ${
-                                credit.type === 'Payment' 
+                                (invoice.status || 'pending') === 'paid' 
                                   ? 'bg-green-100 text-green-800' 
-                                  : 'bg-blue-100 text-blue-800'
+                                  : 'bg-yellow-100 text-yellow-800'
                               }`}>
-                                {credit.type || 'Purchase'}
+                                {invoice.status || 'pending'}
                               </span>
                             </td>
-                            <td className="px-4 py-3">${(credit.amount || 0).toLocaleString()}</td>
-                            <td className="px-4 py-3">${(credit.balance || 0).toLocaleString()}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
                 ) : (
-                  <p className="text-gray-500 text-center py-8">No credit history available</p>
+                  <p className="text-gray-500 text-center py-8">No invoice history available</p>
                 )}
               </div>
             )}
@@ -894,24 +1062,84 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
   );
 };
 
-// Main OutletManagement Component
+// Main OutletManagement Component (UPDATED WITH API)
 const OutletManagement = ({ onLogout }) => {
   const [outlets, setOutlets] = useState([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [currentOutlet, setCurrentOutlet] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [stats, setStats] = useState({
+    totalOutlets: 0,
+    totalCreditLimit: 0,
+    totalCurrentCredit: 0,
+    activeOutlets: 0
+  });
 
   useEffect(() => {
     loadOutlets();
   }, []);
 
-  const loadOutlets = () => {
-    const loadedOutlets = storage.getOutlets();
-    setOutlets(loadedOutlets);
+  const loadOutlets = async () => {
+    setLoading(true);
+    try {
+      const response = await ApiService.get(`/outlets`,{ 
+        headers: {
+        Authorization: `Bearer ${clientToken}`,
+        'Content-Type': 'application/json',
+      }});
+      
+      if (response) {
+        const apiOutlets = response.outlets.map(outlet => ({
+          ...outlet,
+          // Map API fields to component fields
+          phone: outlet.phoneNumber,
+          storeName: outlet.Store?.name,
+          creditUsed: parseFloat(outlet.currentCredit || 0),
+          creditLimit: parseFloat(outlet.creditLimit || 0),
+          status: outlet.isActive ? 'Active' : 'Blocked',
+          type: outlet.type === 'custom' ? 'Official' : outlet.type,
+          totalOrders: 0, // Will be populated from separate API if needed
+          lastOrder: 'No orders yet' // Will be populated from separate API if needed
+        }));
+        
+        setOutlets(apiOutlets);
+        
+        // Update statistics
+        setStats({
+          totalOutlets: response.totalOutlets || 0,
+          totalCreditLimit: response.totalCreditLimit || 0,
+          totalCurrentCredit: response.totalCurrentCredit || 0,
+          activeOutlets: apiOutlets.filter(o => o.isActive).length
+        });
+        
+        // Also update local storage for offline access
+        storage.saveOutlets(apiOutlets);
+      }
+    } catch (error) {
+      console.error('Error loading outlets:', error);
+      // Fallback to local storage if API fails
+      const localOutlets = storage.getOutlets();
+      setOutlets(localOutlets);
+      
+      // Calculate stats from local storage
+      const totalCreditLimit = localOutlets.reduce((sum, outlet) => sum + (outlet.creditLimit || 0), 0);
+      const totalCreditUsed = localOutlets.reduce((sum, outlet) => sum + (outlet.creditUsed || 0), 0);
+      
+      setStats({
+        totalOutlets: localOutlets.length,
+        totalCreditLimit,
+        totalCurrentCredit: totalCreditUsed,
+        activeOutlets: localOutlets.filter(o => o.status === 'Active').length
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const calculatePercentage = (used, limit) => {
+    if (!limit) return 0;
     return Math.round((used / limit) * 100);
   };
 
@@ -925,10 +1153,23 @@ const OutletManagement = ({ onLogout }) => {
     setShowCreateModal(true);
   };
 
-  const handleDeleteOutlet = (outlet) => {
+  const handleDeleteOutlet = async (outlet) => {
     if (window.confirm(`Are you sure you want to delete "${outlet.name}"?`)) {
-      storage.deleteOutlet(outlet.id);
-      loadOutlets();
+      setLoading(true);
+      try {
+        await ApiService.delete(`/outlets/${outlet.id}`,{ 
+          headers: {
+          Authorization: `Bearer ${clientToken}`,
+          'Content-Type': 'application/json',
+        }});
+        loadOutlets();
+        alert('✅ Outlet deleted successfully');
+      } catch (error) {
+        console.error('Error deleting outlet:', error);
+        alert('❌ Failed to delete outlet. Please try again.');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -937,33 +1178,53 @@ const OutletManagement = ({ onLogout }) => {
     setShowDetailsModal(true);
   };
 
-  const handleModalSubmit = (formData) => {
-    if (currentOutlet) {
-      // Update existing outlet
-      const updatedData = {
-        name: formData.name,
-        type: formData.type,
-        phone: formData.phone,
-        creditLimit: formData.creditLimit,
-        storeId: formData.storeId,
-        storeName: formData.storeName
-      };
-      storage.updateOutlet(currentOutlet.id, updatedData);
-    } else {
-      // Create new outlet
-      const newOutletData = {
-        name: formData.name,
-        type: formData.type,
-        phone: formData.phone,
-        creditLimit: formData.creditLimit,
-        storeId: formData.storeId,
-        storeName: formData.storeName
-      };
-      storage.addOutlet(newOutletData);
+  const handleModalSubmit = async (formData) => {
+    setLoading(true);
+  
+    try {
+      if (currentOutlet) {
+        // Update existing outlet
+        await ApiService.put(
+          `/outlets/${currentOutlet.id}`,
+          formData,
+          {
+            headers: {
+              Authorization: `Bearer ${clientToken}`
+            }
+          }
+        );
+  
+        alert('✅ Outlet updated successfully');
+      } else {
+        // Create new outlet
+        await ApiService.post(
+          '/outlets',
+          formData,
+          {
+            headers: {
+              Authorization: `Bearer ${clientToken}`
+            }
+          }
+        );
+  
+        alert('✅ Outlet created successfully');
+      }
+  
+      await loadOutlets();
+      setShowCreateModal(false);
+  
+    } catch (error) {
+      console.error('Error saving outlet:', error);
+  
+      alert(
+        error?.response?.data?.error ||
+        '❌ Failed to save outlet. Please try again.'
+      );
+    } finally {
+      setLoading(false);
     }
-    loadOutlets();
   };
-
+  
   const handleModalClose = () => {
     setShowCreateModal(false);
     setShowDetailsModal(false);
@@ -973,16 +1234,11 @@ const OutletManagement = ({ onLogout }) => {
 
   const filteredOutlets = outlets.filter(outlet =>
     outlet.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    outlet.phone?.includes(searchTerm) ||
+    outlet.phoneNumber?.includes(searchTerm) ||
     outlet.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    outlet.storeName?.toLowerCase().includes(searchTerm.toLowerCase())
+    outlet.Store?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    outlet.contactPerson?.toLowerCase().includes(searchTerm.toLowerCase())
   );
-
-  // Calculate statistics
-  const totalOutlets = outlets.length;
-  const activeOutlets = outlets.filter(o => o.status === 'Active').length;
-  const totalCreditLimit = outlets.reduce((sum, outlet) => sum + (outlet.creditLimit || 0), 0);
-  const totalCreditUsed = outlets.reduce((sum, outlet) => sum + (outlet.creditUsed || 0), 0);
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -1001,10 +1257,11 @@ const OutletManagement = ({ onLogout }) => {
               </div>
               <button 
                 onClick={handleCreateOutlet}
+                disabled={loading}
                 className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition font-medium flex items-center space-x-2"
               >
-                <FaPlus />
-                <span>Create Outlet</span>
+                {loading ? <FaSpinner className="animate-spin" /> : <FaPlus />}
+                <span>{loading ? 'Loading...' : 'Create Outlet'}</span>
               </button>
             </div>
           </div>
@@ -1018,7 +1275,7 @@ const OutletManagement = ({ onLogout }) => {
                 </div>
                 <div>
                   <p className="text-gray-600 text-sm">Total Outlets</p>
-                  <p className="text-2xl font-bold">{totalOutlets}</p>
+                  <p className="text-2xl font-bold">{stats.totalOutlets}</p>
                 </div>
               </div>
             </div>
@@ -1030,7 +1287,7 @@ const OutletManagement = ({ onLogout }) => {
                 </div>
                 <div>
                   <p className="text-gray-600 text-sm">Active Outlets</p>
-                  <p className="text-2xl font-bold">{activeOutlets}</p>
+                  <p className="text-2xl font-bold">{stats.activeOutlets}</p>
                 </div>
               </div>
             </div>
@@ -1042,7 +1299,7 @@ const OutletManagement = ({ onLogout }) => {
                 </div>
                 <div>
                   <p className="text-gray-600 text-sm">Total Credit Limit</p>
-                  <p className="text-2xl font-bold">${totalCreditLimit.toLocaleString()}</p>
+                  <p className="text-2xl font-bold">${stats.totalCreditLimit.toLocaleString()}</p>
                 </div>
               </div>
             </div>
@@ -1054,7 +1311,7 @@ const OutletManagement = ({ onLogout }) => {
                 </div>
                 <div>
                   <p className="text-gray-600 text-sm">Credit Used</p>
-                  <p className="text-2xl font-bold">${totalCreditUsed.toLocaleString()}</p>
+                  <p className="text-2xl font-bold">${stats.totalCurrentCredit.toLocaleString()}</p>
                 </div>
               </div>
             </div>
@@ -1070,14 +1327,16 @@ const OutletManagement = ({ onLogout }) => {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                disabled={loading}
               />
             </div>
             <button 
               onClick={loadOutlets}
+              disabled={loading}
               className="flex items-center space-x-2 text-gray-700 hover:text-gray-900"
             >
-              <FaHistory />
-              <span>Refresh</span>
+              {loading ? <FaSpinner className="animate-spin" /> : <FaHistory />}
+              <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
             </button>
           </div>
 
@@ -1085,7 +1344,12 @@ const OutletManagement = ({ onLogout }) => {
           <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">All Outlets ({filteredOutlets.length})</h3>
             
-            {filteredOutlets.length === 0 ? (
+            {loading ? (
+              <div className="text-center py-12">
+                <FaSpinner className="animate-spin text-4xl text-blue-600 mx-auto mb-4" />
+                <p className="text-gray-600">Loading outlets...</p>
+              </div>
+            ) : filteredOutlets.length === 0 ? (
               <div className="text-center py-12">
                 <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
                   <FaShoppingCart className="text-gray-400 text-3xl" />
@@ -1113,22 +1377,22 @@ const OutletManagement = ({ onLogout }) => {
                         <h3 className="text-xl font-bold text-gray-800 mb-2">{outlet.name}</h3>
                         <div className="flex items-center space-x-2 text-gray-600">
                           <FaPhone />
-                          <span>{outlet.phone}</span>
+                          <span>{outlet.phoneNumber}</span>
                         </div>
-                        {outlet.storeName && (
+                        {outlet.Store?.name && (
                           <div className="flex items-center space-x-2 text-gray-600 mt-1">
                             <FaStore />
-                            <span className="text-sm">{outlet.storeName}</span>
+                            <span className="text-sm">{outlet.Store.name}</span>
                           </div>
                         )}
                       </div>
                       <div className="flex flex-col items-end space-y-2">
                         <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                          outlet.type === 'Official' 
+                          outlet.type === 'Official' || outlet.type === 'custom'
                             ? 'bg-blue-100 text-blue-800' 
                             : 'bg-orange-100 text-orange-800'
                         }`}>
-                          {outlet.type}
+                          {outlet.type === 'custom' ? 'Official' : outlet.type}
                         </span>
                         <span className={`px-3 py-1 rounded-full text-sm font-medium ${
                           outlet.status === 'Active' 
@@ -1145,41 +1409,41 @@ const OutletManagement = ({ onLogout }) => {
                       <div className="flex justify-between items-center mb-2">
                         <span className="text-sm text-gray-600">Credit Usage</span>
                         <span className="font-medium">
-                          ${(outlet.creditUsed || 0).toLocaleString()} / ${(outlet.creditLimit || 0).toLocaleString()}
+                          ${(outlet.currentCredit || 0).toLocaleString()} / ${(outlet.creditLimit || 0).toLocaleString()}
                         </span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2">
                         <div
                           className={`h-2 rounded-full ${
-                            calculatePercentage(outlet.creditUsed || 0, outlet.creditLimit || 1) > 80 
+                            calculatePercentage(outlet.currentCredit || 0, outlet.creditLimit || 1) > 80 
                               ? 'bg-red-600' 
-                              : calculatePercentage(outlet.creditUsed || 0, outlet.creditLimit || 1) > 50 
+                              : calculatePercentage(outlet.currentCredit || 0, outlet.creditLimit || 1) > 50 
                               ? 'bg-yellow-500' 
                               : 'bg-green-600'
                           }`}
-                          style={{ width: `${calculatePercentage(outlet.creditUsed || 0, outlet.creditLimit || 1)}%` }}
+                          style={{ width: `${calculatePercentage(outlet.currentCredit || 0, outlet.creditLimit || 1)}%` }}
                         ></div>
                       </div>
                       <div className="text-right text-sm text-gray-500 mt-1">
-                        {calculatePercentage(outlet.creditUsed || 0, outlet.creditLimit || 1)}% used
+                        {calculatePercentage(outlet.currentCredit || 0, outlet.creditLimit || 1)}% used
                       </div>
                     </div>
 
-                    {/* Order Information */}
+                    {/* Contact Information */}
                     <div className="grid grid-cols-2 gap-4 mb-6">
                       <div>
-                        <div className="flex items-center space-x-2 text-gray-600 mb-1">
-                          <FaCalendarAlt />
-                          <span className="text-sm">Last Order</span>
+                        <div className="text-gray-600 mb-1">
+                          <span className="text-sm">Contact Person</span>
                         </div>
-                        <p className="font-medium">{outlet.lastOrder || 'No orders yet'}</p>
+                        <p className="font-medium">{outlet.contactPerson}</p>
                       </div>
                       <div>
-                        <div className="flex items-center space-x-2 text-gray-600 mb-1">
-                          <FaShoppingCart />
-                          <span className="text-sm">Total Orders</span>
+                        <div className="text-gray-600 mb-1">
+                          <span className="text-sm">Address</span>
                         </div>
-                        <p className="font-medium">{outlet.totalOrders || 0}</p>
+                        <p className="font-medium text-sm truncate" title={outlet.address}>
+                          {outlet.address?.substring(0, 30)}...
+                        </p>
                       </div>
                     </div>
 

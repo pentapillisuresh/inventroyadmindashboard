@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
-import { FaSearch, FaFilter, FaPlus, FaEye, FaCheckCircle, FaTimesCircle } from 'react-icons/fa';
+import { FaSearch, FaFilter, FaPlus, FaEye, FaCheckCircle, FaTimesCircle, FaSpinner } from 'react-icons/fa';
+import ApiService from '../components/ApiService';
 import { storage } from '../data/storage';
+
+const API_BASE_URL = 'http://localhost:5001/api';
 
 const Expenditures = ({ onLogout }) => {
   const [expenditures, setExpenditures] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -20,7 +25,7 @@ const Expenditures = ({ onLogout }) => {
   });
   const [newCategory, setNewCategory] = useState('');
   const [showAddCategory, setShowAddCategory] = useState(false);
-  
+  const clientToken = localStorage.getItem('token');
   const [stats, setStats] = useState({
     totalExpenses: 0,
     pendingAmount: 0,
@@ -28,62 +33,112 @@ const Expenditures = ({ onLogout }) => {
     categoriesCount: 0
   });
 
+  // State for categories from API
+  const [categories, setCategories] = useState([]);
+
   useEffect(() => {
-    loadExpenditures();
+    fetchExpenditures();
+    fetchCategories();
   }, []);
 
-  const loadExpenditures = () => {
-    const allExpenses = storage.getExpenditures();
-    const categories = storage.getExpenseCategories();
-    
-    setExpenditures(allExpenses);
-    
-    // Calculate statistics
-    const totalExpenses = allExpenses.reduce((sum, expense) => sum + expense.amount, 0);
-    const pendingExpenses = allExpenses.filter(e => e.status === 'Pending');
-    const pendingAmount = pendingExpenses.reduce((sum, expense) => sum + expense.amount, 0);
-    const pendingItems = pendingExpenses.length;
-    const categoriesCount = categories.length;
-    
-    setStats({
-      totalExpenses,
-      pendingAmount,
-      pendingItems,
-      categoriesCount
-    });
-  };
-
-  const handleAddExpense = () => {
-    setShowAddModal(true);
-  };
-
-  const handleSaveExpense = (e) => {
-    e.preventDefault();
-    
-    const expenseData = {
-      date: newExpense.date,
-      category: newExpense.category,
-      description: newExpense.description,
-      amount: parseFloat(newExpense.amount),
-      notes: newExpense.notes,
-      status: 'Pending'
-    };
-    
-    storage.addExpenditure(expenseData);
-    loadExpenditures();
-    setShowAddModal(false);
-    resetNewExpense();
-  };
-
-  const handleAddCategory = () => {
-    if (newCategory.trim()) {
-      storage.addExpenseCategory(newCategory.trim());
-      setNewExpense(prev => ({ ...prev, category: newCategory.trim() }));
-      setNewCategory('');
-      setShowAddCategory(false);
-      loadExpenditures();
+  // Fetch expenditures from API
+  const fetchExpenditures = async () => {
+    setLoading(true);
+    try {
+      const response = await ApiService.get(`/expenditures`,{
+        headers: {
+          Authorization: `Bearer ${clientToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!response) {
+        throw new Error('Failed to fetch expenditures');
+      }
+      
+      // Transform API data to match your component structure
+      const transformedExpenditures = response.expenditures.map(exp => ({
+        id: exp.id,
+        date: new Date(exp.date).toISOString().split('T')[0],
+        category: exp.category,
+        description: exp.description,
+        amount: parseFloat(exp.amount),
+        notes: '', // API doesn't have notes field
+        status: exp.verified ? 'Approved' : 'Pending',
+        adminName: exp.Admin?.name,
+        receiptImage: exp.receiptImage
+      }));
+      
+      setExpenditures(transformedExpenditures);
+      
+      // Calculate statistics from API data
+      const totalExpenses = response.summary.totalAmount;
+      const pendingAmount = response.summary.pendingAmount;
+      const pendingItems = transformedExpenditures.filter(e => e.status === 'Pending').length;
+      
+      setStats(prev => ({
+        ...prev,
+        totalExpenses,
+        pendingAmount,
+        pendingItems,
+        totalItems: response.summary.total
+      }));
+    } catch (error) {
+      console.error('Error fetching expenditures:', error);
+      alert('Failed to load expenditures. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
+
+  // Fetch categories from API (you might need a separate endpoint for this)
+  const fetchCategories = async () => {
+        setCategories(storage.getExpenseCategories);
+  };
+
+  // Handle adding a new expense via API
+  const handleSaveExpense = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    
+    try {
+      const expenseData = {
+        category: newExpense.category,
+        description: newExpense.description,
+        amount: parseFloat(newExpense.amount),
+        date: new Date(newExpense.date).toISOString(), // Convert to ISO string
+        // notes field is not in API model, so we're omitting it
+      };
+
+      const response = await ApiService.post(`/expenditures`,expenseData,{
+        headers: {
+          Authorization: `Bearer ${clientToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to add expense');
+      }      
+      // Refresh the expenditures list
+      await fetchExpenditures();
+      
+      // Add the new category to local categories list if it doesn't exist
+      if (!categories.includes(newExpense.category)) {
+        setCategories(prev => [...prev, newExpense.category]);
+      }
+      
+      setShowAddModal(false);
+      resetNewExpense();
+      alert('Expense added successfully!');
+    } catch (error) {
+      console.error('Error adding expense:', error);
+      alert(`Failed to add expense: ${error.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
 
   const resetNewExpense = () => {
     setNewExpense({
@@ -103,14 +158,6 @@ const Expenditures = ({ onLogout }) => {
     setShowDetails(null);
   };
 
-  const handleApproveExpense = (expenseId) => {
-    storage.approveExpenditure(expenseId);
-    loadExpenditures();
-    if (showDetails && showDetails.id === expenseId) {
-      setShowDetails(storage.getExpenditureById(expenseId));
-    }
-  };
-
   const getStatusColor = (status) => {
     switch (status) {
       case 'Approved': return 'bg-green-100 text-green-800';
@@ -119,7 +166,7 @@ const Expenditures = ({ onLogout }) => {
     }
   };
 
-  const expenseCategories = storage.getExpenseCategories();
+  // Filter expenditures based on search and filters
   const filteredExpenditures = expenditures.filter(expense => {
     const matchesSearch = expense.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          expense.category.toLowerCase().includes(searchTerm.toLowerCase());
@@ -151,6 +198,7 @@ const Expenditures = ({ onLogout }) => {
                         resetNewExpense();
                       }}
                       className="text-gray-400 hover:text-gray-600 text-xl"
+                      disabled={saving}
                     >
                       ×
                     </button>
@@ -167,6 +215,7 @@ const Expenditures = ({ onLogout }) => {
                           onChange={(e) => setNewExpense(prev => ({ ...prev, date: e.target.value }))}
                           className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                           required
+                          disabled={saving}
                         />
                       </div>
 
@@ -174,54 +223,21 @@ const Expenditures = ({ onLogout }) => {
                       <div>
                         <div className="flex justify-between items-center mb-2">
                           <label className="block text-sm font-medium text-gray-700">Category *</label>
-                          {!showAddCategory && (
-                            <button
-                              type="button"
-                              onClick={() => setShowAddCategory(true)}
-                              className="text-sm text-blue-600 hover:text-blue-800"
-                            >
-                              + Add New Category
-                            </button>
-                          )}
                         </div>
                         
-                        {showAddCategory ? (
-                          <div className="flex gap-2 mb-2">
-                            <input
-                              type="text"
-                              value={newCategory}
-                              onChange={(e) => setNewCategory(e.target.value)}
-                              placeholder="Enter new category name"
-                              className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                            <button
-                              type="button"
-                              onClick={handleAddCategory}
-                              className="px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                            >
-                              Add
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setShowAddCategory(false)}
-                              className="px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
+                        
                           <select
                             value={newExpense.category}
                             onChange={(e) => setNewExpense(prev => ({ ...prev, category: e.target.value }))}
                             className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                             required
+                            disabled={saving}
                           >
                             <option value="">Select category...</option>
-                            {expenseCategories.map(category => (
+                            {categories.map(category => (
                               <option key={category} value={category}>{category}</option>
                             ))}
                           </select>
-                        )}
                       </div>
 
                       {/* Description */}
@@ -234,6 +250,7 @@ const Expenditures = ({ onLogout }) => {
                           placeholder="Enter expense description..."
                           className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                           required
+                          disabled={saving}
                         />
                       </div>
 
@@ -251,11 +268,12 @@ const Expenditures = ({ onLogout }) => {
                             placeholder="0.00"
                             className="w-full pl-8 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                             required
+                            disabled={saving}
                           />
                         </div>
                       </div>
 
-                      {/* Notes */}
+                      {/* Notes - Optional field not in API */}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Notes (Optional)</label>
                         <textarea
@@ -264,7 +282,9 @@ const Expenditures = ({ onLogout }) => {
                           rows="3"
                           placeholder="Add any additional notes..."
                           className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          disabled={saving}
                         />
+                        <p className="text-sm text-gray-500 mt-1">Note: This field is for reference only and won't be saved to the server.</p>
                       </div>
 
                       {/* Form Actions */}
@@ -275,15 +295,24 @@ const Expenditures = ({ onLogout }) => {
                             setShowAddModal(false);
                             resetNewExpense();
                           }}
-                          className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                          className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                          disabled={saving}
                         >
                           Cancel
                         </button>
                         <button
                           type="submit"
-                          className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                          className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center justify-center min-w-[120px]"
+                          disabled={saving}
                         >
-                          Add Expense
+                          {saving ? (
+                            <>
+                              <FaSpinner className="animate-spin mr-2" />
+                              Adding...
+                            </>
+                          ) : (
+                            'Add Expense'
+                          )}
                         </button>
                       </div>
                     </div>
@@ -335,10 +364,23 @@ const Expenditures = ({ onLogout }) => {
                       <span className={`px-3 py-1 text-sm font-medium rounded-full ${getStatusColor(showDetails.status)}`}>
                         {showDetails.status}
                       </span>
-                      {showDetails.approvedBy && (
-                        <p className="text-sm text-gray-500 mt-1">Approved by {showDetails.approvedBy} on {new Date(showDetails.approvedDate).toLocaleDateString()}</p>
+                      {showDetails.adminName && (
+                        <p className="text-sm text-gray-500 mt-1">Added by {showDetails.adminName}</p>
                       )}
                     </div>
+                    
+                    {showDetails.receiptImage && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-500 mb-1">Receipt</label>
+                        <div className="mt-2">
+                          <img 
+                            src={`http://localhost:5001/${showDetails.receiptImage}`} 
+                            alt="Receipt" 
+                            className="max-w-full h-auto max-h-64 object-contain border border-gray-200 rounded"
+                          />
+                        </div>
+                      </div>
+                    )}
                     
                     {showDetails.notes && (
                       <div>
@@ -349,7 +391,7 @@ const Expenditures = ({ onLogout }) => {
                   </div>
 
                   {/* Action Buttons */}
-                  <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
+                  {/* <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
                     {showDetails.status === 'Pending' && (
                       <button
                         onClick={() => handleApproveExpense(showDetails.id)}
@@ -365,7 +407,7 @@ const Expenditures = ({ onLogout }) => {
                     >
                       Close
                     </button>
-                  </div>
+                  </div> */}
                 </div>
               </div>
             </div>
@@ -378,13 +420,22 @@ const Expenditures = ({ onLogout }) => {
                 <h1 className="text-2xl font-bold text-gray-800">Track and manage business expenses</h1>
                 <p className="text-gray-600 mt-1">Monitor all expenditures and approvals</p>
               </div>
-              <button
-                onClick={handleAddExpense}
-                className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <FaPlus />
-                <span>Add Expense</span>
-              </button>
+              <div className="flex items-center space-x-2">
+                {loading && (
+                  <div className="flex items-center text-gray-500">
+                    <FaSpinner className="animate-spin mr-2" />
+                    Loading...
+                  </div>
+                )}
+                <button
+                  onClick={() => setShowAddModal(true)}
+                  className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  disabled={loading}
+                >
+                  <FaPlus />
+                  <span>Add Expense</span>
+                </button>
+              </div>
             </div>
             
             {/* Stats Cards */}
@@ -392,7 +443,7 @@ const Expenditures = ({ onLogout }) => {
               <div className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-lg p-6">
                 <div className="text-sm text-gray-600 mb-1">Total Expenses</div>
                 <div className="text-3xl font-bold text-gray-800">${stats.totalExpenses.toFixed(2)}</div>
-                <div className="text-sm text-gray-500 mt-2">This month ({currentMonth})</div>
+                <div className="text-sm text-gray-500 mt-2">All time total</div>
               </div>
               
               <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 border border-yellow-200 rounded-lg p-6">
@@ -403,14 +454,14 @@ const Expenditures = ({ onLogout }) => {
               
               <div className="bg-gradient-to-br from-green-50 to-green-100 border border-green-200 rounded-lg p-6">
                 <div className="text-sm text-gray-600 mb-1">Categories</div>
-                <div className="text-3xl font-bold text-green-600">{stats.categoriesCount}</div>
+                <div className="text-3xl font-bold text-green-600">{categories.length}</div>
                 <div className="text-sm text-gray-500 mt-2">Active categories</div>
               </div>
               
               <div className="bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200 rounded-lg p-6">
-                <div className="text-sm text-gray-600 mb-1">Monthly Average</div>
-                <div className="text-3xl font-bold text-purple-600">${(stats.totalExpenses / 3).toFixed(2)}</div>
-                <div className="text-sm text-gray-500 mt-2">Last 3 months</div>
+                <div className="text-sm text-gray-600 mb-1">Total Items</div>
+                <div className="text-3xl font-bold text-purple-600">{stats.totalItems || 0}</div>
+                <div className="text-sm text-gray-500 mt-2">All expenses</div>
               </div>
             </div>
             
@@ -436,7 +487,7 @@ const Expenditures = ({ onLogout }) => {
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="All">All Categories</option>
-                    {expenseCategories.map(category => (
+                    {categories.map(category => (
                       <option key={category} value={category}>{category}</option>
                     ))}
                   </select>
@@ -466,53 +517,68 @@ const Expenditures = ({ onLogout }) => {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">DESCRIPTION</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">AMOUNT</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">STATUS</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ADDED BY</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ACTIONS</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredExpenditures.map((expense) => (
-                      <tr key={expense.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{expense.date}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{expense.category}</div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm text-gray-900">{expense.description}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-semibold text-gray-900">${expense.amount.toFixed(2)}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(expense.status)}`}>
-                            {expense.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <button
-                            onClick={() => handleViewDetails(expense)}
-                            className="text-blue-600 hover:text-blue-900"
-                          >
-                            <FaEye className="inline-block mr-1" />
-                            View Details
-                          </button>
+                    {loading ? (
+                      <tr>
+                        <td colSpan="7" className="px-6 py-12 text-center">
+                          <div className="flex justify-center items-center">
+                            <FaSpinner className="animate-spin text-2xl text-blue-600 mr-3" />
+                            <span className="text-gray-600">Loading expenses...</span>
+                          </div>
                         </td>
                       </tr>
-                    ))}
+                    ) : filteredExpenditures.length === 0 ? (
+                      <tr>
+                        <td colSpan="7" className="px-6 py-12 text-center">
+                          <div className="text-gray-400 mb-2">No expenses found</div>
+                          <div className="text-gray-500 text-sm">
+                            {searchTerm || categoryFilter !== 'All' || statusFilter !== 'All'
+                              ? 'Try adjusting your search or filters' 
+                              : 'Add your first expense using the button above'}
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredExpenditures.map((expense) => (
+                        <tr key={expense.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">{expense.date}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">{expense.category}</div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm text-gray-900">{expense.description}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-semibold text-gray-900">${expense.amount.toFixed(2)}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(expense.status)}`}>
+                              {expense.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">{expense.adminName || 'N/A'}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <button
+                              onClick={() => handleViewDetails(expense)}
+                              className="text-blue-600 hover:text-blue-900"
+                            >
+                              <FaEye className="inline-block mr-1" />
+                              View Details
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
-                
-                {filteredExpenditures.length === 0 && (
-                  <div className="text-center py-12">
-                    <div className="text-gray-400 mb-2">No expenses found</div>
-                    <div className="text-gray-500 text-sm">
-                      {searchTerm || categoryFilter !== 'All' || statusFilter !== 'All'
-                        ? 'Try adjusting your search or filters' 
-                        : 'Add your first expense using the button above'}
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           </div>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { FaSearch, FaCog, FaBell, FaUserCircle } from 'react-icons/fa';
 
-const Header = ({ title, showSearch = true }) => {
+const Header = ({ title, showSearch = false }) => {
   const currentDate = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
@@ -28,7 +28,10 @@ const Header = ({ title, showSearch = true }) => {
               <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
             </div>
           )}
-          
+          <div className="flex items-center space-x-4 text-sm text-gray-600">
+          <span>{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+          <span>{new Date().toLocaleDateString('en-GB').split('/').join('-')}</span>
+        </div>
           <button className="p-2 hover:bg-gray-100 rounded-lg relative">
             <FaBell className="text-gray-600 text-lg" />
             <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
@@ -50,14 +53,14 @@ const Header = ({ title, showSearch = true }) => {
       
       {/* Bottom Bar */}
       <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
-        <div className="flex items-center space-x-6">
+        {/* <div className="flex items-center space-x-6">
           <span>ENG</span>
           <span>26°C</span>
-        </div>
-        <div className="flex items-center space-x-4">
+        </div> */}
+        {/* <div className="flex items-center space-x-4">
           <span>{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
           <span>{new Date().toLocaleDateString('en-GB').split('/').join('-')}</span>
-        </div>
+        </div> */}
       </div>
     </header>
   );

@@ -4,6 +4,7 @@ import Sidebar from './Sidebar';
 import Header from './Header';
 import { FaArrowLeft, FaStore, FaMapMarkerAlt, FaCubes, FaExclamationCircle } from 'react-icons/fa';
 import { storage } from '../data/storage';
+import ApiService from '../components/ApiService';
 
 const CreateStore = ({ onLogout }) => {
   const navigate = useNavigate();
@@ -13,10 +14,11 @@ const CreateStore = ({ onLogout }) => {
     city: '',
     state: '',
     zipCode: '',
-    capacity: '',
-    phone: '',
-    email: ''
+    phoneNumber: '',
+    email: '',
+    creditLimit: ''
   });
+  const clientToken = localStorage.getItem('token');
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [stats, setStats] = useState({
@@ -24,19 +26,81 @@ const CreateStore = ({ onLogout }) => {
     activeManagers: 0,
     totalItems: 0
   });
+  const [apiStores, setApiStores] = useState([]);
+
+  // Get admin ID from localStorage
+  const getAdminId = () => {
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      const user = JSON.parse(userData);
+      return user.id || 1;
+    }
+    return 1;
+  };
 
   useEffect(() => {
-    // Load statistics
-    const stores = storage.getStores();
-    const managers = storage.getManagers();
-    const totalItems = stores.reduce((sum, store) => sum + (store.totalItems || 0), 0);
-    
-    setStats({
-      totalStores: stores.length,
-      activeManagers: managers.filter(m => m.status === 'Active').length,
-      totalItems: totalItems
-    });
+    loadStats();
+    loadApiStores();
   }, []);
+
+  const loadStats = async () => {
+    try {
+      const response = await ApiService.get('/users/admin/store/summery',{
+        headers: {
+          Authorization: `Bearer ${clientToken}`,
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      if (response.success) {
+        const adminId = getAdminId();
+        const adminStats = response.data.find(stat => stat.adminId === adminId) || {
+          storeCount: 0,
+          productItemCount: 0,
+          activeManagerCount: 0
+        };
+        
+        setStats({
+          totalStores: adminStats.storeCount,
+          activeManagers: adminStats.activeManagerCount,
+          totalItems: adminStats.productItemCount
+        });
+      }
+    } catch (error) {
+      console.error('Error loading stats:', error);
+      // Fallback to localStorage stats
+      const stores = storage.getStores();
+      const managers = storage.getManagers();
+      const totalItems = stores.reduce((sum, store) => sum + (store.totalItems || 0), 0);
+      
+      setStats({
+        totalStores: stores.length,
+        activeManagers: managers.filter(m => m.status === 'Active').length,
+        totalItems: totalItems
+      });
+    }
+  };
+
+  const loadApiStores = async () => {
+    try {
+      const response = await ApiService.get('/stores',{
+        headers: {
+          Authorization: `Bearer ${clientToken}`,
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      if (response.success) {
+        const adminId = getAdminId();
+        const adminStores = response.data.filter(store => store.adminId === adminId);
+        setApiStores(adminStores);
+      }
+    } catch (error) {
+      console.error('Error loading API stores:', error);
+      // Keep empty array if API fails
+      setApiStores([]);
+    }
+  };
 
   const validateForm = () => {
     const newErrors = {};
@@ -62,18 +126,23 @@ const CreateStore = ({ onLogout }) => {
     if (!formData.zipCode.trim()) {
       newErrors.zipCode = 'ZIP code is required';
     }
-    // Removed strict ZIP code validation to accept any format
     
-    if (!formData.capacity.trim()) {
-      newErrors.capacity = 'Capacity is required';
+    if (!formData.phoneNumber.trim()) {
+      newErrors.phoneNumber = 'Phone number is required';
+    } else if (!/^[\+]?[1-9][\d]{0,15}$/.test(formData.phoneNumber.replace(/\D/g, ''))) {
+      newErrors.phoneNumber = 'Invalid phone number';
     }
     
-    if (formData.phone && !/^[\+]?[1-9][\d]{0,15}$/.test(formData.phone.replace(/\D/g, ''))) {
-      newErrors.phone = 'Invalid phone number';
-    }
-    
-    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+    if (!formData.email.trim()) {
+      newErrors.email = 'Email is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = 'Invalid email address';
+    }
+    
+    if (!formData.creditLimit.trim()) {
+      newErrors.creditLimit = 'Credit limit is required';
+    } else if (isNaN(parseFloat(formData.creditLimit)) || parseFloat(formData.creditLimit) <= 0) {
+      newErrors.creditLimit = 'Credit limit must be a positive number';
     }
     
     setErrors(newErrors);
@@ -92,51 +161,82 @@ const CreateStore = ({ onLogout }) => {
     try {
       // Format the address
       const fullAddress = `${formData.address}, ${formData.city}, ${formData.state} ${formData.zipCode}`;
+      const adminId = getAdminId();
       
-      // Prepare store data
+      // Prepare store data for API
       const storeData = {
-        name: formData.name,
+        name: formData.name.trim(),
         address: fullAddress,
-        city: formData.city,
-        state: formData.state,
-        zipCode: formData.zipCode,
-        capacity: formData.capacity,
-        phone: formData.phone || '',
-        email: formData.email || '',
-        status: 'Active',
-        totalProducts: 0,
-        totalValue: '$0',
-        totalItems: 0,
-        infrastructure: [],
-        racks: [],
-        freezers: [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        phoneNumber: formData.phoneNumber.replace(/\D/g, ''),
+        email: formData.email.trim(),
+        creditLimit: parseFloat(formData.creditLimit),
+        currentCredit: 0,
+        adminId: adminId,
+        isActive: true
       };
       
-      // Add store to localStorage
-      const newStore = storage.addStore(storeData);
-      
-      // Add recent activity
-      const activities = storage.getRecentActivities();
-      activities.unshift({
-        id: Date.now(),
-        type: 'store_created',
-        description: `New store "${formData.name}" created`,
-        timestamp: new Date().toISOString(),
-        user: 'Admin'
+      // Call API to create store
+      const response = await ApiService.post('/stores',storeData, {
+        headers: {
+          Authorization: `Bearer ${clientToken}`,
+          'Content-Type': 'application/json',
+        }
       });
-      storage.saveRecentActivities(activities);
       
-      // Show success message
-      setTimeout(() => {
-        alert(`✅ Store "${formData.name}" created successfully!`);
-        navigate('/stores');
-      }, 500);
+      
+      if (response) {
+        // Add store to localStorage for fallback/offline support
+        const localStorageStore = {
+          id: response.id,
+          name: response.name,
+          address: response.address,
+          phone: response.phoneNumber,
+          email: response.email,
+          creditLimit: response.creditLimit,
+          currentCredit: response.currentCredit,
+          isActive: response.isActive,
+          status: response.isActive ? 'Active' : 'Inactive',
+          capacity: '', // Not in API, keep empty
+          totalProducts: 0,
+          totalValue: '$0',
+          totalItems: 0,
+          infrastructure: [],
+          racks: [],
+          freezers: [],
+          createdAt: response.createdAt,
+          updatedAt: response.updatedAt
+        };
+        
+        storage.addStore(localStorageStore);
+        
+        // Add recent activity
+        const activities = storage.getRecentActivities();
+        activities.unshift({
+          id: Date.now(),
+          type: 'store_created',
+          description: `New store "${formData.name}" created via API`,
+          timestamp: new Date().toISOString(),
+          user: 'Admin'
+        });
+        storage.saveRecentActivities(activities);
+        
+        // Reload stats to update the numbers
+        await loadStats();
+        await loadApiStores();
+        
+        // Show success message
+        setTimeout(() => {
+          alert(`✅ Store "${formData.name}" created successfully!`);
+          navigate('/stores');
+        }, 500);
+        
+      } else {
+        throw new Error(result.message || 'Failed to create store');
+      }
       
     } catch (error) {
       console.error('Error creating store:', error);
-      alert('❌ An error occurred while creating the store. Please try again.');
+      alert(`❌ An error occurred while creating the store: ${error.message}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -174,8 +274,32 @@ const CreateStore = ({ onLogout }) => {
     
     setFormData(prev => ({
       ...prev,
-      phone: formattedValue
+      phoneNumber: formattedValue
     }));
+    
+    // Clear error for this field if it exists
+    if (errors.phoneNumber) {
+      setErrors(prev => ({
+        ...prev,
+        phoneNumber: ''
+      }));
+    }
+  };
+
+  const handleCreditLimitChange = (e) => {
+    const value = e.target.value.replace(/[^\d.]/g, '');
+    setFormData(prev => ({
+      ...prev,
+      creditLimit: value
+    }));
+    
+    // Clear error for this field if it exists
+    if (errors.creditLimit) {
+      setErrors(prev => ({
+        ...prev,
+        creditLimit: ''
+      }));
+    }
   };
 
   return (
@@ -288,7 +412,7 @@ const CreateStore = ({ onLogout }) => {
                             className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition ${
                               errors.zipCode ? 'border-red-500' : 'border-gray-300'
                             }`}
-                            placeholder="ZIP Code (any format)"
+                            placeholder="ZIP Code"
                           />
                           {errors.zipCode && (
                             <p className="mt-1 text-sm text-red-600">{errors.zipCode}</p>
@@ -301,26 +425,26 @@ const CreateStore = ({ onLogout }) => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Phone Number (Optional)
+                          Phone Number *
                         </label>
                         <input
                           type="text"
-                          name="phone"
-                          value={formData.phone}
+                          name="phoneNumber"
+                          value={formData.phoneNumber}
                           onChange={handlePhoneChange}
                           className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition ${
-                            errors.phone ? 'border-red-500' : 'border-gray-300'
+                            errors.phoneNumber ? 'border-red-500' : 'border-gray-300'
                           }`}
                           placeholder="(123) 456-7890"
                           maxLength="14"
                         />
-                        {errors.phone && (
-                          <p className="mt-1 text-sm text-red-600">{errors.phone}</p>
+                        {errors.phoneNumber && (
+                          <p className="mt-1 text-sm text-red-600">{errors.phoneNumber}</p>
                         )}
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Email (Optional)
+                          Email *
                         </label>
                         <input
                           type="email"
@@ -329,7 +453,7 @@ const CreateStore = ({ onLogout }) => {
                           onChange={handleChange}
                           className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition ${
                             errors.email ? 'border-red-500' : 'border-gray-300'
-                          }`}
+                        }`}
                           placeholder="store@example.com"
                         />
                         {errors.email && (
@@ -338,30 +462,32 @@ const CreateStore = ({ onLogout }) => {
                       </div>
                     </div>
 
-                    {/* Capacity */}
+                    {/* Credit Limit */}
                     <div>
                       <div className="flex items-center mb-2">
                         <FaCubes className="text-gray-400 mr-2" />
                         <label className="block text-sm font-medium text-gray-700">
-                          Capacity *
+                          Credit Limit *
                         </label>
                       </div>
-                      <input
-                        type="text"
-                        name="capacity"
-                        value={formData.capacity}
-                        onChange={handleChange}
-                        className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition ${
-                          errors.capacity ? 'border-red-500' : 'border-gray-300'
-                        }`}
-                        placeholder="e.g., 5000 sq ft or 1000 units"
-                      />
-                      {errors.capacity && (
-                        <p className="mt-1 text-sm text-red-600">{errors.capacity}</p>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <span className="text-gray-500 sm:text-sm">$</span>
+                        </div>
+                        <input
+                          type="text"
+                          name="creditLimit"
+                          value={formData.creditLimit}
+                          onChange={handleCreditLimitChange}
+                          className={`w-full pl-7 px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition ${
+                            errors.creditLimit ? 'border-red-500' : 'border-gray-300'
+                          }`}
+                          placeholder="e.g., 50000.00"
+                        />
+                      </div>
+                      {errors.creditLimit && (
+                        <p className="mt-1 text-sm text-red-600">{errors.creditLimit}</p>
                       )}
-                      <p className="mt-1 text-sm text-gray-500">
-                        You can specify area (sq ft) or storage capacity (units)
-                      </p>
                     </div>
 
                     {/* Submit Button */}
@@ -420,24 +546,32 @@ const CreateStore = ({ onLogout }) => {
 
                 {/* Store Examples */}
                 <div className="bg-white border border-gray-200 rounded-xl p-6">
-                  <h3 className="font-semibold text-gray-800 mb-4">Store Examples</h3>
+                  <h3 className="font-semibold text-gray-800 mb-4">Your Stores</h3>
                   <div className="space-y-4">
-                    {storage.getStores().slice(0, 3).map(store => (
+                    {apiStores.slice(0, 3).map(store => (
                       <div key={store.id} className="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                         <p className="font-medium text-gray-800 mb-1">{store.name}</p>
                         <p className="text-sm text-gray-600 truncate">{store.address}</p>
                         <div className="flex justify-between items-center mt-2">
-                          <span className="text-xs text-gray-500">Capacity: {store.capacity || 'N/A'}</span>
+                          <span className="text-xs text-gray-500">Credit: ${parseFloat(store.creditLimit).toLocaleString()}</span>
                           <span className={`text-xs px-2 py-1 rounded-full ${
-                            store.status === 'Active' ? 'bg-green-100 text-green-800' :
-                            store.status === 'Inactive' ? 'bg-red-100 text-red-800' :
-                            'bg-yellow-100 text-yellow-800'
+                            store.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                           }`}>
-                            {store.status}
+                            {store.isActive ? 'Active' : 'Inactive'}
                           </span>
                         </div>
+                        {store.totalProductQuantity > 0 && (
+                          <div className="mt-1 text-xs text-blue-600">
+                            {store.totalProductQuantity} items • ${parseFloat(store.stockValue).toLocaleString()} value
+                          </div>
+                        )}
                       </div>
                     ))}
+                    {apiStores.length === 0 && (
+                      <div className="text-center py-4">
+                        <p className="text-gray-500 text-sm">No stores yet. Create your first store!</p>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -455,11 +589,11 @@ const CreateStore = ({ onLogout }) => {
                     </li>
                     <li className="flex items-start">
                       <span className="inline-block w-2 h-2 bg-yellow-400 rounded-full mt-1 mr-2"></span>
-                      Enter any ZIP code format - it will be accepted
+                      Phone number must be valid and required
                     </li>
                     <li className="flex items-start">
                       <span className="inline-block w-2 h-2 bg-yellow-400 rounded-full mt-1 mr-2"></span>
-                      Regular capacity updates help in inventory planning
+                      Set an appropriate credit limit for the store
                     </li>
                     <li className="flex items-start">
                       <span className="inline-block w-2 h-2 bg-yellow-400 rounded-full mt-1 mr-2"></span>

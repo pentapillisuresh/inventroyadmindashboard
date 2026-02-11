@@ -4,6 +4,7 @@ import Sidebar from './Sidebar';
 import Header from './Header';
 import { FaEye, FaEdit, FaTrash, FaPlus, FaUser, FaPhone, FaBox, FaChartBar, FaTimes, FaSave } from 'react-icons/fa';
 import { storage } from '../data/storage';
+import ApiService from '../components/ApiService';
 
 const StoreManagement = ({ onLogout }) => {
   const [stores, setStores] = useState([]);
@@ -11,6 +12,15 @@ const StoreManagement = ({ onLogout }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingStore, setEditingStore] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [stats, setStats] = useState({
+    totalStores: 0,
+    activeStores: 0,
+    totalManagers: 0,
+    assignedManagers: 0,
+    totalItems: 0
+  });
+  const clientToken = localStorage.getItem('token');
   const [formData, setFormData] = useState({
     name: '',
     address: '',
@@ -21,110 +31,231 @@ const StoreManagement = ({ onLogout }) => {
     status: 'Active'
   });
 
+  // Get admin ID from localStorage
+  const getAdminId = () => {
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      const user = JSON.parse(userData);
+      return user.id || 1; // Default to 1 if not found
+    }
+    return 1; // Default admin ID
+  };
+
   useEffect(() => {
-    // Load stores and managers from localStorage
+    // Load data from APIs
     loadData();
   }, []);
 
-  const loadData = () => {
-    const loadedStores = storage.getStores();
-    const loadedManagers = storage.getManagers();
-    
-    setStores(loadedStores);
-    setManagers(loadedManagers.filter(manager => manager.status === 'Active'));
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const adminId = getAdminId();
+      
+      // Load stores from API
+      const storesResponse = await ApiService.get('/stores',{
+        headers: {
+          Authorization: `Bearer ${clientToken}`,
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      // Load stats from API
+      const statsResponse = await ApiService.get('/users/admin/store/summery',{
+        headers: {
+          Authorization: `Bearer ${clientToken}`,
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      if (storesResponse.success) {
+        // Filter stores for current admin
+        const adminStores = storesResponse.data.filter(store => store.adminId === adminId);
+        setStores(adminStores);
+        
+        // Calculate stats
+        const activeStores = adminStores.filter(store => store.isActive).length;
+        
+        // Find stats for current admin
+        const adminStats = statsResponse.data?.find(stat => stat.adminId === adminId) || {
+          storeCount: 0,
+          productItemCount: 0,
+          activeManagerCount: 0
+        };
+        
+        // Load managers from localStorage (or update with API if available)
+        const loadedManagers = storage.getManagers();
+        setManagers(loadedManagers.filter(manager => manager.status === 'Active'));
+        
+        // Calculate assigned managers
+        const assignedManagers = adminStores.filter(store => store.managerId).length;
+        
+        setStats({
+          totalStores: adminStats.storeCount,
+          activeStores: activeStores,
+          totalManagers: adminStats.activeManagerCount,
+          assignedManagers: assignedManagers,
+          totalItems: adminStats.productItemCount
+        });
+      }
+      
+    } catch (error) {
+      console.error('Error loading data:', error);
+      // Fallback to localStorage data
+      const loadedStores = storage.getStores();
+      const loadedManagers = storage.getManagers();
+      setStores(loadedStores);
+      setManagers(loadedManagers.filter(manager => manager.status === 'Active'));
+      
+      // Calculate fallback stats
+      const fallbackStats = calculateFallbackStats(loadedStores, loadedManagers);
+      setStats(fallbackStats);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDeleteStore = (id) => {
+  const calculateFallbackStats = (stores, managers) => {
+    const totalStores = stores.length;
+    const activeStores = stores.filter(store => store.status === 'Active').length;
+    const totalManagers = managers.filter(manager => manager.status === 'Active').length;
+    const assignedManagers = managers.filter(manager => manager.storeId).length;
+    const totalItems = stores.reduce((sum, store) => sum + (store.totalItems || 0), 0);
+    
+    return {
+      totalStores,
+      activeStores,
+      totalManagers,
+      assignedManagers,
+      totalItems
+    };
+  };
+
+  const handleDeleteStore = async (id) => {
     if (window.confirm('Are you sure you want to delete this store?')) {
-      const updatedStores = storage.deleteStore(id);
-      setStores(updatedStores);
+      try {
+        const response = await ApiService.delete(`/stores/${id}`, {
+          headers: {
+            Authorization: `Bearer ${clientToken}`,
+            'Content-Type': 'application/json',
+          }  
+        });
+        
+        if (response) {
+          // Update local state
+          const updatedStores = stores.filter(store => store.id !== id);
+          setStores(updatedStores);
+          
+          // Update localStorage for backup
+          storage.deleteStore(id);
+          
+          // Reload stats
+          await loadData();
+          
+          alert('Store deleted successfully!');
+        } else {
+          throw new Error('Failed to delete store');
+        }
+      } catch (error) {
+        console.error('Error deleting store:', error);
+        alert('Failed to delete store. Please try again.');
+      }
     }
   };
 
   const handleEditStore = (store) => {
     setEditingStore(store);
     
-    // Find the manager for this store
-    const storeManager = getStoreManager(store);
+    // Find the manager for this store from API data
+    const storeManager = store.Manager;
     
     setFormData({
       name: store.name || '',
       address: store.address || '',
-      capacity: store.capacity || '',
-      managerId: storeManager?.id?.toString() || '',
-      phone: store.phone || '',
-      stockValue: store.totalValue?.replace('$', '')?.replace('K', '000') || store.stockValue || '',
-      status: store.status || 'Active'
+      capacity: store.creditLimit ? `$${store.creditLimit}` : '',
+      managerId: store.managerId || '',
+      phone: store.phoneNumber || '',
+      stockValue: store.stockValue || '0',
+      status: store.isActive ? 'Active' : 'Inactive'
     });
     setShowEditModal(true);
   };
 
-  const handleSaveEdit = (e) => {
+  const handleSaveEdit = async (e) => {
     e.preventDefault();
     
     if (!editingStore) return;
     
-    // Get selected manager details
-    const selectedManager = managers.find(m => m.id === parseInt(formData.managerId));
-    
-    // Prepare updated data
-    const updatedData = {
-      name: formData.name,
-      address: formData.address,
-      capacity: formData.capacity,
-      phone: formData.phone,
-      status: formData.status,
-    };
-    
-    // Update store in localStorage
-    const updatedStore = storage.updateStore(editingStore.id, updatedData);
-    
-    if (updatedStore) {
-      // Update manager's store assignment if manager is selected
-      if (selectedManager) {
-        storage.updateManager(selectedManager.id, {
-          storeId: editingStore.id,
-          storeName: formData.name
-        });
+    try {
+      // Get selected manager from localStorage (or you might want to fetch from API)
+      const selectedManager = managers.find(m => m.id === parseInt(formData.managerId));
+      
+      // Prepare updated data according to API structure
+      const updatedData = {
+        name: formData.name,
+        address: formData.address,
+        phoneNumber: formData.phone,
+        email: editingStore.email || '',
+        creditLimit: parseFloat(formData.capacity.replace(/[^0-9.-]+/g, '')) || editingStore.creditLimit,
+        isActive: formData.status === 'Active',
+        managerId: formData.managerId || null
+      };
+      
+      // Call API to update store
+      const response = await ApiService.put(`/stores/${editingStore.id}`,updatedData, {
+        headers: {
+          Authorization: `Bearer ${clientToken}`,
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      if (response) {
         
-        // If manager was previously assigned to another store, update that store
-        managers.forEach(manager => {
-          if (manager.id !== selectedManager.id && manager.storeId === editingStore.id) {
-            storage.updateManager(manager.id, {
-              storeId: null,
-              storeName: 'Unassigned'
-            });
-          }
-        });
+        // Update local state
+        const updatedStores = stores.map(store => 
+          store.id === editingStore.id ? response : store
+        );
+        setStores(updatedStores);
+        
+        // Update localStorage for backup
+        const localStorageStore = {
+          id: response.id,
+          name: response.name,
+          address: response.address,
+          capacity: response.creditLimit,
+          phone: response.phoneNumber,
+          email: response.email,
+          status: response.isActive ? 'Active' : 'Inactive',
+          totalProducts: response.totalProductQuantity || 0,
+          totalValue: `$${response.stockValue || 0}`,
+          totalItems: parseInt(response.totalProductQuantity) || 0,
+          creditLimit: response.creditLimit,
+          currentCredit: response.currentCredit
+        };
+        storage.updateStore(response.id, localStorageStore);
+        
+        // Update manager assignment in localStorage
+        if (selectedManager) {
+          storage.updateManager(selectedManager.id, {
+            storeId: editingStore.id,
+            storeName: formData.name
+          });
+        }
+        
+        // Reload data to get updated stats
+        await loadData();
+        
+        // Close modal
+        setShowEditModal(false);
+        setEditingStore(null);
+        resetFormData();
+        
+        alert('Store updated successfully!');
       } else {
-        // If no manager selected, remove any existing assignment
-        managers.forEach(manager => {
-          if (manager.storeId === editingStore.id) {
-            storage.updateManager(manager.id, {
-              storeId: null,
-              storeName: 'Unassigned'
-            });
-          }
-        });
+        throw new Error('Failed to update store');
       }
-      
-      // Update local state
-      const updatedStores = stores.map(store => 
-        store.id === editingStore.id ? updatedStore : store
-      );
-      setStores(updatedStores);
-      
-      // Reload data to get updated manager assignments
-      loadData();
-      
-      // Close modal
-      setShowEditModal(false);
-      setEditingStore(null);
-      resetFormData();
-      
-      alert('Store updated successfully!');
-    } else {
-      alert('Error updating store!');
+    } catch (error) {
+      console.error('Error updating store:', error);
+      alert('Error updating store! Please try again.');
     }
   };
 
@@ -155,10 +286,15 @@ const StoreManagement = ({ onLogout }) => {
     });
   };
 
-  // Fixed: Get store manager by matching storeId
+  // Get store manager from API data or localStorage
   const getStoreManager = (store) => {
+    // First try to get from API data
+    if (store.Manager) {
+      return store.Manager;
+    }
+    
+    // Fallback to localStorage
     return managers.find(manager => {
-      // Match by storeId OR by store name (for backward compatibility)
       return manager.storeId === store.id || manager.storeName === store.name;
     });
   };
@@ -173,29 +309,11 @@ const StoreManagement = ({ onLogout }) => {
     });
   };
 
-  const calculateStoreStats = () => {
-    const totalStores = stores.length;
-    const activeStores = stores.filter(store => store.status === 'Active').length;
-    const totalManagers = managers.filter(manager => manager.status === 'Active').length;
-    const assignedManagers = managers.filter(manager => manager.storeId).length;
-    const totalItems = stores.reduce((sum, store) => sum + (store.totalItems || 0), 0);
-    
-    return {
-      totalStores,
-      activeStores,
-      totalManagers,
-      assignedManagers,
-      totalItems
-    };
-  };
-
   const filteredStores = stores.filter(store =>
-    store.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    store.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (getStoreManager(store)?.name?.toLowerCase().includes(searchTerm.toLowerCase()))
+    store?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    store?.address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (getStoreManager(store)?.name?.toLowerCase().includes(searchTerm?.toLowerCase()))
   );
-
-  const stats = calculateStoreStats();
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -280,144 +398,152 @@ const StoreManagement = ({ onLogout }) => {
             </div>
           </div>
 
+          {/* Loading State */}
+          {loading && (
+            <div className="text-center py-8">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <p className="mt-2 text-gray-600">Loading stores...</p>
+            </div>
+          )}
+
           {/* Stores Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-            {filteredStores.map((store) => {
-              const storeManager = getStoreManager(store);
-              
-              return (
-                <div key={store.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow">
-                  {/* Store Header */}
-                  <div className="p-6 pb-4">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="flex-1">
-                        <h3 className="text-xl font-bold text-gray-800 mb-1">{store.name}</h3>
-                        <p className="text-sm text-gray-600 mb-3">{store.address}</p>
-                        <div className="flex items-center space-x-2">
-                          <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                            store.status === 'Active' 
-                              ? 'bg-green-100 text-green-800' 
-                              : store.status === 'Inactive'
-                              ? 'bg-red-100 text-red-800'
-                              : 'bg-yellow-100 text-yellow-800'
-                          }`}>
-                            {store.status}
-                          </span>
-                          {storeManager && (
-                            <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
-                              Managed
+          {!loading && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+              {filteredStores.map((store) => {
+                const storeManager = getStoreManager(store);
+                
+                return (
+                  <div key={store.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow">
+                    {/* Store Header */}
+                    <div className="p-6 pb-4">
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="flex-1">
+                          <h3 className="text-xl font-bold text-gray-800 mb-1">{store.name}</h3>
+                          <p className="text-sm text-gray-600 mb-3">{store.address}</p>
+                          <div className="flex items-center space-x-2">
+                            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                              store.isActive 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-red-100 text-red-800'
+                            }`}>
+                              {store.isActive ? 'Active' : 'Inactive'}
                             </span>
+                            {storeManager && (
+                              <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
+                                Managed
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex space-x-2 ml-2">
+                          <Link
+                            to={`/stores/${store.id}`}
+                            className="p-2 hover:bg-gray-100 rounded-lg transition"
+                            title="View Details"
+                          >
+                            <FaEye className="text-gray-600" />
+                          </Link>
+                          <button
+                            onClick={() => handleEditStore(store)}
+                            className="p2 hover:bg-blue-50 rounded-lg transition"
+                            title="Edit"
+                          >
+                            <FaEdit className="text-blue-600" />
+                          </button>
+                        </div>
+                      </div>
+                      
+                      {/* Manager Info */}
+                      <div className="flex items-center space-x-3 mb-4">
+                        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                          <FaUser className="text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-800">
+                            {storeManager ? storeManager.name : 'Manager Not Assigned'}
+                          </p>
+                          <div className="flex items-center text-sm text-gray-600">
+                            <FaPhone className="mr-2 text-xs" />
+                            {store.phoneNumber || 'N/A'}
+                          </div>
+                          {store.email && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              {store.email}
+                            </p>
                           )}
                         </div>
                       </div>
-                      <div className="flex space-x-2 ml-2">
+                    </div>
+                    
+                    {/* Store Stats */}
+                    <div className="border-t border-gray-200 p-6 pt-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="text-center p-3 bg-gray-50 rounded-lg">
+                          <p className="text-sm text-gray-600 mb-1">Total Products</p>
+                          <p className="text-2xl font-bold text-gray-800">{store.totalProductQuantity || 0}</p>
+                        </div>
+                        <div className="text-center p-3 bg-gray-50 rounded-lg">
+                          <p className="text-sm text-gray-600 mb-1">Stock Value</p>
+                          <p className="text-2xl font-bold text-gray-800">
+                            ${store.stockValue || '0'}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      {/* Infrastructure Info */}
+                      <div className="mt-4 grid grid-cols-2 gap-2">
+                        <div className="text-center p-2 bg-gray-50 rounded">
+                          <p className="text-xs text-gray-600">Rooms</p>
+                          <p className="font-medium">{store.roomCount || 0}</p>
+                        </div>
+                        <div className="text-center p-2 bg-gray-50 rounded">
+                          <p className="text-xs text-gray-600">Racks</p>
+                          <p className="font-medium">{store.rackCount || 0}</p>
+                        </div>
+                      </div>
+                      
+                      {/* Action Buttons */}
+                      <div className="mt-6 grid grid-cols-2 gap-3">
                         <Link
                           to={`/stores/${store.id}`}
-                          className="p-2 hover:bg-gray-100 rounded-lg transition"
-                          title="View Details"
+                          className="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition text-center font-medium flex items-center justify-center space-x-2"
                         >
-                          <FaEye className="text-gray-600" />
+                          <FaEye />
+                          <span>View Details</span>
                         </Link>
                         <button
-                          onClick={() => handleEditStore(store)}
-                          className="p2 hover:bg-blue-50 rounded-lg transition"
-                          title="Edit"
+                          onClick={() => handleDeleteStore(store.id)}
+                          className="bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition text-center font-medium flex items-center justify-center space-x-2"
                         >
-                          <FaEdit className="text-blue-600" />
+                          <FaTrash />
+                          <span>Delete Store</span>
+                        </button>
+                      </div>
+                      
+                      {/* Additional Actions */}
+                      <div className="mt-4 flex space-x-2">
+                        <Link
+                          to={`/stores/${store.id}`}
+                          className="flex-1 text-sm text-blue-600 hover:text-blue-800 py-1 text-center border border-blue-200 rounded hover:bg-blue-50 transition"
+                        >
+                          View Reports
+                        </Link>
+                        <button 
+                          onClick={() => handleEditStore(store)}
+                          className="flex-1 text-sm text-gray-600 hover:text-gray-800 py-1 text-center border border-gray-200 rounded hover:bg-gray-50 transition"
+                        >
+                          Edit Store
                         </button>
                       </div>
                     </div>
-                    
-                    {/* Manager Info */}
-                    <div className="flex items-center space-x-3 mb-4">
-                      <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                        <FaUser className="text-blue-600" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-800">
-                          {storeManager ? storeManager.name : 'Manager Not Assigned'}
-                        </p>
-                        <div className="flex items-center text-sm text-gray-600">
-                          <FaPhone className="mr-2 text-xs" />
-                          {storeManager ? storeManager.phone : store.phone || 'N/A'}
-                        </div>
-                        {storeManager && (
-                          <p className="text-xs text-gray-500 mt-1">
-                            {storeManager.email}
-                          </p>
-                        )}
-                      </div>
-                    </div>
                   </div>
-                  
-                  {/* Store Stats */}
-                  <div className="border-t border-gray-200 p-6 pt-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="text-center p-3 bg-gray-50 rounded-lg">
-                        <p className="text-sm text-gray-600 mb-1">Total Products</p>
-                        <p className="text-2xl font-bold text-gray-800">{store.totalProducts || 0}</p>
-                      </div>
-                      <div className="text-center p-3 bg-gray-50 rounded-lg">
-                        <p className="text-sm text-gray-600 mb-1">Stock Value</p>
-                        <p className="text-2xl font-bold text-gray-800">
-                          {store.totalValue || '$0'}
-                        </p>
-                      </div>
-                    </div>
-                    
-                    {/* Infrastructure Info */}
-                    <div className="mt-4 grid grid-cols-2 gap-2">
-                      <div className="text-center p-2 bg-gray-50 rounded">
-                        <p className="text-xs text-gray-600">Rooms</p>
-                        <p className="font-medium">{(store.infrastructure?.length || 0)}</p>
-                      </div>
-                      <div className="text-center p-2 bg-gray-50 rounded">
-                        <p className="text-xs text-gray-600">Racks</p>
-                        <p className="font-medium">{(store.racks?.length || 0)}</p>
-                      </div>
-                    </div>
-                    
-                    {/* Action Buttons */}
-                    <div className="mt-6 grid grid-cols-2 gap-3">
-                      <Link
-                        to={`/stores/${store.id}`}
-                        className="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition text-center font-medium flex items-center justify-center space-x-2"
-                      >
-                        <FaEye />
-                        <span>View Details</span>
-                      </Link>
-                      <button
-                        onClick={() => handleDeleteStore(store.id)}
-                        className="bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition text-center font-medium flex items-center justify-center space-x-2"
-                      >
-                        <FaTrash />
-                        <span>Delete Store</span>
-                      </button>
-                    </div>
-                    
-                    {/* Additional Actions */}
-                    <div className="mt-4 flex space-x-2">
-                      <Link
-                        to={`/stores/${store.id}`}
-                        className="flex-1 text-sm text-blue-600 hover:text-blue-800 py-1 text-center border border-blue-200 rounded hover:bg-blue-50 transition"
-                      >
-                        View Reports
-                      </Link>
-                      <button 
-                        onClick={() => handleEditStore(store)}
-                        className="flex-1 text-sm text-gray-600 hover:text-gray-800 py-1 text-center border border-gray-200 rounded hover:bg-gray-50 transition"
-                      >
-                        Edit Store
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Empty State */}
-          {filteredStores.length === 0 && (
+          {!loading && filteredStores.length === 0 && (
             <div className="text-center py-16">
               <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-6">
                 <FaPlus className="text-gray-400 text-4xl" />
@@ -451,7 +577,7 @@ const StoreManagement = ({ onLogout }) => {
           )}
 
           {/* Total Stores Count */}
-          {filteredStores.length > 0 && (
+          {!loading && filteredStores.length > 0 && (
             <div className="mt-8 pt-6 border-t border-gray-200">
               <p className="text-sm text-gray-600">
                 Showing <span className="font-medium">{filteredStores.length}</span> of <span className="font-medium">{stores.length}</span> stores
@@ -515,10 +641,10 @@ const StoreManagement = ({ onLogout }) => {
                     />
                   </div>
 
-                  {/* Capacity */}
+                  {/* Capacity (Credit Limit) */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Capacity *
+                      Credit Limit *
                     </label>
                     <input
                       type="text"
@@ -526,7 +652,7 @@ const StoreManagement = ({ onLogout }) => {
                       value={formData.capacity}
                       onChange={handleChange}
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-                      placeholder="e.g., 5000 sq ft"
+                      placeholder="e.g., $50000"
                       required
                     />
                   </div>
@@ -542,7 +668,7 @@ const StoreManagement = ({ onLogout }) => {
                       value={formData.phone}
                       onChange={handleChange}
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-                      placeholder="e.g., +1 (555) 123-4567"
+                      placeholder="e.g., 91105423536"
                     />
                   </div>
 
@@ -605,7 +731,6 @@ const StoreManagement = ({ onLogout }) => {
                     >
                       <option value="Active">Active</option>
                       <option value="Inactive">Inactive</option>
-                      <option value="Maintenance">Under Maintenance</option>
                     </select>
                   </div>
                 </div>

@@ -6,20 +6,13 @@ import StatCard from './StatCard';
 import PendingApprovals from './PendingApprovals';
 import StockAlerts from './StockAlerts';
 import RecentActivity from './RecentActivity';
-import { 
-  FaStore, 
-  FaShoppingCart, 
-  FaFileInvoice, 
-  FaBoxes, 
-  FaCreditCard, 
-  FaUserTie,
-  FaChartLine,
-  FaExclamationTriangle,
-  FaCheckCircle
-} from 'react-icons/fa';
+import { FaStore, FaShoppingCart, FaFileInvoice, FaBoxes, FaCreditCard, FaUserTie, FaChartLine, FaExclamationTriangle, FaCheckCircle, FaSpinner } from 'react-icons/fa';
 import { storage } from '../data/storage';
+import ApiService from '../components/ApiService';
 
-// CreditDues Component
+const API_BASE_URL = 'http://localhost:5001/api';
+const clientToken = localStorage.getItem('token');
+// CreditDues Component (unchanged functionality)
 const CreditDues = ({ dues }) => {
   const [blockedOutlets, setBlockedOutlets] = useState([]);
   const [warningOutlets, setWarningOutlets] = useState([]);
@@ -54,11 +47,10 @@ const CreditDues = ({ dues }) => {
       return outlet;
     });
     storage.saveOutlets(updatedOutlets);
-    window.location.reload(); // Refresh to show updated status
+    window.location.reload();
   };
 
   const handleProcessPayment = (outletId) => {
-    // Navigate to outlet management for payment processing
     window.location.href = `/outlets`;
   };
 
@@ -206,39 +198,171 @@ const Dashboard = ({ onLogout }) => {
   const [creditDuesData, setCreditDuesData] = useState([]);
   const [stockAlertsData, setStockAlertsData] = useState([]);
   const [recentActivities, setRecentActivities] = useState([]);
+  
+  // Loading states
+  const [loadingStats, setLoadingStats] = useState(true);
+  const [loadingStockAlerts, setLoadingStockAlerts] = useState(true);
+  const [statsError, setStatsError] = useState('');
+  const [stockAlertsError, setStockAlertsError] = useState('');
 
   useEffect(() => {
-    // Load all data
-    const stores = storage.getStores();
+    fetchDashboardStats();
+    // fetchLowStockAlerts();
+    
+    // Keep existing local data for other sections
+    loadLocalData();
+  }, []);
+
+  const fetchDashboardStats = async () => {
+    setLoadingStats(true);
+    setStatsError('');
+    setLoadingStockAlerts(true);
+    setStockAlertsError('');
+
+    
+    try {
+      const response = await ApiService.get(`/reports/dashboard/stats`,{
+        headers: {
+          Authorization: `Bearer ${clientToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      // Update stats with API data while preserving existing local data for other fields
+      setStats(prevStats => ({
+        ...prevStats,
+        totalStores: response.myStores || 0,
+        activeOutlets: response.outlets || 0,
+        totalStockValue: response.inventoryValue || 0
+      }));
+      if (response.lowStockItems) {
+        const lowStockItems=response.lowStockItems
+        const transformedAlerts = lowStockItems.map(item => ({
+          id: item.id,
+          productName: item.Product?.name || 'Unknown Product',
+          sku: item.Product?.sku || 'N/A',
+          storeName: item.Store?.name || 'Unknown Store',
+          currentStock: item.quantity,
+          reorderLevel: item.reorderLevel,
+          status: item.quantity <= item.reorderLevel ? 'Low Stock' : 'Critical',
+          location: getLocationString(item)
+        }));
+        
+        setStockAlertsData(transformedAlerts);
+        } else {
+          setStockAlertsError(`All Stoke are full`);
+      }
+
+    } catch (err) {
+      setStockAlertsError(`Failed to load low stock alerts: ${err.message}`);
+      setStatsError(`Failed to load dashboard stats: ${err.message}`);
+      console.error('Error fetching dashboard stats:', err);
+      
+      // Fallback to local data if API fails
+      loadLocalStats();
+    } finally {
+      setLoadingStats(false);
+      setLoadingStockAlerts(false);
+    }
+  };
+
+  // const fetchLowStockAlerts = async () => {
+  //   setLoadingStockAlerts(true);
+  //   setStockAlertsError('');
+    
+  //   try {
+  //     // Using store ID 1 as per the API endpoint
+  //     const response = await ApiService.get(`/stores/1/inventory/low-stock`,{
+  //       headers: {
+  //         Authorization: `Bearer ${clientToken}`,
+  //         'Content-Type': 'application/json',
+  //       },
+  //     });
+      
+  //     if (!response) {
+  //       throw new Error(`HTTP error! status: ${response.status}`);
+  //     }
+      
+  //     // Transform the API response to match the format expected by StockAlerts component
+  //     const transformedAlerts = response.map(item => ({
+  //       id: item.id,
+  //       productName: item.Product?.name || 'Unknown Product',
+  //       sku: item.Product?.sku || 'N/A',
+  //       storeName: item.Store?.name || 'Unknown Store',
+  //       currentStock: item.quantity,
+  //       reorderLevel: item.reorderLevel,
+  //       status: item.quantity <= item.reorderLevel ? 'Low Stock' : 'Critical',
+  //       location: getLocationString(item)
+  //     }));
+      
+  //     setStockAlertsData(transformedAlerts);
+      
+  //   } catch (err) {
+  //     setStockAlertsError(`Failed to load low stock alerts: ${err.message}`);
+  //     console.error('Error fetching low stock alerts:', err);
+      
+  //     // Fallback to local data if API fails
+  //     setStockAlertsData(storage.getStores().slice(0, 3));
+  //   } finally {
+  //     setLoadingStockAlerts(false);
+  //   }
+  // };
+
+  // Helper function to generate location string from inventory item
+  const getLocationString = (item) => {
+    const parts = [];
+    if (item.Room) parts.push(item.Room.name);
+    if (item.Rack) parts.push(item.Rack.name);
+    if (item.Freezer) parts.push(item.Freezer.name);
+    return parts.length > 0 ? parts.join(' > ') : 'Main Storage';
+  };
+
+  const loadLocalData = () => {
+    // Load all local data for sections that don't have APIs yet
     const outlets = storage.getOutlets();
     const invoices = storage.getInvoices();
-    const products = storage.getProducts();
     const managers = storage.getManagers();
     const activities = storage.getRecentActivities();
 
-    // Calculate statistics
+    // Calculate statistics for local data
     const blockedOutlets = outlets.filter(o => o.status === 'Blocked').length;
     const warningOutlets = outlets.filter(o => {
       const percentage = Math.round(((o.creditUsed || 0) / (o.creditLimit || 1)) * 100);
       return percentage >= 80 && percentage < 100 && o.status !== 'Blocked';
     }).length;
 
-    setStats({
-      totalStores: stores.length,
-      activeOutlets: outlets.filter(o => o.status === 'Active').length,
+    // Update local-only stats
+    setStats(prevStats => ({
+      ...prevStats,
       pendingInvoices: invoices.filter(i => i.status === 'Pending').length,
-      totalStockValue: products.reduce((sum, p) => sum + (p.price * p.stock), 0),
       creditOutstanding: outlets.reduce((sum, o) => sum + (o.creditUsed || 0), 0),
       activeManagers: managers.filter(m => m.status === 'Active').length,
       blockedOutlets: blockedOutlets,
       warningOutlets: warningOutlets
-    });
+    }));
 
     setPendingApprovals(storage.getPendingApprovals());
     setCreditDuesData(outlets);
-    setStockAlertsData(storage.getStores().slice(0, 3));
     setRecentActivities(activities.slice(0, 5));
-  }, []);
+  };
+
+  const loadLocalStats = () => {
+    // Fallback function to load stats from local storage
+    const stores = storage.getStores();
+    const outlets = storage.getOutlets();
+    const products = storage.getProducts();
+
+    setStats(prevStats => ({
+      ...prevStats,
+      totalStores: stores.length,
+      activeOutlets: outlets.filter(o => o.status === 'Active').length,
+      totalStockValue: products.reduce((sum, p) => sum + (p.price * p.stock), 0)
+    }));
+  };
 
   const handleApprove = (id) => {
     const updatedApprovals = pendingApprovals.filter(item => item.id !== id);
@@ -252,17 +376,32 @@ const Dashboard = ({ onLogout }) => {
     storage.savePendingApprovals(updatedApprovals);
   };
 
+  // Show loading state while fetching initial data
+  if (loadingStats && loadingStockAlerts) {
+    return (
+      <div className="flex min-h-screen bg-gray-50">
+        <Sidebar onLogout={onLogout} />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <FaSpinner className="animate-spin text-4xl text-blue-600 mx-auto mb-4" />
+            <p className="text-gray-600">Loading dashboard data...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const statCards = [
     {
       title: 'Total Stores',
-      value: stats.totalStores,
+      value: loadingStats ? '...' : stats.totalStores,
       change: '+2 this month',
       icon: <FaStore className="text-blue-600" />,
       color: 'bg-blue-50'
     },
     {
       title: 'Active Outlets',
-      value: stats.activeOutlets,
+      value: loadingStats ? '...' : stats.activeOutlets,
       change: `${stats.blockedOutlets} blocked`,
       icon: <FaShoppingCart className="text-green-600" />,
       color: 'bg-green-50'
@@ -276,24 +415,10 @@ const Dashboard = ({ onLogout }) => {
     },
     {
       title: 'Total Stock Value',
-      value: `$${stats.totalStockValue.toLocaleString()}`,
+      value: loadingStats ? '...' : `$${stats.totalStockValue.toLocaleString()}`,
       change: '+12% from last month',
       icon: <FaBoxes className="text-purple-600" />,
       color: 'bg-purple-50'
-    },
-    {
-      title: 'Credit Outstanding',
-      value: `$${stats.creditOutstanding.toLocaleString()}`,
-      change: `${stats.blockedOutlets} blocked, ${stats.warningOutlets} near limit`,
-      icon: <FaCreditCard className="text-red-600" />,
-      color: 'bg-red-50'
-    },
-    {
-      title: 'Active Managers',
-      value: stats.activeManagers,
-      change: 'All logged in',
-      icon: <FaUserTie className="text-indigo-600" />,
-      color: 'bg-indigo-50'
     }
   ];
 
@@ -302,13 +427,26 @@ const Dashboard = ({ onLogout }) => {
       <Sidebar onLogout={onLogout} />
       
       <div className="flex-1">
-        <Header title="Dashboard" />
+        <Header title="Dashboard" showSearch={false}/>
         
         <main className="p-6">
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-800 mb-2">Admin Dashboard</h1>
             <p className="text-gray-600">Welcome back! Here's what's happening with your inventory system.</p>
           </div>
+
+          {/* Error Messages */}
+          {statsError && (
+            <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+              <p className="text-red-600 text-sm">{statsError}</p>
+            </div>
+          )}
+
+          {stockAlertsError && (
+            <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <p className="text-yellow-700 text-sm">{stockAlertsError}</p>
+            </div>
+          )}
 
           {/* Credit Warning Banner */}
           {stats.blockedOutlets > 0 && (
@@ -334,7 +472,7 @@ const Dashboard = ({ onLogout }) => {
           )}
 
           {/* Overview Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             {statCards.map((card, index) => (
               <StatCard key={index} {...card} />
             ))}
@@ -344,20 +482,16 @@ const Dashboard = ({ onLogout }) => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Left Column */}
             <div className="space-y-6">
-              <PendingApprovals 
-                approvals={pendingApprovals} 
-                onApprove={handleApprove}
-                onReject={handleReject}
-              />
-              
               <CreditDues dues={creditDuesData} />
             </div>
 
             {/* Right Column */}
             <div className="space-y-6">
-              <StockAlerts alerts={stockAlertsData} />
-              
-              <RecentActivity activities={recentActivities} />
+              <StockAlerts 
+                alerts={stockAlertsData} 
+                loading={loadingStockAlerts}
+                error={stockAlertsError}
+              />
             </div>
           </div>
         </main>

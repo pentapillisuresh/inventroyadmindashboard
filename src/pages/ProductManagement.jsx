@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { FaPlus, FaEdit, FaTrash, FaSearch, FaFilter } from 'react-icons/fa';
-import { storage } from '../data/storage';
 import AddProductModal from '../components/AddProductModal';
+import ApiService from '../components/ApiService';
 
 const ProductManagement = ({ onLogout }) => {
   const navigate = useNavigate();
@@ -14,14 +14,112 @@ const ProductManagement = ({ onLogout }) => {
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
-
+  const [loading, setLoading] = useState(true);
+  const [categories, setCategories] = useState(['All']);
+  const [allCategories, setAllCategories] = useState([]); // For category dropdown in modal
+  const [stats, setStats] = useState({
+    total: 0,
+    inStock: 0,
+    lowStock: 0,
+    outOfStock: 0
+  });
+  const clientToken = localStorage.getItem('token');
   useEffect(() => {
     loadProducts();
+    loadStats();
+    loadAllCategories();
   }, []);
 
-  const loadProducts = () => {
-    const allProducts = storage.getProducts();
-    setProducts(allProducts);
+  const loadProducts = async () => {
+    setLoading(true);
+
+    try {
+      const response = await ApiService.get('/products',{
+        headers: {
+          Authorization: `Bearer ${clientToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.products) {
+        // Transform API data to match your existing format
+        const transformedProducts = response.products.map(product => ({
+          id: product.id,
+          name: product.name,
+          sku: product.sku,
+          description: product.description || '',
+          category: product.Category?.name || 'Uncategorized',
+          price: parseFloat(product.price),
+          costPrice: parseFloat(product.costPrice),
+          stock: parseInt(product.quantity),
+          minStock: parseInt(product.thresholdQuantity),
+          status: getProductStatus(product.quantity, product.thresholdQuantity),
+          image: product.image,
+          isActive: product.isActive,
+          categoryId: product.categoryId
+        }));
+        
+        setProducts(transformedProducts);
+        
+        // Extract unique categories
+        const uniqueCategories = ['All'];
+        response.products.forEach(product => {
+          if (product.Category?.name && !uniqueCategories.includes(product.Category.name)) {
+            uniqueCategories.push(product.Category.name);
+          }
+        });
+        setCategories(uniqueCategories);
+      }
+    } catch (error) {
+      console.error('Error loading products:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadAllCategories = async () => {
+    
+    try {
+      // Assuming you have a categories endpoint
+      const response = await ApiService.get('/categories',{
+        headers: {
+          Authorization: `Bearer ${clientToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      setAllCategories(response.categories || data || []);
+    } catch (error) {
+      console.error('Error loading categories:', error);
+      // If categories endpoint doesn't exist, we'll handle it in the modal
+    }
+  };
+
+  const loadStats = async () => {
+    try {
+      const response = await ApiService.get('/products/admin/allCount',{
+        headers: {
+          Authorization: `Bearer ${clientToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      setStats({
+        total: response.totalProducts || 0,
+        inStock: response.inStockProducts || 0,
+        lowStock: response.lowStockProducts || 0,
+        outOfStock: response.outOfStockProducts || 0
+      });
+    } catch (error) {
+      console.error('Error loading stats:', error);
+    }
+  };
+
+  const getProductStatus = (quantity, threshold) => {
+    const qty = parseInt(quantity);
+    const thr = parseInt(threshold);
+    if (qty <= 0) return 'Out of Stock';
+    if (qty <= thr) return 'Low Stock';
+    return 'In Stock';
   };
 
   const handleAddProduct = () => {
@@ -34,21 +132,78 @@ const ProductManagement = ({ onLogout }) => {
     setShowModal(true);
   };
 
-  const handleDeleteProduct = (id) => {
-    storage.deleteProduct(id);
-    loadProducts();
-    setShowDeleteConfirm(null);
+  const handleDeleteProduct = async (id) => {
+    try {
+      // Make API call to delete product
+      await ApiService.delete(`/products/${id}`, {
+        headers: {
+          Authorization: `Bearer ${clientToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      // Reload data
+      loadProducts();
+      loadStats();
+      setShowDeleteConfirm(null);
+    } catch (error) {
+      console.error('Error deleting product:', error);
+    }
   };
 
-  const handleSaveProduct = (productData) => {
-    if (editingProduct) {
-      storage.updateProduct(editingProduct.id, productData);
-    } else {
-      storage.addProduct(productData);
+  const handleSaveProduct = async (productData) => {
+    try {
+      // Prepare the request payload based on your API specification
+      const productPayload = {
+        name: productData.name.trim(),
+        sku: productData.sku.trim(),
+        categoryId: parseInt(productData.categoryId),
+        quantity: parseInt(productData.quantity),
+        price: parseFloat(productData.price),
+        costPrice: parseFloat(productData.costPrice || 0),
+        thresholdQuantity: parseInt(productData.thresholdQuantity)
+      };
+
+      // Add description if it exists
+      if (productData.description && productData.description.trim()) {
+        productPayload.description = productData.description.trim();
+      }
+      console.log("productPayload::",productPayload)
+      let response;
+      
+      if (editingProduct) {
+        // Update existing product
+        response = await ApiService.put(`/products/${editingProduct.id}`,productPayload, {
+          headers: {
+            Authorization: `Bearer ${clientToken}`,
+            'Content-Type': 'application/json',
+          },
+        });
+      } else {
+        // Add new product
+        response = await ApiService.post('/products',productPayload, {
+          headers: {
+            Authorization: `Bearer ${clientToken}`,
+            'Content-Type': 'application/json',
+          },
+        });
+      }
+      
+      
+      if (!response) {
+        throw new Error(response.message || 'Failed to save product');
+      }
+      
+      // Reload data
+      await loadProducts();
+      await loadStats();
+      setShowModal(false);
+      setEditingProduct(null);
+      
+    } catch (error) {
+      console.error('Error saving product:', error);
+      alert(`Error: ${error.message}`);
     }
-    loadProducts();
-    setShowModal(false);
-    setEditingProduct(null);
   };
 
   const getStatusColor = (status) => {
@@ -66,14 +221,6 @@ const ProductManagement = ({ onLogout }) => {
     const matchesCategory = selectedCategory === 'All' || product.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
-
-  const categories = ['All', ...storage.getCategories()];
-  const stats = {
-    total: products.length,
-    inStock: products.filter(p => p.status === 'In Stock').length,
-    lowStock: products.filter(p => p.status === 'Low Stock').length,
-    outOfStock: products.filter(p => p.status === 'Out of Stock').length
-  };
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -161,54 +308,65 @@ const ProductManagement = ({ onLogout }) => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredProducts.map((product) => (
-                      <tr key={product.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="font-medium text-gray-900">{product.name}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{product.sku}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{product.category}</td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-semibold text-gray-900">${product.price.toFixed(2)}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">
-                            {product.stock} units
-                            <div className="text-xs text-gray-500">Min: {product.minStock}</div>
+                    {loading ? (
+                      <tr>
+                        <td colSpan="7" className="px-6 py-8 text-center">
+                          <div className="flex justify-center">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                           </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(product.status)}`}>
-                            {product.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => handleEditProduct(product)}
-                              className="text-blue-600 hover:text-blue-900"
-                            >
-                              <FaEdit />
-                            </button>
-                            <button
-                              onClick={() => setShowDeleteConfirm(product.id)}
-                              className="text-red-600 hover:text-red-900"
-                            >
-                              <FaTrash />
-                            </button>
-                          </div>
+                          <p className="mt-2 text-gray-500">Loading products...</p>
                         </td>
                       </tr>
-                    ))}
+                    ) : filteredProducts.length > 0 ? (
+                      filteredProducts.map((product) => (
+                        <tr key={product.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="font-medium text-gray-900">{product.name}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{product.sku}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{product.category}</td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-semibold text-gray-900">${product.price.toFixed(2)}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">
+                              {product.stock} units
+                              <div className="text-xs text-gray-500">Min: {product.minStock}</div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(product.status)}`}>
+                              {product.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <div className="flex space-x-2">
+                              <button
+                                onClick={() => handleEditProduct(product)}
+                                className="text-blue-600 hover:text-blue-900"
+                              >
+                                <FaEdit />
+                              </button>
+                              <button
+                                onClick={() => setShowDeleteConfirm(product.id)}
+                                className="text-red-600 hover:text-red-900"
+                              >
+                                <FaTrash />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="7" className="px-6 py-12 text-center">
+                          <div className="text-gray-400 mb-2">No products found</div>
+                          <div className="text-gray-500 text-sm">Try adjusting your search or add a new product</div>
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
-                
-                {filteredProducts.length === 0 && (
-                  <div className="text-center py-12">
-                    <div className="text-gray-400 mb-2">No products found</div>
-                    <div className="text-gray-500 text-sm">Try adjusting your search or add a new product</div>
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -219,6 +377,7 @@ const ProductManagement = ({ onLogout }) => {
       {showModal && (
         <AddProductModal
           product={editingProduct}
+          categories={allCategories} // Pass categories to modal for dropdown
           onSave={handleSaveProduct}
           onClose={() => {
             setShowModal(false);

@@ -2,21 +2,8 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import AddDistributionModal from '../components/AddDistributionModal';
-import { 
-  FaPlus, 
-  FaSearch, 
-  FaFilter, 
-  FaEye, 
-  FaEdit, 
-  FaTrash, 
-  FaTruck, 
-  FaClock, 
-  FaCheckCircle,
-  FaWarehouse,
-  FaBox,
-  FaInfoCircle
-} from 'react-icons/fa';
-import { storage } from '../data/storage';
+import {FaPlus,FaSearch,FaFilter,FaEye,FaEdit,FaTrash,FaTruck,FaClock,FaCheckCircle,FaWarehouse,FaBox,FaInfoCircle,FaTimes} from 'react-icons/fa';
+import ApiService from '../components/ApiService';
 
 const StockDistribution = ({ onLogout }) => {
   const [distributions, setDistributions] = useState([]);
@@ -28,6 +15,7 @@ const StockDistribution = ({ onLogout }) => {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedDistribution, setSelectedDistribution] = useState(null);
   const [stores, setStores] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     all: 0,
     pending: 0,
@@ -37,41 +25,140 @@ const StockDistribution = ({ onLogout }) => {
     credit: 0,
     totalValue: 0
   });
-
+  const clientToken = localStorage.getItem('token');
   useEffect(() => {
     loadDistributions();
-    loadStores();
   }, []);
 
-  const loadStores = () => {
-    const loadedStores = storage.getStores();
-    setStores(loadedStores);
-  };
+  const loadDistributions = async () => {
+    try {
+      setLoading(true);
+      const response = await ApiService.get('/invoice/allDistributed/Invoices/admin',{
+        headers: {
+          Authorization: `Bearer ${clientToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+         // Transform API data to match your UI structure
+      const transformedDistributions = response.invoices.map(invoice => {
+        // Extract unique store names
+        const uniqueStores = [...new Set(response.invoices.map(inv => inv.Store.name))];
+        setStores(uniqueStores.map((name, index) => ({
+          id: index + 1,
+          name: name
+        })));
 
-  const loadDistributions = () => {
-    const allDistributions = storage.getDistributions();
-    setDistributions(allDistributions);
-    
-    // Calculate statistics
-    const all = allDistributions.length;
-    const pending = allDistributions.filter(d => d.status === 'Pending').length;
-    const inTransit = allDistributions.filter(d => d.status === 'In Transit').length;
-    const completed = allDistributions.filter(d => d.status === 'Completed').length;
-    const paid = allDistributions.filter(d => d.paymentType === 'Paid').length;
-    const credit = allDistributions.filter(d => d.paymentType === 'Credit').length;
-    const totalValue = allDistributions.reduce((sum, d) => sum + d.totalValue, 0);
-    
-    setStats({ all, pending, inTransit, completed, paid, credit, totalValue });
+        // Calculate total items
+        const totalItems = invoice.items.reduce((sum, item) => sum + item.quantity, 0);
+        
+        // Map items to products format
+        const products = invoice.items.map(item => ({
+          productId: item.productId,
+          productName: item.Product.name,
+          quantity: item.quantity,
+          price: parseFloat(item.price),
+          total: parseFloat(item.totalPrice),
+          sku: item.Product.sku
+        }));
+
+        // Map API status to your UI status
+        const mapStatus = (apiStatus) => {
+          switch (apiStatus) {
+            case 'pending': return 'Pending';
+            case 'completed': return 'Completed';
+            case 'cancelled': return 'Cancelled';
+            default: return 'Pending';
+          }
+        };
+
+        // Map payment method
+        const mapPaymentType = (paymentMethod) => {
+          switch (paymentMethod) {
+            case 'paid': return 'Paid';
+            case 'credit': return 'Credit';
+            case 'mixed': return 'Mixed';
+            default: return 'Paid';
+          }
+        };
+
+        return {
+          id: invoice.invoiceNumber,
+          storeId: invoice.storeId.toString(),
+          storeName: invoice.Store.name,
+          managerName: invoice.StoreManager?.name || 'Unassigned',
+          date: new Date(invoice.invoiceDate).toLocaleDateString(),
+          createdAt: invoice.createdAt,
+          totalItems: totalItems,
+          products: products,
+          totalValue: parseFloat(invoice.totalAmount),
+          paymentType: mapPaymentType(invoice.paymentMethod),
+          status: mapStatus(invoice.status),
+          discount: 0,
+          notes: '',
+          // API specific fields
+          invoiceId: invoice.id,
+          creditAmount: parseFloat(invoice.creditAmount),
+          paidAmount: parseFloat(invoice.paidAmount),
+          adminName: invoice.Admin.name,
+          adminEmail: invoice.Admin.email
+        };
+      });
+
+      setDistributions(transformedDistributions);
+      
+      // Calculate statistics from transformed data
+      const all = transformedDistributions.length;
+      const pending = transformedDistributions.filter(d => d.status === 'Pending').length;
+      const inTransit = 0; // API doesn't have this status
+      const completed = transformedDistributions.filter(d => d.status === 'Completed').length;
+      const paid = transformedDistributions.filter(d => d.paymentType === 'Paid').length;
+      const credit = transformedDistributions.filter(d => d.paymentType === 'Credit').length;
+      const totalValue = transformedDistributions.reduce((sum, d) => sum + d.totalValue, 0);
+      
+      setStats({ all, pending, inTransit, completed, paid, credit, totalValue });
+    } catch (error) {
+      console.error('Error loading distributions:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCreateDistribution = () => {
     setShowModal(true);
   };
 
-  const handleSaveDistribution = (distributionData) => {
-    storage.addDistribution(distributionData);
-    loadDistributions();
-    setShowModal(false);
+  const handleSaveDistribution = async (distributionData) => {
+    try {
+      // Prepare API-compatible data
+      const apiData = {
+        storeId: parseInt(distributionData.storeId),
+        type: 'distribution',
+        paymentMethod: distributionData.paymentType.toLowerCase(),
+        totalAmount: distributionData.totalValue,
+        creditAmount: distributionData.paymentType === 'Credit' ? distributionData.totalValue : 0,
+        paidAmount: distributionData.paymentType === 'Paid' ? distributionData.totalValue : 0,
+        items: distributionData.products.map(product => ({
+          productId: product.productId,
+          quantity: product.quantity,
+          price: product.price
+        }))
+      };
+
+      // Here you would make a POST request to create an invoice
+      // const response = await fetch('http://localhost:5001/api/invoice/create', {
+      //   method: 'POST',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify(apiData)
+      // });
+
+      // For now, we'll just reload the data
+      console.log('Saving distribution:', apiData);
+      
+      loadDistributions();
+      setShowModal(false);
+    } catch (error) {
+      console.error('Error saving distribution:', error);
+    }
   };
 
   const handleViewDetails = (distribution) => {
@@ -79,15 +166,56 @@ const StockDistribution = ({ onLogout }) => {
     setShowDetailsModal(true);
   };
 
-  const handleStatusUpdate = (id, newStatus) => {
-    storage.updateDistributionStatus(id, newStatus);
-    loadDistributions();
+  const handleStatusUpdate = async (invoiceNumber, newStatus) => {
+    try {
+      // Map your UI status to API status
+      const mapToApiStatus = (uiStatus) => {
+        switch (uiStatus) {
+          case 'Pending': return 'pending';
+          case 'In Transit': return 'pending'; // API doesn't have this status
+          case 'Completed': return 'completed';
+          case 'Cancelled': return 'cancelled';
+          default: return 'pending';
+        }
+      };
+
+      const apiStatus = mapToApiStatus(newStatus);
+      
+      // Find the invoice ID
+      const distribution = distributions.find(d => d.id === invoiceNumber);
+      
+      // Here you would make a PATCH request to update the status
+      // const response = await fetch(`http://localhost:5001/api/invoice/updateStatus/${distribution.invoiceId}`, {
+      //   method: 'PATCH',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify({ status: apiStatus })
+      // });
+
+      console.log(`Updating status of ${invoiceNumber} to ${apiStatus}`);
+      
+      loadDistributions();
+    } catch (error) {
+      console.error('Error updating status:', error);
+    }
   };
 
-  const handleDeleteDistribution = (id) => {
+  const handleDeleteDistribution = async (invoiceNumber) => {
     if (window.confirm('Are you sure you want to delete this distribution?')) {
-      storage.deleteDistribution(id);
-      loadDistributions();
+      try {
+        // Find the invoice ID
+        const distribution = distributions.find(d => d.id === invoiceNumber);
+        
+        // Here you would make a DELETE request
+        // const response = await fetch(`http://localhost:5001/api/invoice/delete/${distribution.invoiceId}`, {
+        //   method: 'DELETE'
+        // });
+
+        console.log(`Deleting invoice: ${invoiceNumber}`);
+        
+        loadDistributions();
+      } catch (error) {
+        console.error('Error deleting distribution:', error);
+      }
     }
   };
 
@@ -96,6 +224,7 @@ const StockDistribution = ({ onLogout }) => {
       case 'Completed': return 'bg-green-100 text-green-800';
       case 'In Transit': return 'bg-blue-100 text-blue-800';
       case 'Pending': return 'bg-yellow-100 text-yellow-800';
+      case 'Cancelled': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -104,6 +233,7 @@ const StockDistribution = ({ onLogout }) => {
     switch (paymentType) {
       case 'Paid': return 'bg-green-50 text-green-700 border border-green-200';
       case 'Credit': return 'bg-blue-50 text-blue-700 border border-blue-200';
+      case 'Mixed': return 'bg-purple-50 text-purple-700 border border-purple-200';
       default: return 'bg-gray-50 text-gray-700 border border-gray-200';
     }
   };
@@ -113,6 +243,7 @@ const StockDistribution = ({ onLogout }) => {
       case 'Completed': return <FaCheckCircle className="text-green-500" />;
       case 'In Transit': return <FaTruck className="text-blue-500" />;
       case 'Pending': return <FaClock className="text-yellow-500" />;
+      case 'Cancelled': return <FaTimes className="text-red-500" />;
       default: return null;
     }
   };
@@ -257,7 +388,7 @@ const StockDistribution = ({ onLogout }) => {
                 
                 {/* Filters Row */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* Status Filter */}
+                  {/* Status Filter - Updated according to invoice model */}
                   <div className="relative">
                     <div className="flex items-center space-x-2">
                       <FaFilter className="text-gray-400" />
@@ -268,13 +399,13 @@ const StockDistribution = ({ onLogout }) => {
                       >
                         <option value="All">All Status</option>
                         <option value="Pending">Pending</option>
-                        <option value="In Transit">In Transit</option>
                         <option value="Completed">Completed</option>
+                        <option value="Cancelled">Cancelled</option>
                       </select>
                     </div>
                   </div>
                   
-                  {/* Payment Filter */}
+                  {/* Payment Filter - Updated according to invoice model */}
                   <div className="relative">
                     <select
                       value={paymentFilter}
@@ -284,6 +415,7 @@ const StockDistribution = ({ onLogout }) => {
                       <option value="All">All Payments</option>
                       <option value="Paid">Paid</option>
                       <option value="Credit">Credit</option>
+                      <option value="Mixed">Mixed</option>
                     </select>
                   </div>
                   
@@ -307,177 +439,167 @@ const StockDistribution = ({ onLogout }) => {
             </div>
             
             {/* Distributions Table */}
-            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">DISTRIBUTION ID</th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">STORE</th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">MANAGER</th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">DATE</th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PRODUCTS</th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">LOCATION</th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">TOTAL</th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PAYMENT</th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">STATUS</th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ACTIONS</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredDistributions.map((distribution) => (
-                      <tr key={distribution.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4">
-                          <div className="font-medium text-gray-900">{distribution.id}</div>
-                          <div className="text-xs text-gray-500">
-                            {new Date(distribution.createdAt).toLocaleDateString()}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="font-medium text-gray-900">{distribution.storeName}</div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm text-gray-900">{distribution.managerName || 'Unassigned'}</div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm text-gray-500">{distribution.date}</div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm text-gray-900">
-                            {distribution.totalItems} items
+            {loading ? (
+              <div className="text-center py-16">
+                <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
+                <p className="mt-4 text-gray-600">Loading distributions...</p>
+              </div>
+            ) : (
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">INVOICE NUMBER</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">STORE</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">MANAGER</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">DATE</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PRODUCTS</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SKU</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">TOTAL</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PAYMENT</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">STATUS</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ACTIONS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {filteredDistributions.map((distribution) => (
+                        <tr key={distribution.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4">
+                            <div className="font-medium text-gray-900">{distribution.id}</div>
                             <div className="text-xs text-gray-500">
-                              {distribution.products.length} product{distribution.products.length !== 1 ? 's' : ''}
+                              {new Date(distribution.createdAt).toLocaleDateString()}
                             </div>
-                            <div className="mt-1">
-                              {distribution.products.slice(0, 2).map(p => (
-                                <div key={p.productId} className="text-xs text-gray-600">
-                                  • {p.productName} ({p.quantity})
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="font-medium text-gray-900">{distribution.storeName}</div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm text-gray-900">{distribution.managerName}</div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm text-gray-500">{distribution.date}</div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm text-gray-900">
+                              {distribution.totalItems} items
+                              <div className="text-xs text-gray-500">
+                                {distribution.products.length} product{distribution.products.length !== 1 ? 's' : ''}
+                              </div>
+                              <div className="mt-1">
+                                {distribution.products.slice(0, 2).map(p => (
+                                  <div key={p.productId} className="text-xs text-gray-600">
+                                    • {p.productName} ({p.quantity})
+                                  </div>
+                                ))}
+                                {distribution.products.length > 2 && (
+                                  <div className="text-xs text-gray-400">
+                                    +{distribution.products.length - 2} more
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm text-gray-600">
+                              {distribution.products.slice(0, 1).map(p => (
+                                <div key={p.productId} className="text-xs">
+                                  {p.sku}
                                 </div>
                               ))}
-                              {distribution.products.length > 2 && (
-                                <div className="text-xs text-gray-400">
-                                  +{distribution.products.length - 2} more
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm font-semibold text-gray-900">
+                              ${distribution.totalValue.toFixed(2)}
+                              {distribution.creditAmount > 0 && (
+                                <div className="text-xs text-blue-600">
+                                  Credit: ${distribution.creditAmount.toFixed(2)}
                                 </div>
                               )}
                             </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm">
-                            {distribution.products.some(p => p.room) ? (
-                              <div className="space-y-1">
-                                {distribution.products.slice(0, 2).map(p => (
-                                  <div key={p.productId} className="text-xs">
-                                    {p.room && (
-                                      <div className="flex items-center space-x-1">
-                                        <FaWarehouse className="text-gray-400" />
-                                        <span>{p.room}</span>
-                                        {p.rack && (
-                                          <>
-                                            <span>/</span>
-                                            <span>{p.rack}</span>
-                                          </>
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <span className="text-gray-400 text-xs">Not specified</span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm font-semibold text-gray-900">
-                            ${distribution.totalValue.toFixed(2)}
-                            {distribution.discount > 0 && (
-                              <div className="text-xs text-green-600">
-                                {distribution.discount}% discount
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`px-3 py-1 text-xs font-medium rounded-full ${getPaymentColor(distribution.paymentType)}`}>
-                            {distribution.paymentType}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center">
-                            {getStatusIcon(distribution.status)}
-                            <span className={`ml-2 px-3 py-1 text-xs font-medium rounded-full ${getStatusColor(distribution.status)}`}>
-                              {distribution.status}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`px-3 py-1 text-xs font-medium rounded-full ${getPaymentColor(distribution.paymentType)}`}>
+                              {distribution.paymentType}
                             </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => handleViewDetails(distribution)}
-                              className="text-blue-600 hover:text-blue-900 p-2 hover:bg-blue-50 rounded-lg transition"
-                              title="View Details"
-                            >
-                              <FaEye />
-                            </button>
-                            {distribution.status === 'Pending' && (
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center">
+                              {getStatusIcon(distribution.status)}
+                              <span className={`ml-2 px-3 py-1 text-xs font-medium rounded-full ${getStatusColor(distribution.status)}`}>
+                                {distribution.status}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex space-x-2">
                               <button
-                                onClick={() => handleStatusUpdate(distribution.id, 'In Transit')}
-                                className="text-yellow-600 hover:text-yellow-900 p-2 hover:bg-yellow-50 rounded-lg transition"
-                                title="Mark as In Transit"
+                                onClick={() => handleViewDetails(distribution)}
+                                className="text-blue-600 hover:text-blue-900 p-2 hover:bg-blue-50 rounded-lg transition"
+                                title="View Details"
                               >
-                                <FaTruck />
+                                <FaEye />
                               </button>
-                            )}
-                            {distribution.status === 'In Transit' && (
+                              {distribution.status === 'Pending' && (
+                                <button
+                                  onClick={() => handleStatusUpdate(distribution.id, 'Completed')}
+                                  className="text-green-600 hover:text-green-900 p-2 hover:bg-green-50 rounded-lg transition"
+                                  title="Mark as Completed"
+                                >
+                                  <FaCheckCircle />
+                                </button>
+                              )}
+                              {distribution.status !== 'Cancelled' && (
+                                <button
+                                  onClick={() => handleStatusUpdate(distribution.id, 'Cancelled')}
+                                  className="text-red-600 hover:text-red-900 p-2 hover:bg-red-50 rounded-lg transition"
+                                  title="Cancel Distribution"
+                                >
+                                  <FaTimes />
+                                </button>
+                              )}
                               <button
-                                onClick={() => handleStatusUpdate(distribution.id, 'Completed')}
-                                className="text-green-600 hover:text-green-900 p-2 hover:bg-green-50 rounded-lg transition"
-                                title="Mark as Completed"
+                                onClick={() => handleDeleteDistribution(distribution.id)}
+                                className="text-red-600 hover:text-red-900 p-2 hover:bg-red-50 rounded-lg transition"
+                                title="Delete"
                               >
-                                <FaCheckCircle />
+                                <FaTrash />
                               </button>
-                            )}
-                            <button
-                              onClick={() => handleDeleteDistribution(distribution.id)}
-                              className="text-red-600 hover:text-red-900 p-2 hover:bg-red-50 rounded-lg transition"
-                              title="Delete"
-                            >
-                              <FaTrash />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                
-                {filteredDistributions.length === 0 && (
-                  <div className="text-center py-16">
-                    <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <FaBox className="text-gray-400 text-3xl" />
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  
+                  {filteredDistributions.length === 0 && (
+                    <div className="text-center py-16">
+                      <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <FaBox className="text-gray-400 text-3xl" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                        {searchTerm || statusFilter !== 'All' || paymentFilter !== 'All' || storeFilter !== 'All' 
+                          ? 'No distributions found' 
+                          : 'No distributions yet'}
+                      </h3>
+                      <p className="text-gray-600 max-w-md mx-auto mb-6">
+                        {searchTerm || statusFilter !== 'All' || paymentFilter !== 'All' || storeFilter !== 'All'
+                          ? 'Try adjusting your search or filters' 
+                          : 'Create your first distribution to start managing stock transfers'}
+                      </p>
+                      <button
+                        onClick={handleCreateDistribution}
+                        className="inline-flex items-center space-x-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition"
+                      >
+                        <FaPlus />
+                        <span>Create First Distribution</span>
+                      </button>
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                      {searchTerm || statusFilter !== 'All' || paymentFilter !== 'All' || storeFilter !== 'All' 
-                        ? 'No distributions found' 
-                        : 'No distributions yet'}
-                    </h3>
-                    <p className="text-gray-600 max-w-md mx-auto mb-6">
-                      {searchTerm || statusFilter !== 'All' || paymentFilter !== 'All' || storeFilter !== 'All'
-                        ? 'Try adjusting your search or filters' 
-                        : 'Create your first distribution to start managing stock transfers'}
-                    </p>
-                    <button
-                      onClick={handleCreateDistribution}
-                      className="inline-flex items-center space-x-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition"
-                    >
-                      <FaPlus />
-                      <span>Create First Distribution</span>
-                    </button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
@@ -499,6 +621,7 @@ const StockDistribution = ({ onLogout }) => {
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900">Distribution Details</h2>
                   <p className="text-gray-600 mt-1">{selectedDistribution.id}</p>
+                  <p className="text-sm text-gray-500">Admin: {selectedDistribution.adminName}</p>
                 </div>
                 <button
                   onClick={() => setShowDetailsModal(false)}
@@ -517,7 +640,7 @@ const StockDistribution = ({ onLogout }) => {
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Manager</p>
-                    <p className="font-medium">{selectedDistribution.managerName || 'Unassigned'}</p>
+                    <p className="font-medium">{selectedDistribution.managerName}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Date</p>
@@ -553,6 +676,7 @@ const StockDistribution = ({ onLogout }) => {
                       <div className="flex justify-between items-start">
                         <div>
                           <h4 className="font-medium text-gray-900">{product.productName}</h4>
+                          <p className="text-sm text-gray-500 mb-2">SKU: {product.sku}</p>
                           <div className="mt-2 grid grid-cols-3 gap-4">
                             <div>
                               <p className="text-sm text-gray-600">Quantity</p>
@@ -567,25 +691,6 @@ const StockDistribution = ({ onLogout }) => {
                               <p className="font-medium">${product.total.toFixed(2)}</p>
                             </div>
                           </div>
-                          {(product.room || product.rack) && (
-                            <div className="mt-3 pt-3 border-t border-gray-200">
-                              <p className="text-sm text-gray-600 mb-1">Location</p>
-                              <div className="flex items-center space-x-2">
-                                {product.room && (
-                                  <div className="flex items-center space-x-1 text-sm">
-                                    <FaWarehouse className="text-gray-400" />
-                                    <span>{product.room}</span>
-                                  </div>
-                                )}
-                                {product.rack && (
-                                  <div className="flex items-center space-x-1 text-sm">
-                                    <FaBox className="text-gray-400" />
-                                    <span>{product.rack}</span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -593,15 +698,28 @@ const StockDistribution = ({ onLogout }) => {
                 </div>
               </div>
 
-              {/* Notes */}
-              {selectedDistribution.notes && (
-                <div className="mb-8">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-2">Notes</h3>
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <p className="text-gray-700">{selectedDistribution.notes}</p>
+              {/* Payment Summary */}
+              <div className="mb-8">
+                <h3 className="text-lg font-semibold text-gray-800 mb-2">Payment Summary</h3>
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-gray-600">Total Amount</p>
+                      <p className="text-lg font-semibold">${selectedDistribution.totalValue.toFixed(2)}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Paid Amount</p>
+                      <p className="text-lg font-semibold text-green-600">${selectedDistribution.paidAmount?.toFixed(2) || '0.00'}</p>
+                    </div>
+                    {selectedDistribution.creditAmount > 0 && (
+                      <div>
+                        <p className="text-sm text-gray-600">Credit Amount</p>
+                        <p className="text-lg font-semibold text-blue-600">${selectedDistribution.creditAmount.toFixed(2)}</p>
+                      </div>
+                    )}
                   </div>
                 </div>
-              )}
+              </div>
 
               {/* Summary */}
               <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
@@ -614,12 +732,6 @@ const StockDistribution = ({ onLogout }) => {
                     <span className="text-gray-600">Number of Products</span>
                     <span className="font-medium">{selectedDistribution.products.length}</span>
                   </div>
-                  {selectedDistribution.discount > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Discount</span>
-                      <span className="font-medium text-green-600">{selectedDistribution.discount}%</span>
-                    </div>
-                  )}
                   <div className="flex justify-between border-t border-gray-200 pt-2">
                     <span className="text-lg font-semibold">Total Amount</span>
                     <span className="text-xl font-bold text-gray-900">${selectedDistribution.totalValue.toFixed(2)}</span>

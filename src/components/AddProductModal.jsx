@@ -1,85 +1,139 @@
 import React, { useState, useEffect } from 'react';
 import { FaTimes } from 'react-icons/fa';
-import { storage } from '../data/storage';
+import ApiService from './ApiService';
 
-const AddProductModal = ({ product, onSave, onClose }) => {
+const AddProductModal = ({ product, categories = [], onSave, onClose }) => {
   const [formData, setFormData] = useState({
     name: '',
     sku: '',
-    category: '',
+    categoryId: '',
     price: '',
     stock: '',
-    minStock: 100,
+    costPrice: '',
+    minStock: '10',
     description: ''
   });
-
-  const [categories, setCategories] = useState([]);
-  const [newCategory, setNewCategory] = useState('');
+  const clientToken = localStorage.getItem('token');
+  const [loading, setLoading] = useState(false);
   const [showNewCategory, setShowNewCategory] = useState(false);
+  const [newCategory, setNewCategory] = useState('');
 
   useEffect(() => {
-    // Load categories
-    const loadedCategories = storage.getCategories();
-    setCategories(loadedCategories);
-    
     // If editing, populate form with product data
     if (product) {
       setFormData({
         name: product.name,
         sku: product.sku,
-        category: product.category,
-        price: product.price.toString(),
-        stock: product.stock.toString(),
-        minStock: product.minStock,
+        categoryId: product.categoryId?.toString() || '',
+        price: product.price?.toString() || '',
+        stock: product.stock?.toString() || '',
+        costPrice: product.costPrice?.toString() || '',
+        minStock: product.minStock?.toString() || '10',
         description: product.description || ''
       });
     } else {
-      // Set default category to first available
-      if (loadedCategories.length > 0) {
-        setFormData(prev => ({ ...prev, category: loadedCategories[0] }));
-      }
+      // Set default values for new product
+      setFormData({
+        name: '',
+        sku: '',
+        categoryId: categories.length > 0 ? categories[0].id?.toString() : '',
+        price: '',
+        stock: '',
+        costPrice: '',
+        minStock: '10',
+        description: ''
+      });
     }
-  }, [product]);
+  }, [product, categories]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleAddCategory = () => {
+  const handleAddCategory = async () => {
     if (newCategory.trim()) {
-      storage.addCategory(newCategory.trim());
-      const updatedCategories = storage.getCategories();
-      setCategories(updatedCategories);
-      setFormData(prev => ({ ...prev, category: newCategory.trim() }));
-      setNewCategory('');
-      setShowNewCategory(false);
+      try {
+        setLoading(true);
+        // Assuming you have an API to add categories
+        const response = await ApiService.post('/categories', {
+          headers: {
+            Authorization: `Bearer ${clientToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name: newCategory.trim(),
+            description: ''
+          }),
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+          // You might want to reload categories in parent component
+          // or handle this differently based on your app structure
+          alert('Category added successfully! Please refresh the page to see it.');
+          setNewCategory('');
+          setShowNewCategory(false);
+        } else {
+          throw new Error(data.message || 'Failed to add category');
+        }
+      } catch (error) {
+        console.error('Error adding category:', error);
+        alert(`Error: ${error.message}`);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
-    const productData = {
-      name: formData.name,
-      sku: formData.sku,
-      category: formData.category,
-      price: parseFloat(formData.price),
-      stock: parseInt(formData.stock),
-      minStock: parseInt(formData.minStock),
-      description: formData.description
-    };
+    // Validate form
+    if (!isFormValid()) return;
 
-    onSave(productData);
+    try {
+      setLoading(true);
+      
+      // Prepare the product data for API
+      const productData = {
+        name: formData.name.trim(),
+        sku: formData.sku.trim(),
+        categoryId: parseInt(formData.categoryId),
+        quantity: parseInt(formData.stock),
+        price: parseFloat(formData.price),
+        costPrice: parseFloat(formData.costPrice || 0),
+        thresholdQuantity: parseInt(formData.minStock)
+      };
+
+      // Add description if provided
+      if (formData.description.trim()) {
+        productData.description = formData.description.trim();
+      }
+
+      // Call parent's onSave function with the data
+      await onSave(productData);
+      
+    } catch (error) {
+      console.error('Error in form submission:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const isFormValid = () => {
-    return formData.name.trim() && 
-           formData.sku.trim() && 
-           formData.category && 
-           formData.price && 
-           formData.stock !== '' && 
-           formData.minStock !== '';
+    return (
+      formData.name.trim() && 
+      formData.sku.trim() && 
+      formData.categoryId && 
+      formData.price && 
+      parseFloat(formData.price) > 0 &&
+      formData.stock !== '' && 
+      parseInt(formData.stock) >= 0 &&
+      formData.minStock !== '' &&
+      parseInt(formData.minStock) >= 0
+    );
   };
 
   return (
@@ -92,7 +146,8 @@ const AddProductModal = ({ product, onSave, onClose }) => {
             </h2>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
+              className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
+              disabled={loading}
             >
               <FaTimes size={24} />
             </button>
@@ -103,7 +158,7 @@ const AddProductModal = ({ product, onSave, onClose }) => {
               {/* Product Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Product Name
+                  Product Name *
                 </label>
                 <input
                   type="text"
@@ -113,22 +168,24 @@ const AddProductModal = ({ product, onSave, onClose }) => {
                   placeholder="Enter product name"
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required
+                  disabled={loading}
                 />
               </div>
 
               {/* SKU */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  SKU
+                  SKU *
                 </label>
                 <input
                   type="text"
                   name="sku"
                   value={formData.sku}
                   onChange={handleChange}
-                  placeholder="e.g., PCB-001"
+                  placeholder="e.g., COKE-500-ML"
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required
+                  disabled={loading}
                 />
               </div>
 
@@ -136,13 +193,14 @@ const AddProductModal = ({ product, onSave, onClose }) => {
               <div>
                 <div className="flex justify-between items-center mb-2">
                   <label className="block text-sm font-medium text-gray-700">
-                    Category
+                    Category *
                   </label>
-                  {!showNewCategory && (
+                  {!showNewCategory && categories.length > 0 && (
                     <button
                       type="button"
                       onClick={() => setShowNewCategory(true)}
-                      className="text-sm text-blue-600 hover:text-blue-800"
+                      className="text-sm text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                      disabled={loading}
                     >
                       + Add New Category
                     </button>
@@ -157,43 +215,61 @@ const AddProductModal = ({ product, onSave, onClose }) => {
                       onChange={(e) => setNewCategory(e.target.value)}
                       placeholder="Enter new category name"
                       className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      disabled={loading}
                     />
                     <button
                       type="button"
                       onClick={handleAddCategory}
-                      className="px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                      className="px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+                      disabled={loading || !newCategory.trim()}
                     >
-                      Add
+                      {loading ? 'Adding...' : 'Add'}
                     </button>
                     <button
                       type="button"
                       onClick={() => setShowNewCategory(false)}
-                      className="px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                      className="px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                      disabled={loading}
                     >
                       Cancel
                     </button>
                   </div>
                 ) : (
                   <select
-                    name="category"
-                    value={formData.category}
+                    name="categoryId"
+                    value={formData.categoryId}
                     onChange={handleChange}
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     required
+                    disabled={loading || categories.length === 0}
                   >
                     <option value="">Select category</option>
                     {categories.map(category => (
-                      <option key={category} value={category}>{category}</option>
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
                     ))}
                   </select>
                 )}
+                
+                {categories.length === 0 && !showNewCategory && (
+                  <div className="mt-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowNewCategory(true)}
+                      className="text-sm text-blue-600 hover:text-blue-800"
+                    >
+                      No categories available. Click here to add a new category.
+                    </button>
+                  </div>
+                )}
               </div>
 
-              {/* Price and Stock */}
+              {/* Price, Stock, and Cost Price */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Price
+                    Selling Price *
                   </label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
@@ -204,15 +280,38 @@ const AddProductModal = ({ product, onSave, onClose }) => {
                       onChange={handleChange}
                       min="0"
                       step="0.01"
+                      placeholder="0.00"
                       className="w-full pl-8 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                       required
+                      disabled={loading}
                     />
                   </div>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Stock
+                    Cost Price *
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                    <input
+                      type="number"
+                      name="costPrice"
+                      value={formData.costPrice}
+                      onChange={handleChange}
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      className="w-full pl-8 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      required
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Stock Quantity *
                   </label>
                   <input
                     type="number"
@@ -223,12 +322,16 @@ const AddProductModal = ({ product, onSave, onClose }) => {
                     placeholder="Current stock"
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     required
+                    disabled={loading}
                   />
                 </div>
+              </div>
 
+              {/* Minimum Stock */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Minimum Stock
+                    Minimum Stock (Threshold) *
                   </label>
                   <input
                     type="number"
@@ -236,9 +339,14 @@ const AddProductModal = ({ product, onSave, onClose }) => {
                     value={formData.minStock}
                     onChange={handleChange}
                     min="1"
+                    placeholder="10"
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     required
+                    disabled={loading}
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    System will alert when stock falls below this level
+                  </p>
                 </div>
               </div>
 
@@ -254,6 +362,7 @@ const AddProductModal = ({ product, onSave, onClose }) => {
                   rows="3"
                   placeholder="Enter product description..."
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={loading}
                 />
               </div>
 
@@ -270,20 +379,31 @@ const AddProductModal = ({ product, onSave, onClose }) => {
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                  className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                  disabled={loading}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={!isFormValid()}
+                  disabled={!isFormValid() || loading}
                   className={`px-6 py-3 rounded-lg font-medium ${
-                    isFormValid()
+                    isFormValid() && !loading
                       ? 'bg-blue-600 text-white hover:bg-blue-700'
                       : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   }`}
                 >
-                  {product ? 'Update Product' : 'Add Product'}
+                  {loading ? (
+                    <span className="flex items-center">
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      {product ? 'Updating...' : 'Adding...'}
+                    </span>
+                  ) : (
+                    product ? 'Update Product' : 'Add Product'
+                  )}
                 </button>
               </div>
             </div>

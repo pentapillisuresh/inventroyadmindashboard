@@ -1,29 +1,35 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
-import { FaDownload, FaFilePdf, FaFileExcel, FaFileCsv, FaChartBar, FaChartLine, FaChartPie, FaDollarSign, FaBox, FaReceipt, FaCreditCard } from 'react-icons/fa';
+import { FaDownload, FaFilePdf, FaFileExcel, FaFileCsv, FaChartBar, FaChartLine, FaChartPie, FaDollarSign, FaBox, FaReceipt, FaCreditCard, FaSpinner, FaExclamationCircle } from 'react-icons/fa';
 import { storage } from '../data/storage';
+import ApiService from '../components/ApiService';
 
 const ReportsAnalytics = ({ onLogout }) => {
   const [reports, setReports] = useState([]);
   const [formData, setFormData] = useState({
-    reportType: 'Inventory',
+    reportType: 'inventory',
     dateRange: 'Month',
-    startDate: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0],
-    exportFormat: 'PDF'
+    startDate: '',
+    endDate: '',
+    exportFormat: 'json'
+  });
+  const clientToken = localStorage.getItem('token');
+  const [stats, setStats] = useState({
+    revenue: 0,
+    revenueChange: 0,
+    inventory: 0,
+    inventoryChange: 0,
+    invoices: 0,
+    invoicesChange: 0,
+    credit: 0,
+    creditChange: 0
   });
 
-  const [stats, setStats] = useState({
-    revenue: 284500,
-    revenueChange: 12.5,
-    inventory: 1245,
-    inventoryChange: 8.3,
-    invoices: 48,
-    invoicesChange: 5,
-    credit: 425800,
-    creditChange: 15.2
-  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [reportData, setReportData] = useState(null);
+  const [showReportDetails, setShowReportDetails] = useState(false);
 
   useEffect(() => {
     loadReports();
@@ -34,85 +40,294 @@ const ReportsAnalytics = ({ onLogout }) => {
     setReports(allReports);
   };
 
-  const handleGenerateReport = (e) => {
-    e.preventDefault();
-    
-    const reportName = `${formData.reportType} Report - ${formData.dateRange} (${formData.startDate} to ${formData.endDate})`;
-    const size = `${(Math.random() * 2 + 0.5).toFixed(1)} MB`;
-    
-    const newReport = {
-      name: reportName,
-      type: formData.reportType,
-      date: new Date().toISOString().split('T')[0],
-      size: size,
-      downloadUrl: '#',
-      description: `${formData.reportType} analysis for ${formData.dateRange} period`
-    };
-    
-    storage.addReport(newReport);
-    loadReports();
-    
-    // Simulate download
-    alert(`Report generated successfully!\n\nName: ${reportName}\nFormat: ${formData.exportFormat}\nSize: ${size}`);
-  };
+  const handleGenerateReport = async (e) => {
+    setLoading(true);
+    setError('');
+    setShowReportDetails(true);
 
-  const handleDownloadReport = (report) => {
-    alert(`Downloading: ${report.name}\nSize: ${report.size}\nFormat: ${report.type}`);
-  };
+    try {
+      const payload = {
+        reportType: formData.reportType.toLowerCase(),
+        // format: formData.exportFormat.toLowerCase()
+      };
 
-  const getReportIcon = (type) => {
-    switch (type) {
-      case 'Inventory': return <FaBox className="text-blue-500" />;
-      case 'Invoice': return <FaReceipt className="text-green-500" />;
-      case 'Credit': return <FaCreditCard className="text-purple-500" />;
-      case 'Expense': return <FaDollarSign className="text-red-500" />;
-      default: return <FaFilePdf className="text-gray-500" />;
+      // Only include dates if they are provided
+      if (formData.startDate) {
+        payload.startDate = formData.startDate;
+      }
+      if (formData.endDate) {
+        payload.endDate = formData.endDate;
+      }
+
+      // You can add these if needed
+      const response = await ApiService.post('/reports',payload, {
+        headers: {
+          Authorization: `Bearer ${clientToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      if (response.success) {
+        setReportData(response);
+
+        // Update stats based on API response
+        setStats({
+          revenue: response.TotalRevenue || 0,
+          revenueChange: 12.5, // You might want to calculate this based on previous data
+          inventory: response.report?.summary?.totalItems || 0,
+          inventoryChange: 8.3, // You might want to calculate this based on previous data
+          invoices: response.TotalInvoice || 0,
+          invoicesChange: 5, // You might want to calculate this based on previous data
+          credit: response.TotalCredit || 0,
+          creditChange: 15.2 // You might want to calculate this based on previous data
+        });
+
+        // Generate report name for history
+        const reportName = `${formData.reportType.charAt(0).toUpperCase() + formData.reportType.slice(1)} Report - ${formData.dateRange} (${formData.startDate || 'All time'} to ${formData.endDate || 'Now'})`;
+        const size = `${(Math.random() * 2 + 0.5).toFixed(1)} MB`;
+
+        const newReport = {
+          name: reportName,
+          type: formData.reportType.charAt(0).toUpperCase() + formData.reportType.slice(1),
+          date: new Date().toISOString().split('T')[0],
+          size: size,
+          downloadUrl: '#',
+          description: `${formData.reportType} analysis for ${formData.dateRange} period`,
+          data: response // Store the actual report data
+        };
+
+        storage.addReport(newReport);
+        loadReports();
+
+        // Simulate download if not JSON format
+        if (formData.exportFormat.toLowerCase() !== 'json') {
+          alert(`Report generated successfully!\n\nName: ${reportName}\nFormat: ${formData.exportFormat}\nSize: ${size}`);
+        }
+
+      } else {
+        throw new Error(response.message || 'Failed to generate report');
+      }
+    } catch (err) {
+      setError(`Error generating report: ${err.message}`);
+      console.error('Error generating report:', err);
+    } finally {
+      setLoading(false);
     }
   };
+
 
   const handleDateRangeChange = (range) => {
     const today = new Date();
-    let startDate = new Date();
-    
+    let startDate = null;
+
     switch (range) {
       case 'Week':
-        startDate.setDate(today.getDate() - 7);
+        startDate = new Date(today.setDate(today.getDate() - 7));
         break;
       case 'Month':
-        startDate.setMonth(today.getMonth() - 1);
+        startDate = new Date(today.setMonth(today.getMonth() - 1));
         break;
       case 'Quarter':
-        startDate.setMonth(today.getMonth() - 3);
+        startDate = new Date(today.setMonth(today.getMonth() - 3));
         break;
       case 'Year':
-        startDate.setFullYear(today.getFullYear() - 1);
+        startDate = new Date(today.setFullYear(today.getFullYear() - 1));
+        break;
+      case 'Custom':
+        startDate = null;
         break;
       default:
-        startDate.setMonth(today.getMonth() - 1);
+        startDate = null;
     }
-    
+
     setFormData(prev => ({
       ...prev,
       dateRange: range,
-      startDate: startDate.toISOString().split('T')[0],
-      endDate: today.toISOString().split('T')[0]
+      startDate: startDate ? startDate.toISOString().split('T')[0] : '',
+      endDate: range !== 'Custom' ? new Date().toISOString().split('T')[0] : ''
     }));
+  };
+
+  const renderReportDetails = () => {
+    if (!reportData || !showReportDetails) return null;
+
+    const reportType = formData.reportType.toLowerCase();
+    const report = reportData.report?.report || reportData.report;
+    const summary = report?.summary;
+
+    return (
+      <div className="mt-8 bg-white rounded-lg border border-gray-200 p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-bold text-gray-800">Report Details</h2>
+          <button
+            onClick={() => setShowReportDetails(false)}
+            className="text-gray-500 hover:text-gray-700"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-gray-800">${reportData.TotalRevenue?.toLocaleString() || '0'}</div>
+              <div className="text-sm text-gray-500">Total Revenue</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-gray-800">{reportData.TotalInvoice?.toLocaleString() || '0'}</div>
+              <div className="text-sm text-gray-500">Total Invoices</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-gray-800">${reportData.TotalCredit?.toLocaleString() || '0'}</div>
+              <div className="text-sm text-gray-500">Total Credit</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Report Type Specific Details */}
+        {reportType === 'inventory' && summary && (
+          <div>
+            <h3 className="text-lg font-semibold text-gray-700 mb-4">Inventory Summary</h3>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="text-2xl font-bold text-gray-800">{summary.totalItems}</div>
+                <div className="text-sm text-gray-500">Total Items</div>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="text-2xl font-bold text-gray-800">{summary.totalQuantity}</div>
+                <div className="text-sm text-gray-500">Total Quantity</div>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="text-2xl font-bold text-gray-800">${summary.totalValue}</div>
+                <div className="text-sm text-gray-500">Total Value</div>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="text-2xl font-bold text-gray-800">{summary.lowStockItems}</div>
+                <div className="text-sm text-gray-500">Low Stock</div>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="text-2xl font-bold text-gray-800">{summary.outOfStockItems}</div>
+                <div className="text-sm text-gray-500">Out of Stock</div>
+              </div>
+            </div>
+
+            {report.inventory && report.inventory.length > 0 && (
+              <div>
+                <h3 className="text-lg font-semibold text-gray-700 mb-4">Inventory Items</h3>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full bg-white border border-gray-200">
+                    <thead>
+                      <tr className="bg-gray-50">
+                        <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Product</th>
+                        <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Quantity</th>
+                        <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Location</th>
+                        <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Last Updated</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {report.inventory.slice(0, 5).map((item, index) => (
+                        <tr key={index} className="border-t border-gray-200 hover:bg-gray-50">
+                          <td className="px-4 py-2">{item.Product?.name}</td>
+                          <td className="px-4 py-2">{item.quantity}</td>
+                          <td className="px-4 py-2">
+                            {item.Store?.name || 'N/A'}
+                            {item.Room && ` / ${item.Room.name}`}
+                            {item.Rack && ` / ${item.Rack.name}`}
+                            {item.Freezer && ` / ${item.Freezer.name}`}
+                          </td>
+                          <td className="px-4 py-2">
+                            {new Date(item.lastUpdated).toLocaleDateString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {report.inventory.length > 5 && (
+                    <div className="text-center text-sm text-gray-500 mt-2">
+                      Showing 5 of {report.inventory.length} items
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {reportType === 'credit' && summary && (
+          <div>
+            <h3 className="text-lg font-semibold text-gray-700 mb-4">Credit Summary</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="text-2xl font-bold text-gray-800">${summary.totalCreditGiven}</div>
+                <div className="text-sm text-gray-500">Total Credit Given</div>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="text-2xl font-bold text-gray-800">${summary.totalOutstanding}</div>
+                <div className="text-sm text-gray-500">Total Outstanding</div>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="text-2xl font-bold text-gray-800">{summary.creditUtilization?.toFixed(2)}%</div>
+                <div className="text-sm text-gray-500">Credit Utilization</div>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="text-2xl font-bold text-gray-800">{summary.overdueInvoices}</div>
+                <div className="text-sm text-gray-500">Overdue Invoices</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {reportType === 'expenditure' && summary && (
+          <div>
+            <h3 className="text-lg font-semibold text-gray-700 mb-4">Expenditure Summary</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="text-2xl font-bold text-gray-800">{summary.totalExpenditures}</div>
+                <div className="text-sm text-gray-500">Total Expenditures</div>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="text-2xl font-bold text-gray-800">${summary.totalAmount}</div>
+                <div className="text-sm text-gray-500">Total Amount</div>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="text-2xl font-bold text-gray-800">${summary.verifiedAmount}</div>
+                <div className="text-sm text-gray-500">Verified Amount</div>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="text-2xl font-bold text-gray-800">${summary.pendingAmount}</div>
+                <div className="text-sm text-gray-500">Pending Amount</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-6 text-sm text-gray-500">
+          <p>Report generated on: {new Date().toLocaleString()}</p>
+          <p>Report type: {formData.reportType}</p>
+          <p>Date range: {formData.startDate || 'All time'} to {formData.endDate || 'Now'}</p>
+        </div>
+      </div>
+    );
   };
 
   return (
     <div className="flex min-h-screen bg-gray-50">
       <Sidebar onLogout={onLogout} />
-      
+
       <div className="flex-1 flex flex-col">
         <Header title="Reports & Analytics" />
-        
+
         <div className="flex-1 p-6">
           <div className="mb-8">
             <div className="mb-6">
               <h1 className="text-2xl font-bold text-gray-800">Generate comprehensive business reports</h1>
               <p className="text-gray-600 mt-1">Analyze performance and export data for insights</p>
             </div>
-            
+
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
               <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
@@ -126,9 +341,8 @@ const ReportsAnalytics = ({ onLogout }) => {
                 </div>
                 <div className="text-2xl font-bold text-gray-800">${stats.revenue.toLocaleString()}</div>
                 <div className="text-sm text-gray-500 mt-1">Total Revenue</div>
-                <div className="text-xs text-gray-400 mt-2">+12.5% from last period</div>
               </div>
-              
+
               <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
                   <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
@@ -139,10 +353,9 @@ const ReportsAnalytics = ({ onLogout }) => {
                   </span>
                 </div>
                 <div className="text-2xl font-bold text-gray-800">{stats.inventory.toLocaleString()}</div>
-                <div className="text-sm text-gray-500 mt-1">Total Inventory</div>
-                <div className="text-xs text-gray-400 mt-2">+8.3% from last period</div>
+                <div className="text-sm text-gray-500 mt-1">Total Inventory Items</div>
               </div>
-              
+
               <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
                   <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
@@ -154,9 +367,8 @@ const ReportsAnalytics = ({ onLogout }) => {
                 </div>
                 <div className="text-2xl font-bold text-gray-800">{stats.invoices}</div>
                 <div className="text-sm text-gray-500 mt-1">Total Invoices</div>
-                <div className="text-xs text-gray-400 mt-2">+5 from last period</div>
               </div>
-              
+
               <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
                   <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
@@ -168,22 +380,28 @@ const ReportsAnalytics = ({ onLogout }) => {
                 </div>
                 <div className="text-2xl font-bold text-gray-800">${stats.credit.toLocaleString()}</div>
                 <div className="text-sm text-gray-500 mt-1">Total Credit</div>
-                <div className="text-xs text-gray-400 mt-2">+15.2% from last period</div>
               </div>
             </div>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+            <div className="grid grid-cols-1 lg:grid-cols-1 gap-8">
               {/* Generate Report Form */}
               <div className="bg-white rounded-lg border border-gray-200 p-6">
                 <h2 className="text-xl font-bold text-gray-800 mb-6">Generate Report</h2>
-                
-                <form onSubmit={handleGenerateReport}>
+
+                {error && (
+                  <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start space-x-3">
+                    <FaExclamationCircle className="text-red-500 mt-0.5" />
+                    <div className="text-red-700 text-sm">{error}</div>
+                  </div>
+                )}
+
+                <form>
                   <div className="space-y-6">
                     {/* Report Type */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Report Type</label>
                       <div className="grid grid-cols-2 gap-3">
-                        {['Inventory', 'Invoice', 'Credit', 'Expense'].map(type => (
+                        {['inventory', 'credit', 'expenditure'].map(type => (
                           <label key={type} className="flex items-center">
                             <input
                               type="radio"
@@ -193,7 +411,7 @@ const ReportsAnalytics = ({ onLogout }) => {
                               onChange={(e) => setFormData(prev => ({ ...prev, reportType: e.target.value }))}
                               className="mr-2"
                             />
-                            <span>{type}</span>
+                            <span>{type.charAt(0).toUpperCase() + type.slice(1)}</span>
                           </label>
                         ))}
                       </div>
@@ -203,16 +421,15 @@ const ReportsAnalytics = ({ onLogout }) => {
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Date Range</label>
                       <div className="grid grid-cols-4 gap-2">
-                        {['Week', 'Month', 'Quarter', 'Year'].map(range => (
+                        {['Week', 'Month', 'Quarter', 'Year', 'Custom'].map(range => (
                           <button
                             type="button"
                             key={range}
                             onClick={() => handleDateRangeChange(range)}
-                            className={`px-3 py-2 text-sm rounded-lg transition-colors ${
-                              formData.dateRange === range
+                            className={`px-3 py-2 text-sm rounded-lg transition-colors ${formData.dateRange === range
                                 ? 'bg-blue-600 text-white'
                                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
+                              }`}
                           >
                             {range}
                           </button>
@@ -223,22 +440,24 @@ const ReportsAnalytics = ({ onLogout }) => {
                     {/* Custom Date Range */}
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Start Date (Optional)</label>
                         <input
                           type="date"
                           value={formData.startDate}
                           onChange={(e) => setFormData(prev => ({ ...prev, startDate: e.target.value }))}
                           className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
+                        <p className="text-xs text-gray-500 mt-1">Leave empty for all time</p>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">End Date (Optional)</label>
                         <input
                           type="date"
                           value={formData.endDate}
                           onChange={(e) => setFormData(prev => ({ ...prev, endDate: e.target.value }))}
                           className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
+                        <p className="text-xs text-gray-500 mt-1">Leave empty for current date</p>
                       </div>
                     </div>
 
@@ -246,23 +465,21 @@ const ReportsAnalytics = ({ onLogout }) => {
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Export Format</label>
                       <div className="grid grid-cols-3 gap-3">
-                        <label className={`flex flex-col items-center p-3 border rounded-lg cursor-pointer transition-colors ${
-                          formData.exportFormat === 'PDF' ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:bg-gray-50'
-                        }`}>
+                        <label className={`flex flex-col items-center p-3 border rounded-lg cursor-pointer transition-colors ${formData.exportFormat === 'JSON' ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:bg-gray-50'
+                          }`}>
                           <input
                             type="radio"
                             name="exportFormat"
-                            value="PDF"
-                            checked={formData.exportFormat === 'PDF'}
+                            value="JSON"
+                            checked={formData.exportFormat === 'JSON'}
                             onChange={(e) => setFormData(prev => ({ ...prev, exportFormat: e.target.value }))}
                             className="sr-only"
                           />
                           <FaFilePdf className="text-red-500 text-xl mb-2" />
-                          <span className="text-sm">PDF</span>
+                          <span className="text-sm">JSON</span>
                         </label>
-                        <label className={`flex flex-col items-center p-3 border rounded-lg cursor-pointer transition-colors ${
-                          formData.exportFormat === 'Excel' ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:bg-gray-50'
-                        }`}>
+                        <label className={`flex flex-col items-center p-3 border rounded-lg cursor-pointer transition-colors ${formData.exportFormat === 'Excel' ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:bg-gray-50'
+                          }`}>
                           <input
                             type="radio"
                             name="exportFormat"
@@ -274,9 +491,8 @@ const ReportsAnalytics = ({ onLogout }) => {
                           <FaFileExcel className="text-green-500 text-xl mb-2" />
                           <span className="text-sm">Excel</span>
                         </label>
-                        <label className={`flex flex-col items-center p-3 border rounded-lg cursor-pointer transition-colors ${
-                          formData.exportFormat === 'CSV' ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:bg-gray-50'
-                        }`}>
+                        <label className={`flex flex-col items-center p-3 border rounded-lg cursor-pointer transition-colors ${formData.exportFormat === 'CSV' ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:bg-gray-50'
+                          }`}>
                           <input
                             type="radio"
                             name="exportFormat"
@@ -294,85 +510,34 @@ const ReportsAnalytics = ({ onLogout }) => {
                     {/* Generate Button */}
                     <button
                       type="submit"
-                      className="w-full flex items-center justify-center space-x-2 bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                      disabled={loading}
+                      className={`w-full flex items-center justify-center space-x-2 py-3 px-4 rounded-lg transition-colors font-medium ${loading
+                          ? 'bg-blue-400 cursor-not-allowed'
+                          : 'bg-blue-600 hover:bg-blue-700'
+                        } text-white`}
+                        onClick={handleGenerateReport}
                     >
-                      <FaDownload />
-                      <span>Generate & Download Report</span>
+                      {loading ? (
+                        <>
+                          <FaSpinner className="animate-spin" />
+                          <span>Generating Report...</span>
+                        </>
+                      ) : (
+                        <>
+                          <FaDownload />
+                          <span>Generate & Download Report</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </form>
               </div>
 
-              {/* Recent Reports */}
-              <div className="bg-white rounded-lg border border-gray-200 p-6">
-                <h2 className="text-xl font-bold text-gray-800 mb-6">Recent Reports</h2>
-                
-                <div className="space-y-4">
-                  {reports.map(report => (
-                    <div key={report.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
-                      <div className="flex items-center space-x-4">
-                        <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                          {getReportIcon(report.type)}
-                        </div>
-                        <div>
-                          <h3 className="font-medium text-gray-900">{report.name}</h3>
-                          <div className="flex items-center space-x-3 text-sm text-gray-500 mt-1">
-                            <span>{report.type}</span>
-                            <span>•</span>
-                            <span>{report.date}</span>
-                            <span>•</span>
-                            <span>{report.size}</span>
-                          </div>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handleDownloadReport(report)}
-                        className="flex items-center space-x-1 text-blue-600 hover:text-blue-800"
-                      >
-                        <FaDownload />
-                        <span className="text-sm">Download</span>
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                
-                {reports.length === 0 && (
-                  <div className="text-center py-12">
-                    <div className="text-gray-400 mb-2">No reports generated yet</div>
-                    <div className="text-gray-500 text-sm">Generate your first report using the form</div>
-                  </div>
-                )}
-              </div>
+              {/* Display Report Results */}
+              {renderReportDetails()}
+
             </div>
-            
-            {/* Chart Placeholders */}
-            <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="bg-white rounded-lg border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-semibold text-gray-800">Revenue Trend</h3>
-                  <FaChartLine className="text-blue-500" />
-                </div>
-                <div className="h-64 bg-gradient-to-b from-blue-50 to-white rounded-lg flex items-center justify-center">
-                  <div className="text-center">
-                    <FaChartLine className="text-blue-300 text-4xl mb-2" />
-                    <p className="text-gray-500">Revenue chart visualization</p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-white rounded-lg border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-semibold text-gray-800">Category Distribution</h3>
-                  <FaChartPie className="text-green-500" />
-                </div>
-                <div className="h-64 bg-gradient-to-b from-green-50 to-white rounded-lg flex items-center justify-center">
-                  <div className="text-center">
-                    <FaChartPie className="text-green-300 text-4xl mb-2" />
-                    <p className="text-gray-500">Category distribution chart</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+
           </div>
         </div>
       </div>

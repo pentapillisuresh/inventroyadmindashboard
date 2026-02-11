@@ -331,6 +331,7 @@ export const initialExpenseCategories = [
   'Marketing',
   'Salaries',
   'Rent',
+  'Travel',
   'Insurance',
   'Taxes',
   'Miscellaneous'

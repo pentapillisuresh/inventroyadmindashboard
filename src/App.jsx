@@ -23,7 +23,7 @@ function App() {
     setIsAuthenticated(loggedIn);
     
     // Initialize data
-    storage.initializeData();
+    // storage.initializeData();
   }, []);
 
   const handleLogin = () => {
