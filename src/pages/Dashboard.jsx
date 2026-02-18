@@ -342,7 +342,7 @@ const Dashboard = ({ onLogout }) => {
       creditOutstanding: outlets.reduce((sum, o) => sum + (o.creditUsed || 0), 0),
       activeManagers: managers.filter(m => m.status === 'Active').length,
       blockedOutlets: blockedOutlets,
-      warningOutlets: warningOutlets
+      warningOutlets: warningOutlets 
     }));
 
     setPendingApprovals(storage.getPendingApprovals());
