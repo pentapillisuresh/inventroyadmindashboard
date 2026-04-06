@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaUser, FaLock } from 'react-icons/fa';
 import ApiService from '../components/ApiService';
@@ -12,31 +12,32 @@ const AdminLogin = ({ onLogin }) => {
 
   const navigate = useNavigate();
 
+  useEffect(() => {
+    localStorage.clear();
+  }, [])
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
-const loginPayload={
-  email,
-  password
-}
+    const loginPayload = {
+      email,
+      password
+    }
     try {
-      const response = await ApiService.post('/auth/login',loginPayload, {
+      const response = await ApiService.post('/auth/login', loginPayload, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
       });
 
-      console.log("rrr:::",response)
-
       if (!response) {
         throw new Error(response.message || 'Login failed');
       }
 
       // ✅ Store token & user in localStorage
-      await saveUserData(response.user,response.token)
+      await saveUserData(response.user, response.token)
 
       // Optional callback
       if (onLogin) onLogin(response.user);

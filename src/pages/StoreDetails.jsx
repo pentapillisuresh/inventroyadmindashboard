@@ -85,7 +85,9 @@ const StoreDetails = ({ onLogout }) => {
           racks: response.racks || [],
           freezers: response.freezers || []
         };
-        
+        console.log("rack:::",response.racks);
+        console.log("freezers:::",response.freezers);
+        console.log("room:::",response.rooms );
         setStore(transformedStore);
         
         // Transform inventory data from API

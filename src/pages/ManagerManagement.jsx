@@ -346,7 +346,7 @@ const ManagerManagement = ({ onLogout }) => {
       if (!response) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
+      console.log("manager:::",response)
       if (response.success) {
         // Transform API data to match UI format
         const transformedManagers = response.data.map(manager => ({
@@ -462,8 +462,8 @@ const ManagerManagement = ({ onLogout }) => {
       if (!response) {
         throw new Error('No response from server');
       }
-  
-      if (response.success) {
+  console.log("rrr:::",response)
+      if (response) {
         alert(`Manager ${currentManager ? 'updated' : 'created'} successfully!`);
         loadManagers();
       } else {

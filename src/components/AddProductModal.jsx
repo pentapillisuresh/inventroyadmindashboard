@@ -55,26 +55,28 @@ const AddProductModal = ({ product, categories = [], onSave, onClose }) => {
     if (newCategory.trim()) {
       try {
         setLoading(true);
+        const categoryProduct={
+          name: newCategory.trim(),
+          description: ''
+        }
         // Assuming you have an API to add categories
-        const response = await ApiService.post('/categories', {
+        const response = await ApiService.post('/categories',categoryProduct, {
           headers: {
             Authorization: `Bearer ${clientToken}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            name: newCategory.trim(),
-            description: ''
-          }),
         });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
+                
+        if (response) {
           // You might want to reload categories in parent component
           // or handle this differently based on your app structure
           alert('Category added successfully! Please refresh the page to see it.');
           setNewCategory('');
           setShowNewCategory(false);
+          const rrr=response.category
+          console.log("rrr:::",response.category)
+          categories.push(rrr)
+          console.log("rrr:::",response.category)
         } else {
           throw new Error(data.message || 'Failed to add category');
         }
