@@ -313,6 +313,7 @@ const Dashboard = ({ onLogout }) => {
   // };
 
   // Helper function to generate location string from inventory item
+ 
   const getLocationString = (item) => {
     const parts = [];
     if (item.Room) parts.push(item.Room.name);
