@@ -8,8 +8,8 @@ import ApiService from '../components/ApiService';
 
 const API_BASE_URL = 'http://localhost:5001/api';
 const clientToken = localStorage.getItem('token');
-// Add Test Order Modal Component (UPDATED WITH API)
 
+// Add Test Order Modal Component (FIXED ALIGNMENT)
 const AddTestOrderModal = ({ isOpen, onClose, outlet, onSubmit }) => {
   const [orderData, setOrderData] = useState({
     items: 1,
@@ -31,7 +31,6 @@ const AddTestOrderModal = ({ isOpen, onClose, outlet, onSubmit }) => {
     setLoading(true);
     
     try {
-      // API call to create invoice/order
       const response = await ApiService.post(`/stores/${outlet.storeId}/invoices`, {
         outletId: outlet.id,
         totalAmount: orderData.amount,
@@ -60,26 +59,28 @@ const AddTestOrderModal = ({ isOpen, onClose, outlet, onSubmit }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl w-full max-w-md">
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-800">
-              Add Test Order - {outlet?.name}
-            </h2>
-            <button 
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
-              disabled={loading}
-            >
-              <FaTimes className="text-xl" />
-            </button>
-          </div>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-xl w-full max-w-md max-h-[90vh] overflow-hidden shadow-2xl">
+        {/* Fixed Header */}
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+          <h2 className="text-xl font-bold text-gray-800">
+            Add Test Order - {outlet?.name}
+          </h2>
+          <button 
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full hover:bg-gray-100"
+            disabled={loading}
+          >
+            <FaTimes className="text-xl" />
+          </button>
+        </div>
 
+        {/* Scrollable Content */}
+        <div className="overflow-y-auto px-6 py-5" style={{ maxHeight: 'calc(90vh - 80px)' }}>
           <form onSubmit={handleSubmit}>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Number of Items *
                 </label>
                 <input
@@ -87,7 +88,7 @@ const AddTestOrderModal = ({ isOpen, onClose, outlet, onSubmit }) => {
                   name="items"
                   value={orderData.items}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                   placeholder="Enter number of items"
                   required
                   min="1"
@@ -96,31 +97,34 @@ const AddTestOrderModal = ({ isOpen, onClose, outlet, onSubmit }) => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Order Amount ($) *
                 </label>
-                <input
-                  type="number"
-                  name="amount"
-                  value={orderData.amount}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Enter order amount"
-                  required
-                  min="0"
-                  disabled={loading}
-                />
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                  <input
+                    type="number"
+                    name="amount"
+                    value={orderData.amount}
+                    onChange={handleChange}
+                    className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                    placeholder="Enter order amount"
+                    required
+                    min="0"
+                    disabled={loading}
+                  />
+                </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Order Status *
                 </label>
                 <select
                   name="status"
                   value={orderData.status}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white"
                   disabled={loading}
                 >
                   <option value="Delivered">Delivered</option>
@@ -130,11 +134,11 @@ const AddTestOrderModal = ({ isOpen, onClose, outlet, onSubmit }) => {
                 </select>
               </div>
 
-              <div className="pt-4">
+              <div className="sticky bottom-0 bg-white pt-4 pb-2 border-t border-gray-200 -mx-6 px-6 mt-4">
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition font-medium flex items-center justify-center"
+                  className="w-full bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 transition font-medium flex items-center justify-center"
                 >
                   {loading ? (
                     <>
@@ -154,7 +158,7 @@ const AddTestOrderModal = ({ isOpen, onClose, outlet, onSubmit }) => {
   );
 };
 
-// Create Outlet Modal (UPDATED WITH API)
+// Create Outlet Modal (FIXED ALIGNMENT)
 const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
   const [stores, setStores] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -166,19 +170,6 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
     phoneNumber: '',
     creditLimit: 0
   });
-
-  // const createOutlets = async () => {
-  //   try {
-  //     const response = await ApiService.post(`/outlets`,{ 
-  //       headers: {
-  //       Authorization: `Bearer ${clientToken}`,
-  //       'Content-Type': 'application/json',
-  //     }});
-  //   } catch (error) {
-  //     console.error('Error loading stores:', error);
-  //     setStores([]);
-  //   }
-  // };
 
   const loadStores = async () => {
     try {
@@ -196,8 +187,6 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
   };
 
   useEffect(() => {
-    // Load stores from API
-
     if (isOpen) {
       loadStores();
       
@@ -239,7 +228,6 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
     setLoading(true);
     
     try {
-      // Prepare data for API
       const submitData = {
         name: formData.name,
         storeId: parseInt(formData.storeId),
@@ -251,11 +239,9 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
       };
       
       if (outlet) {
-        // Edit existing outlet
         submitData.currentCredit = parseFloat(formData.currentCredit) || 0;
         await onSubmit(submitData);
       } else {
-        // Create new outlet
         await onSubmit(submitData);
       }
       
@@ -271,26 +257,28 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl w-full max-w-md">
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-800">
-              {outlet ? 'Edit Outlet' : 'Create New Outlet'}
-            </h2>
-            <button 
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
-              disabled={loading}
-            >
-              <FaTimes className="text-xl" />
-            </button>
-          </div>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-xl w-full max-w-md max-h-[90vh] overflow-hidden shadow-2xl">
+        {/* Fixed Header */}
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+          <h2 className="text-xl font-bold text-gray-800">
+            {outlet ? 'Edit Outlet' : 'Create New Outlet'}
+          </h2>
+          <button 
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full hover:bg-gray-100"
+            disabled={loading}
+          >
+            <FaTimes className="text-xl" />
+          </button>
+        </div>
 
+        {/* Scrollable Content */}
+        <div className="overflow-y-auto px-6 py-5" style={{ maxHeight: 'calc(90vh - 80px)' }}>
           <form onSubmit={handleSubmit}>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Outlet Name *
                 </label>
                 <input
@@ -298,7 +286,7 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
                   name="name"
                   value={formData.name}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                   placeholder="Enter outlet name"
                   required
                   disabled={loading}
@@ -306,14 +294,14 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Associated Store *
                 </label>
                 <select
                   name="storeId"
                   value={formData.storeId}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white"
                   required
                   disabled={loading}
                 >
@@ -327,14 +315,14 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Address *
                 </label>
                 <textarea
                   name="address"
                   value={formData.address}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition resize-none"
                   placeholder="Enter outlet address"
                   required
                   rows="3"
@@ -343,7 +331,7 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Contact Person *
                 </label>
                 <input
@@ -351,7 +339,7 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
                   name="contactPerson"
                   value={formData.contactPerson}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                   placeholder="Enter contact person name"
                   required
                   disabled={loading}
@@ -359,17 +347,17 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Phone Number *
                 </label>
                 <div className="relative">
-                  <FaPhone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <FaPhone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
                   <input
                     type="tel"
                     name="phoneNumber"
                     value={formData.phoneNumber}
                     onChange={handleChange}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                     placeholder="+1 (555) 123-4567"
                     required
                     disabled={loading}
@@ -378,17 +366,17 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Credit Limit ($) *
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-700">$</span>
+                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
                   <input
                     type="number"
                     name="creditLimit"
                     value={formData.creditLimit}
                     onChange={handleChange}
-                    className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                     placeholder="300000"
                     required
                     min="0"
@@ -396,24 +384,24 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
                     disabled={loading}
                   />
                 </div>
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-xs text-gray-500">
                   Maximum credit amount allowed for this outlet
                 </p>
               </div>
 
               {outlet && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
                     Current Credit ($)
                   </label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-700">$</span>
+                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
                     <input
                       type="number"
                       name="currentCredit"
                       value={formData.currentCredit || 0}
                       onChange={handleChange}
-                      className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                       placeholder="0"
                       min="0"
                       step="0.01"
@@ -423,11 +411,11 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
                 </div>
               )}
 
-              <div className="pt-4">
+              <div className="sticky bottom-0 bg-white pt-4 pb-2 border-t border-gray-200 -mx-6 px-6 mt-4">
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition font-medium flex items-center justify-center"
+                  className="w-full bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 transition font-medium flex items-center justify-center"
                 >
                   {loading ? (
                     <>
@@ -447,7 +435,7 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
   );
 };
 
-// View Details Modal (UPDATED WITH API)
+// View Details Modal (FIXED ALIGNMENT)
 const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
   const [activeTab, setActiveTab] = useState('orders');
   const [paymentAmount, setPaymentAmount] = useState('');
@@ -516,7 +504,6 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
     const paymentAmt = parseFloat(paymentAmount);
 
     try {
-      // Call payment API
       const response = await ApiService.post(`/stores/${outlet.storeId}/invoices/payment/${outlet.id}`,
         {
           paymentMethod: paymentMethod,
@@ -531,14 +518,11 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
       if (response.message) {
         alert(`✅ ${response.message}\n\nInvoice: ${response.invoice?.invoiceNumber}\nAmount: $${paymentAmt}`);
         
-        // Update outlet data
         const newCredit = Math.max(0, (outlet.currentCredit || 0) - paymentAmt);
         
-        // Check if outlet should be unblocked
         const shouldUnblock = outlet.status === 'Blocked' && newCredit < outlet.creditLimit;
         
         if (shouldUnblock) {
-          // Update outlet status
           const updateData = {
             name: outlet.name,
             storeId: outlet.storeId,
@@ -587,7 +571,7 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
           creditLimit: outlet.creditLimit,
           currentCredit: outlet.currentCredit,
           type: 'custom',
-          isActive:false
+          isActive: false
         };
         
         await ApiService.put(`/outlets/${outlet.id}`, updateData,{ 
@@ -596,7 +580,6 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
           'Content-Type': 'application/json',
         }});
         
-        // Update local storage for status
         const outlets = storage.getOutlets();
         const updatedOutlets = outlets.map(o => {
           if (o.id === outlet.id) {
@@ -641,7 +624,6 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
         'Content-Type': 'application/json',
       }});
       
-      // Update local storage for status
       const outlets = storage.getOutlets();
       const updatedOutlets = outlets.map(o => {
         if (o.id === outlet.id) {
@@ -664,20 +646,22 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-800">Outlet Details</h2>
-            <button 
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
-              disabled={loading}
-            >
-              <FaTimes className="text-xl" />
-            </button>
-          </div>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl">
+        {/* Fixed Header */}
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+          <h2 className="text-xl font-bold text-gray-800">Outlet Details</h2>
+          <button 
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full hover:bg-gray-100"
+            disabled={loading}
+          >
+            <FaTimes className="text-xl" />
+          </button>
+        </div>
 
+        {/* Scrollable Content */}
+        <div className="overflow-y-auto p-6" style={{ maxHeight: 'calc(90vh - 80px)' }}>
           {/* Credit Status Banner */}
           <div className={`mb-6 p-4 rounded-lg border ${
             outlet.status === 'Blocked' 
@@ -686,7 +670,7 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
               ? 'bg-yellow-50 border-yellow-200'
               : 'bg-blue-50 border-blue-200'
           }`}>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-3">
               <div className="flex items-center space-x-3">
                 {outlet.status === 'Blocked' ? (
                   <FaLock className="text-red-600 text-xl" />
@@ -772,7 +756,7 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
               </div>
             </div>
 
-            {/* Order Stats */}
+            {/* Credit Stats */}
             <div className="bg-gray-50 rounded-lg p-4">
               <h3 className="font-semibold text-gray-700 mb-2">Credit Information</h3>
               <div className="space-y-2">
@@ -829,7 +813,7 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
                   <select
                     value={paymentMethod}
                     onChange={(e) => setPaymentMethod(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                     disabled={loading}
                   >
                     <option value="paid">Cash</option>
@@ -841,16 +825,19 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Payment Amount ($)
                   </label>
-                  <input
-                    type="number"
-                    value={paymentAmount}
-                    onChange={(e) => setPaymentAmount(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                    placeholder="Enter amount"
-                    min="0"
-                    max={outlet.currentCredit || 0}
-                    disabled={loading}
-                  />
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                    <input
+                      type="number"
+                      value={paymentAmount}
+                      onChange={(e) => setPaymentAmount(e.target.value)}
+                      className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg"
+                      placeholder="Enter amount"
+                      min="0"
+                      max={outlet.currentCredit || 0}
+                      disabled={loading}
+                    />
+                  </div>
                 </div>
                 <div className="flex space-x-3">
                   <button
@@ -1026,24 +1013,24 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex space-x-3">
+          <div className="flex flex-wrap gap-3 sticky bottom-0 bg-white pt-4 pb-2 border-t border-gray-200 -mx-6 px-6">
             <button
               onClick={() => setShowPaymentForm(true)}
-              className="flex-1 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition font-medium flex items-center justify-center space-x-2"
+              className="flex-1 bg-green-600 text-white py-2.5 rounded-lg hover:bg-green-700 transition font-medium flex items-center justify-center space-x-2"
             >
               <FaDollarSign />
               <span>Receive Payment</span>
             </button>
             <button
               onClick={() => setShowAddOrderModal(true)}
-              className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition font-medium flex items-center justify-center space-x-2"
+              className="flex-1 bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 transition font-medium flex items-center justify-center space-x-2"
             >
               <FaPlus />
               <span>Add Test Order</span>
             </button>
             <button
               onClick={onClose}
-              className="flex-1 bg-gray-200 text-gray-800 py-3 rounded-lg hover:bg-gray-300 transition font-medium"
+              className="flex-1 bg-gray-200 text-gray-800 py-2.5 rounded-lg hover:bg-gray-300 transition font-medium"
             >
               Close
             </button>
@@ -1062,7 +1049,7 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
   );
 };
 
-// Main OutletManagement Component (UPDATED WITH API)
+// Main OutletManagement Component
 const OutletManagement = ({ onLogout }) => {
   const [outlets, setOutlets] = useState([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -1093,20 +1080,18 @@ const OutletManagement = ({ onLogout }) => {
       if (response) {
         const apiOutlets = response.outlets.map(outlet => ({
           ...outlet,
-          // Map API fields to component fields
           phone: outlet.phoneNumber,
           storeName: outlet.Store?.name,
           creditUsed: parseFloat(outlet.currentCredit || 0),
           creditLimit: parseFloat(outlet.creditLimit || 0),
           status: outlet.isActive ? 'Active' : 'Blocked',
           type: outlet.type === 'custom' ? 'Official' : outlet.type,
-          totalOrders: 0, // Will be populated from separate API if needed
-          lastOrder: 'No orders yet' // Will be populated from separate API if needed
+          totalOrders: 0,
+          lastOrder: 'No orders yet'
         }));
         
         setOutlets(apiOutlets);
         
-        // Update statistics
         setStats({
           totalOutlets: response.totalOutlets || 0,
           totalCreditLimit: response.totalCreditLimit || 0,
@@ -1114,16 +1099,13 @@ const OutletManagement = ({ onLogout }) => {
           activeOutlets: apiOutlets.filter(o => o.isActive).length
         });
         
-        // Also update local storage for offline access
         storage.saveOutlets(apiOutlets);
       }
     } catch (error) {
       console.error('Error loading outlets:', error);
-      // Fallback to local storage if API fails
       const localOutlets = storage.getOutlets();
       setOutlets(localOutlets);
       
-      // Calculate stats from local storage
       const totalCreditLimit = localOutlets.reduce((sum, outlet) => sum + (outlet.creditLimit || 0), 0);
       const totalCreditUsed = localOutlets.reduce((sum, outlet) => sum + (outlet.creditUsed || 0), 0);
       
@@ -1183,7 +1165,6 @@ const OutletManagement = ({ onLogout }) => {
   
     try {
       if (currentOutlet) {
-        // Update existing outlet
         await ApiService.put(
           `/outlets/${currentOutlet.id}`,
           formData,
@@ -1196,7 +1177,6 @@ const OutletManagement = ({ onLogout }) => {
   
         alert('✅ Outlet updated successfully');
       } else {
-        // Create new outlet
         await ApiService.post(
           '/outlets',
           formData,
@@ -1250,7 +1230,7 @@ const OutletManagement = ({ onLogout }) => {
         <main className="p-6">
           {/* Header Section */}
           <div className="mb-8">
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center flex-wrap gap-4">
               <div>
                 <h1 className="text-3xl font-bold text-gray-800 mb-2">Outlet Management</h1>
                 <p className="text-gray-600">Manage outlets, credit limits, and status</p>
@@ -1267,8 +1247,8 @@ const OutletManagement = ({ onLogout }) => {
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
               <div className="flex items-center space-x-3">
                 <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                   <FaShoppingCart className="text-blue-600 text-xl" />
@@ -1280,7 +1260,7 @@ const OutletManagement = ({ onLogout }) => {
               </div>
             </div>
             
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
               <div className="flex items-center space-x-3">
                 <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                   <FaCheckCircle className="text-green-600 text-xl" />
@@ -1292,7 +1272,7 @@ const OutletManagement = ({ onLogout }) => {
               </div>
             </div>
             
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
               <div className="flex items-center space-x-3">
                 <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
                   <FaDollarSign className="text-purple-600 text-xl" />
@@ -1304,7 +1284,7 @@ const OutletManagement = ({ onLogout }) => {
               </div>
             </div>
             
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
               <div className="flex items-center space-x-3">
                 <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
                   <FaDollarSign className="text-orange-600 text-xl" />
@@ -1318,9 +1298,9 @@ const OutletManagement = ({ onLogout }) => {
           </div>
 
           {/* Search and Refresh */}
-          <div className="mb-6 flex items-center justify-between">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
             <div className="relative w-64">
-              <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
               <input
                 type="text"
                 placeholder="Search outlets"
@@ -1372,16 +1352,16 @@ const OutletManagement = ({ onLogout }) => {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {filteredOutlets.map((outlet) => (
                   <div key={outlet.id} className="bg-gray-50 rounded-lg border border-gray-200 p-6">
-                    <div className="flex items-start justify-between mb-6">
+                    <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
                       <div>
                         <h3 className="text-xl font-bold text-gray-800 mb-2">{outlet.name}</h3>
                         <div className="flex items-center space-x-2 text-gray-600">
-                          <FaPhone />
-                          <span>{outlet.phoneNumber}</span>
+                          <FaPhone size={12} />
+                          <span className="text-sm">{outlet.phoneNumber}</span>
                         </div>
                         {outlet.Store?.name && (
                           <div className="flex items-center space-x-2 text-gray-600 mt-1">
-                            <FaStore />
+                            <FaStore size={12} />
                             <span className="text-sm">{outlet.Store.name}</span>
                           </div>
                         )}
@@ -1408,7 +1388,7 @@ const OutletManagement = ({ onLogout }) => {
                     <div className="mb-6">
                       <div className="flex justify-between items-center mb-2">
                         <span className="text-sm text-gray-600">Credit Usage</span>
-                        <span className="font-medium">
+                        <span className="font-medium text-sm">
                           ${(outlet.currentCredit || 0).toLocaleString()} / ${(outlet.creditLimit || 0).toLocaleString()}
                         </span>
                       </div>
@@ -1430,12 +1410,12 @@ const OutletManagement = ({ onLogout }) => {
                     </div>
 
                     {/* Contact Information */}
-                    <div className="grid grid-cols-2 gap-4 mb-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
                       <div>
                         <div className="text-gray-600 mb-1">
                           <span className="text-sm">Contact Person</span>
                         </div>
-                        <p className="font-medium">{outlet.contactPerson}</p>
+                        <p className="font-medium text-sm">{outlet.contactPerson}</p>
                       </div>
                       <div>
                         <div className="text-gray-600 mb-1">
@@ -1448,26 +1428,26 @@ const OutletManagement = ({ onLogout }) => {
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="flex space-x-3">
+                    <div className="flex flex-wrap gap-3">
                       <button 
                         onClick={() => handleViewDetails(outlet)}
                         className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition flex items-center justify-center space-x-2"
                       >
-                        <FaEye />
+                        <FaEye size={14} />
                         <span>View Details</span>
                       </button>
                       <button 
                         onClick={() => handleEditOutlet(outlet)}
                         className="flex-1 bg-gray-100 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-200 transition flex items-center justify-center space-x-2"
                       >
-                        <FaEdit />
+                        <FaEdit size={14} />
                         <span>Edit</span>
                       </button>
                       <button 
                         onClick={() => handleDeleteOutlet(outlet)}
                         className="flex-1 bg-red-100 text-red-700 py-2 px-4 rounded-lg hover:bg-red-200 transition flex items-center justify-center space-x-2"
                       >
-                        <FaTrash />
+                        <FaTrash size={14} />
                         <span>Delete</span>
                       </button>
                     </div>
@@ -1482,14 +1462,14 @@ const OutletManagement = ({ onLogout }) => {
       {/* Modals */}
       <CreateOutletModal
         isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
+        onClose={handleModalClose}
         outlet={currentOutlet}
         onSubmit={handleModalSubmit}
       />
 
       <OutletDetailsModal
         isOpen={showDetailsModal}
-        onClose={() => setShowDetailsModal(false)}
+        onClose={handleModalClose}
         outlet={currentOutlet}
         onUpdate={loadOutlets}
       />

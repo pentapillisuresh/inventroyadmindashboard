@@ -139,249 +139,250 @@ const AddProductModal = ({ product, categories = [], onSave, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-      <div className="bg-white rounded-lg w-full max-w-2xl my-8">
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">
-              {product ? 'Edit Product' : 'Add New Product'}
-            </h2>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
-              disabled={loading}
-            >
-              <FaTimes size={24} />
-            </button>
-          </div>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-xl w-full max-w-lg max-h-[90vh] overflow-hidden shadow-2xl">
+        {/* Header - Fixed at top */}
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+          <h2 className="text-xl font-bold text-gray-900">
+            {product ? 'Edit Product' : 'Add New Product'}
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full hover:bg-gray-100 disabled:opacity-50"
+            disabled={loading}
+          >
+            <FaTimes size={20} />
+          </button>
+        </div>
 
-          <form onSubmit={handleSubmit}>
-            <div className="space-y-6">
-              {/* Product Name */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Product Name *
+        {/* Scrollable Form Content */}
+        <div className="overflow-y-auto px-6 py-5" style={{ maxHeight: 'calc(90vh - 80px)' }}>
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Product Name */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Product Name *
+              </label>
+              <input
+                type="text"
+                name="name"
+                value={formData.name}
+                onChange={handleChange}
+                placeholder="Enter product name"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                required
+                disabled={loading}
+              />
+            </div>
+
+            {/* SKU */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                SKU *
+              </label>
+              <input
+                type="text"
+                name="sku"
+                value={formData.sku}
+                onChange={handleChange}
+                placeholder="e.g., COKE-500-ML"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                required
+                disabled={loading}
+              />
+            </div>
+
+            {/* Category */}
+            <div>
+              <div className="flex justify-between items-center mb-1.5">
+                <label className="block text-sm font-medium text-gray-700">
+                  Category *
                 </label>
-                <input
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  placeholder="Enter product name"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                  disabled={loading}
-                />
-              </div>
-
-              {/* SKU */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  SKU *
-                </label>
-                <input
-                  type="text"
-                  name="sku"
-                  value={formData.sku}
-                  onChange={handleChange}
-                  placeholder="e.g., COKE-500-ML"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                  disabled={loading}
-                />
-              </div>
-
-              {/* Category */}
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Category *
-                  </label>
-                  {!showNewCategory && categories.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setShowNewCategory(true)}
-                      className="text-sm text-blue-600 hover:text-blue-800 disabled:opacity-50"
-                      disabled={loading}
-                    >
-                      + Add New Category
-                    </button>
-                  )}
-                </div>
-                
-                {showNewCategory ? (
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={newCategory}
-                      onChange={(e) => setNewCategory(e.target.value)}
-                      placeholder="Enter new category name"
-                      className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      disabled={loading}
-                    />
-                    <button
-                      type="button"
-                      onClick={handleAddCategory}
-                      className="px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
-                      disabled={loading || !newCategory.trim()}
-                    >
-                      {loading ? 'Adding...' : 'Add'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowNewCategory(false)}
-                      className="px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
-                      disabled={loading}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <select
-                    name="categoryId"
-                    value={formData.categoryId}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                    disabled={loading || categories.length === 0}
+                {!showNewCategory && categories.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowNewCategory(true)}
+                    className="text-xs text-blue-600 hover:text-blue-800 font-medium disabled:opacity-50"
+                    disabled={loading}
                   >
-                    <option value="">Select category</option>
-                    {categories.map(category => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                
-                {categories.length === 0 && !showNewCategory && (
-                  <div className="mt-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowNewCategory(true)}
-                      className="text-sm text-blue-600 hover:text-blue-800"
-                    >
-                      No categories available. Click here to add a new category.
-                    </button>
-                  </div>
+                    + Add New Category
+                  </button>
                 )}
               </div>
-
-              {/* Price, Stock, and Cost Price */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Selling Price *
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
-                    <input
-                      type="number"
-                      name="price"
-                      value={formData.price}
-                      onChange={handleChange}
-                      min="0"
-                      step="0.01"
-                      placeholder="0.00"
-                      className="w-full pl-8 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      required
-                      disabled={loading}
-                    />
-                  </div>
+              
+              {showNewCategory ? (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newCategory}
+                    onChange={(e) => setNewCategory(e.target.value)}
+                    placeholder="Enter new category name"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                    disabled={loading}
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddCategory}
+                    className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm font-medium transition"
+                    disabled={loading || !newCategory.trim()}
+                  >
+                    {loading ? 'Adding...' : 'Add'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowNewCategory(false)}
+                    className="px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 text-sm font-medium transition"
+                    disabled={loading}
+                  >
+                    Cancel
+                  </button>
                 </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Cost Price *
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
-                    <input
-                      type="number"
-                      name="costPrice"
-                      value={formData.costPrice}
-                      onChange={handleChange}
-                      min="0"
-                      step="0.01"
-                      placeholder="0.00"
-                      className="w-full pl-8 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      required
-                      disabled={loading}
-                    />
-                  </div>
+              ) : (
+                <select
+                  name="categoryId"
+                  value={formData.categoryId}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition bg-white"
+                  required
+                  disabled={loading || categories.length === 0}
+                >
+                  <option value="">Select category</option>
+                  {categories.map(category => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+              
+              {categories.length === 0 && !showNewCategory && (
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowNewCategory(true)}
+                    className="text-sm text-blue-600 hover:text-blue-800"
+                  >
+                    No categories available. Click here to add a new category.
+                  </button>
                 </div>
+              )}
+            </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Stock Quantity *
-                  </label>
+            {/* Price, Stock, and Cost Price - Responsive Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Selling Price *
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
                   <input
                     type="number"
-                    name="stock"
-                    value={formData.stock}
+                    name="price"
+                    value={formData.price}
                     onChange={handleChange}
                     min="0"
-                    placeholder="Current stock"
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    step="0.01"
+                    placeholder="0.00"
+                    className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                     required
                     disabled={loading}
                   />
                 </div>
               </div>
 
-              {/* Minimum Stock */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Minimum Stock (Threshold) *
-                  </label>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Cost Price *
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
                   <input
                     type="number"
-                    name="minStock"
-                    value={formData.minStock}
+                    name="costPrice"
+                    value={formData.costPrice}
                     onChange={handleChange}
-                    min="1"
-                    placeholder="10"
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                     required
                     disabled={loading}
                   />
-                  <p className="text-xs text-gray-500 mt-1">
-                    System will alert when stock falls below this level
-                  </p>
                 </div>
               </div>
 
-              {/* Description */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Description (Optional)
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Stock Quantity *
                 </label>
-                <textarea
-                  name="description"
-                  value={formData.description}
+                <input
+                  type="number"
+                  name="stock"
+                  value={formData.stock}
                   onChange={handleChange}
-                  rows="3"
-                  placeholder="Enter product description..."
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  min="0"
+                  placeholder="Current stock"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                  required
                   disabled={loading}
                 />
               </div>
+            </div>
 
-              {/* Product Availability Notice */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-sm text-blue-800">
-                  <strong>Product Availability:</strong> Once created, this product will be available 
-                  system-wide for all stores and can be included in inventory distributions.
-                </p>
-              </div>
+            {/* Minimum Stock */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Minimum Stock (Threshold) *
+              </label>
+              <input
+                type="number"
+                name="minStock"
+                value={formData.minStock}
+                onChange={handleChange}
+                min="1"
+                placeholder="10"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                required
+                disabled={loading}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                System will alert when stock falls below this level
+              </p>
+            </div>
 
-              {/* Form Actions */}
-              <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+            {/* Description */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Description (Optional)
+              </label>
+              <textarea
+                name="description"
+                value={formData.description}
+                onChange={handleChange}
+                rows="3"
+                placeholder="Enter product description..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition resize-none"
+                disabled={loading}
+              />
+            </div>
+
+            {/* Product Availability Notice */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <p className="text-xs text-blue-800">
+                <strong>Product Availability:</strong> Once created, this product will be available 
+                system-wide for all stores and can be included in inventory distributions.
+              </p>
+            </div>
+
+            {/* Form Actions - Sticky at bottom */}
+            <div className="sticky bottom-0 bg-white pt-4 pb-2 border-t border-gray-200 -mx-6 px-6 mt-2">
+              <div className="flex justify-end space-x-3">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                  className="px-5 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 font-medium transition"
                   disabled={loading}
                 >
                   Cancel
@@ -389,15 +390,15 @@ const AddProductModal = ({ product, categories = [], onSave, onClose }) => {
                 <button
                   type="submit"
                   disabled={!isFormValid() || loading}
-                  className={`px-6 py-3 rounded-lg font-medium ${
+                  className={`px-5 py-2 rounded-lg font-medium transition ${
                     isFormValid() && !loading
-                      ? 'bg-blue-600 text-white hover:bg-blue-700'
+                      ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm'
                       : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   }`}
                 >
                   {loading ? (
-                    <span className="flex items-center">
-                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                    <span className="flex items-center gap-2">
+                      <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                       </svg>

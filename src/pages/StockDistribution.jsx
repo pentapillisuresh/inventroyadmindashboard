@@ -31,97 +31,128 @@ const StockDistribution = ({ onLogout }) => {
   }, []);
 
   const loadDistributions = async () => {
+  try {
+    setLoading(true);
+    const response = await ApiService.get('/invoice/allDistributed/Invoices/admin', {
+      headers: {
+        Authorization: `Bearer ${clientToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    // First, fetch all managers to create a lookup map
+    let managerMap = {};
     try {
-      setLoading(true);
-      const response = await ApiService.get('/invoice/allDistributed/Invoices/admin',{
+      const managersResponse = await ApiService.get('users/admin/all/store-managers', {
         headers: {
           Authorization: `Bearer ${clientToken}`,
           'Content-Type': 'application/json',
-        },
+        }
       });
-         // Transform API data to match your UI structure
-      const transformedDistributions = response.invoices.map(invoice => {
-        // Extract unique store names
-        const uniqueStores = [...new Set(response.invoices.map(inv => inv.Store.name))];
-        setStores(uniqueStores.map((name, index) => ({
-          id: index + 1,
-          name: name
-        })));
-
-        // Calculate total items
-        const totalItems = invoice.items.reduce((sum, item) => sum + item.quantity, 0);
-        
-        // Map items to products format
-        const products = invoice.items.map(item => ({
-          productId: item.productId,
-          productName: item.Product.name,
-          quantity: item.quantity,
-          price: parseFloat(item.price),
-          total: parseFloat(item.totalPrice),
-          sku: item.Product.sku
-        }));
-
-        // Map API status to your UI status
-        const mapStatus = (apiStatus) => {
-          switch (apiStatus) {
-            case 'pending': return 'Pending';
-            case 'completed': return 'Completed';
-            case 'cancelled': return 'Cancelled';
-            default: return 'Pending';
-          }
-        };
-
-        // Map payment method
-        const mapPaymentType = (paymentMethod) => {
-          switch (paymentMethod) {
-            case 'paid': return 'Paid';
-            case 'credit': return 'Credit';
-            case 'mixed': return 'Mixed';
-            default: return 'Paid';
-          }
-        };
-
-        return {
-          id: invoice.invoiceNumber,
-          storeId: invoice.storeId.toString(),
-          storeName: invoice.Store.name,
-          managerName: invoice.StoreManager?.name || 'Unassigned',
-          date: new Date(invoice.invoiceDate).toLocaleDateString(),
-          createdAt: invoice.createdAt,
-          totalItems: totalItems,
-          products: products,
-          totalValue: parseFloat(invoice.totalAmount),
-          paymentType: mapPaymentType(invoice.paymentMethod),
-          status: mapStatus(invoice.status),
-          discount: 0,
-          notes: '',
-          // API specific fields
-          invoiceId: invoice.id,
-          creditAmount: parseFloat(invoice.creditAmount),
-          paidAmount: parseFloat(invoice.paidAmount),
-          adminName: invoice.Admin.name,
-          adminEmail: invoice.Admin.email
-        };
-      });
-
-      setDistributions(transformedDistributions);
       
-      // Calculate statistics from transformed data
-      const all = transformedDistributions.length;
-      const pending = transformedDistributions.filter(d => d.status === 'Pending').length;
-      const inTransit = 0; // API doesn't have this status
-      const completed = transformedDistributions.filter(d => d.status === 'Completed').length;
-      const paid = transformedDistributions.filter(d => d.paymentType === 'Paid').length;
-      const credit = transformedDistributions.filter(d => d.paymentType === 'Credit').length;
-      const totalValue = transformedDistributions.reduce((sum, d) => sum + d.totalValue, 0);
-      
-      setStats({ all, pending, inTransit, completed, paid, credit, totalValue });
+      if (managersResponse.success) {
+        // Create a map of managerId to manager name
+        managersResponse.data.forEach(manager => {
+          if (manager.id) {
+            managerMap[manager.id] = manager.name;
+          }
+        });
+      }
     } catch (error) {
-      console.error('Error loading distributions:', error);
-    } finally {
-      setLoading(false);
+      console.error('Error loading managers for lookup:', error);
     }
-  };
+    
+    // Extract unique store names
+    const uniqueStores = [...new Set(response.invoices.map(inv => inv.Store.name))];
+    setStores(uniqueStores.map((name, index) => ({
+      id: index + 1,
+      name: name
+    })));
+    
+    // Transform API data to match your UI structure
+    const transformedDistributions = response.invoices.map(invoice => {
+      // Calculate total items
+      const totalItems = invoice.items.reduce((sum, item) => sum + item.quantity, 0);
+      
+      // Map items to products format
+      const products = invoice.items.map(item => ({
+        productId: item.productId,
+        productName: item.Product.name,
+        quantity: item.quantity,
+        price: parseFloat(item.price),
+        total: parseFloat(item.totalPrice),
+        sku: item.Product.sku
+      }));
+
+      // Map API status to your UI status
+      const mapStatus = (apiStatus) => {
+        switch (apiStatus) {
+          case 'pending': return 'Pending';
+          case 'completed': return 'Completed';
+          case 'cancelled': return 'Cancelled';
+          default: return 'Pending';
+        }
+      };
+
+      // Map payment method
+      const mapPaymentType = (paymentMethod) => {
+        switch (paymentMethod) {
+          case 'paid': return 'Paid';
+          case 'credit': return 'Credit';
+          case 'mixed': return 'Mixed';
+          default: return 'Paid';
+        }
+      };
+
+      // Get manager name using managerId from Store object
+      let managerName = 'Unassigned';
+      if (invoice.Store?.managerId && managerMap[invoice.Store.managerId]) {
+        managerName = managerMap[invoice.Store.managerId];
+      }
+
+      return {
+        id: invoice.invoiceNumber,
+        storeId: invoice.storeId.toString(),
+        storeName: invoice.Store.name,
+        managerName: managerName,
+        managerId: invoice.Store?.managerId,
+        date: new Date(invoice.invoiceDate).toLocaleDateString(),
+        createdAt: invoice.createdAt,
+        totalItems: totalItems,
+        products: products,
+        totalValue: parseFloat(invoice.totalAmount),
+        paymentType: mapPaymentType(invoice.paymentMethod),
+        status: mapStatus(invoice.status),
+        discount: 0,
+        notes: '',
+        invoiceId: invoice.id,
+        creditAmount: parseFloat(invoice.creditAmount),
+        paidAmount: parseFloat(invoice.paidAmount),
+        adminName: invoice.Admin?.name || 'Admin',
+        adminEmail: invoice.Admin?.email
+      };
+    });
+
+    setDistributions(transformedDistributions);
+    
+    // Calculate statistics from transformed data
+    const all = transformedDistributions.length;
+    const pending = transformedDistributions.filter(d => d.status === 'Pending').length;
+    const inTransit = 0;
+    const completed = transformedDistributions.filter(d => d.status === 'Completed').length;
+    const paid = transformedDistributions.filter(d => d.paymentType === 'Paid').length;
+    const credit = transformedDistributions.filter(d => d.paymentType === 'Credit').length;
+    const totalValue = transformedDistributions.reduce((sum, d) => sum + d.totalValue, 0);
+    
+    setStats({ all, pending, inTransit, completed, paid, credit, totalValue });
+    
+  } catch (error) {
+    console.error('Error loading distributions:', error);
+    alert('Failed to load distributions. Please try again.');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleCreateDistribution = () => {
     setShowModal(true);

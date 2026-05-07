@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
-import { FaSearch, FaFilter, FaPlus, FaEye, FaCheckCircle, FaTimesCircle, FaSpinner } from 'react-icons/fa';
+import { FaSearch, FaFilter, FaPlus, FaEye, FaCheckCircle, FaTimesCircle, FaSpinner, FaTimes } from 'react-icons/fa';
 import ApiService from '../components/ApiService';
 import { storage } from '../data/storage';
 
@@ -185,35 +185,37 @@ const Expenditures = ({ onLogout }) => {
         <Header title="Expenditures" />
         
         <div className="flex-1 p-6">
-          {/* Add Expense Modal */}
+          {/* Add Expense Modal - Fixed Alignment */}
           {showAddModal && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-              <div className="bg-white rounded-lg w-full max-w-2xl my-8">
-                <div className="p-6">
-                  <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-2xl font-bold text-gray-900">Add New Expense</h2>
-                    <button
-                      onClick={() => {
-                        setShowAddModal(false);
-                        resetNewExpense();
-                      }}
-                      className="text-gray-400 hover:text-gray-600 text-xl"
-                      disabled={saving}
-                    >
-                      ×
-                    </button>
-                  </div>
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-lg w-full max-w-lg max-h-[90vh] overflow-hidden shadow-xl">
+                {/* Fixed Header */}
+                <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+                  <h2 className="text-xl font-bold text-gray-900">Add New Expense</h2>
+                  <button
+                    onClick={() => {
+                      setShowAddModal(false);
+                      resetNewExpense();
+                    }}
+                    className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full hover:bg-gray-100"
+                    disabled={saving}
+                  >
+                    <FaTimes size={20} />
+                  </button>
+                </div>
 
+                {/* Scrollable Content */}
+                <div className="overflow-y-auto px-6 py-5" style={{ maxHeight: 'calc(90vh - 80px)' }}>
                   <form onSubmit={handleSaveExpense}>
-                    <div className="space-y-6">
+                    <div className="space-y-5">
                       {/* Date */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Date</label>
                         <input
                           type="date"
                           value={newExpense.date}
                           onChange={(e) => setNewExpense(prev => ({ ...prev, date: e.target.value }))}
-                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                           required
                           disabled={saving}
                         />
@@ -221,34 +223,30 @@ const Expenditures = ({ onLogout }) => {
 
                       {/* Category */}
                       <div>
-                        <div className="flex justify-between items-center mb-2">
-                          <label className="block text-sm font-medium text-gray-700">Category *</label>
-                        </div>
-                        
-                        
-                          <select
-                            value={newExpense.category}
-                            onChange={(e) => setNewExpense(prev => ({ ...prev, category: e.target.value }))}
-                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            required
-                            disabled={saving}
-                          >
-                            <option value="">Select category...</option>
-                            {categories.map(category => (
-                              <option key={category} value={category}>{category}</option>
-                            ))}
-                          </select>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Category *</label>
+                        <select
+                          value={newExpense.category}
+                          onChange={(e) => setNewExpense(prev => ({ ...prev, category: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition bg-white"
+                          required
+                          disabled={saving}
+                        >
+                          <option value="">Select category...</option>
+                          {categories.map(category => (
+                            <option key={category} value={category}>{category}</option>
+                          ))}
+                        </select>
                       </div>
 
                       {/* Description */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Description *</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Description *</label>
                         <input
                           type="text"
                           value={newExpense.description}
                           onChange={(e) => setNewExpense(prev => ({ ...prev, description: e.target.value }))}
                           placeholder="Enter expense description..."
-                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                           required
                           disabled={saving}
                         />
@@ -256,7 +254,7 @@ const Expenditures = ({ onLogout }) => {
 
                       {/* Amount */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Amount *</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Amount *</label>
                         <div className="relative">
                           <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
                           <input
@@ -266,7 +264,7 @@ const Expenditures = ({ onLogout }) => {
                             min="0"
                             step="0.01"
                             placeholder="0.00"
-                            className="w-full pl-8 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                             required
                             disabled={saving}
                           />
@@ -275,39 +273,41 @@ const Expenditures = ({ onLogout }) => {
 
                       {/* Notes - Optional field not in API */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Notes (Optional)</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Notes (Optional)</label>
                         <textarea
                           value={newExpense.notes}
                           onChange={(e) => setNewExpense(prev => ({ ...prev, notes: e.target.value }))}
-                          rows="3"
+                          rows="2"
                           placeholder="Add any additional notes..."
-                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition resize-none"
                           disabled={saving}
                         />
-                        <p className="text-sm text-gray-500 mt-1">Note: This field is for reference only and won't be saved to the server.</p>
+                        <p className="text-xs text-gray-500 mt-1">Note: This field is for reference only and won't be saved to the server.</p>
                       </div>
+                    </div>
 
-                      {/* Form Actions */}
-                      <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+                    {/* Form Actions - Sticky at bottom */}
+                    <div className="sticky bottom-0 bg-white pt-4 pb-2 border-t border-gray-200 -mx-6 px-6 mt-6">
+                      <div className="flex justify-end space-x-3">
                         <button
                           type="button"
                           onClick={() => {
                             setShowAddModal(false);
                             resetNewExpense();
                           }}
-                          className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                          className="px-5 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 font-medium transition"
                           disabled={saving}
                         >
                           Cancel
                         </button>
                         <button
                           type="submit"
-                          className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center justify-center min-w-[120px]"
+                          className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center justify-center min-w-[120px] transition"
                           disabled={saving}
                         >
                           {saving ? (
                             <>
-                              <FaSpinner className="animate-spin mr-2" />
+                              <FaSpinner className="animate-spin mr-2" size={14} />
                               Adding...
                             </>
                           ) : (
@@ -322,92 +322,85 @@ const Expenditures = ({ onLogout }) => {
             </div>
           )}
 
-          {/* Expense Details Modal */}
+          {/* Expense Details Modal - Fixed Alignment */}
           {showDetails && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-              <div className="bg-white rounded-lg w-full max-w-2xl my-8">
-                <div className="p-6">
-                  <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-2xl font-bold text-gray-900">Expense Details</h2>
-                    <button
-                      onClick={handleCloseDetails}
-                      className="text-gray-400 hover:text-gray-600 text-xl"
-                    >
-                      ×
-                    </button>
-                  </div>
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-lg w-full max-w-md max-h-[90vh] overflow-hidden shadow-xl">
+                {/* Fixed Header */}
+                <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+                  <h2 className="text-xl font-bold text-gray-900">Expense Details</h2>
+                  <button
+                    onClick={handleCloseDetails}
+                    className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full hover:bg-gray-100"
+                  >
+                    <FaTimes size={20} />
+                  </button>
+                </div>
 
+                {/* Scrollable Content */}
+                <div className="overflow-y-auto px-6 py-5" style={{ maxHeight: 'calc(90vh - 80px)' }}>
                   <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-500 mb-1">Date</label>
-                        <p className="text-lg font-semibold text-gray-900">{showDetails.date}</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Date</label>
+                        <p className="text-base font-semibold text-gray-900">{showDetails.date}</p>
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-500 mb-1">Category</label>
-                        <p className="text-lg font-semibold text-gray-900">{showDetails.category}</p>
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Category</label>
+                        <p className="text-base font-semibold text-gray-900">{showDetails.category}</p>
                       </div>
                     </div>
                     
-                    <div>
-                      <label className="block text-sm font-medium text-gray-500 mb-1">Description</label>
-                      <p className="text-lg font-semibold text-gray-900">{showDetails.description}</p>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Description</label>
+                      <p className="text-base font-semibold text-gray-900">{showDetails.description}</p>
                     </div>
                     
-                    <div>
-                      <label className="block text-sm font-medium text-gray-500 mb-1">Amount</label>
-                      <p className="text-2xl font-bold text-gray-900">${showDetails.amount.toFixed(2)}</p>
+                    <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-4">
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Amount</label>
+                      <p className="text-2xl font-bold text-blue-700">${showDetails.amount.toFixed(2)}</p>
                     </div>
                     
-                    <div>
-                      <label className="block text-sm font-medium text-gray-500 mb-1">Status</label>
-                      <span className={`px-3 py-1 text-sm font-medium rounded-full ${getStatusColor(showDetails.status)}`}>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Status</label>
+                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(showDetails.status)}`}>
                         {showDetails.status}
                       </span>
                       {showDetails.adminName && (
-                        <p className="text-sm text-gray-500 mt-1">Added by {showDetails.adminName}</p>
+                        <p className="text-xs text-gray-500 mt-2">Added by {showDetails.adminName}</p>
                       )}
                     </div>
                     
                     {showDetails.receiptImage && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-500 mb-1">Receipt</label>
-                        <div className="mt-2">
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Receipt</label>
+                        <div className="mt-1">
                           <img 
                             src={`http://localhost:5001/${showDetails.receiptImage}`} 
                             alt="Receipt" 
-                            className="max-w-full h-auto max-h-64 object-contain border border-gray-200 rounded"
+                            className="w-full max-h-40 object-contain border border-gray-200 rounded-lg"
                           />
                         </div>
                       </div>
                     )}
                     
                     {showDetails.notes && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-500 mb-1">Notes</label>
-                        <p className="text-gray-700 bg-gray-50 p-3 rounded-lg">{showDetails.notes}</p>
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Notes</label>
+                        <p className="text-sm text-gray-700">{showDetails.notes}</p>
                       </div>
                     )}
                   </div>
 
-                  {/* Action Buttons */}
-                  {/* <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
-                    {showDetails.status === 'Pending' && (
-                      <button
-                        onClick={() => handleApproveExpense(showDetails.id)}
-                        className="flex items-center space-x-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                      >
-                        <FaCheckCircle />
-                        <span>Approve Expense</span>
-                      </button>
-                    )}
+                  {/* Close Button */}
+                  <div className="sticky bottom-0 bg-white pt-4 pb-2 border-t border-gray-200 -mx-6 px-6 mt-4">
                     <button
                       onClick={handleCloseDetails}
-                      className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                      className="w-full px-5 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-medium transition"
                     >
                       Close
                     </button>
-                  </div> */}
+                  </div>
                 </div>
               </div>
             </div>

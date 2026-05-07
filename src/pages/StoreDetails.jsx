@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
-import { FaArrowLeft, FaPlus, FaTrash, FaEdit, FaBox, FaSnowflake, FaTruck, FaFileInvoice, FaMoneyBill, FaChartBar, FaWarehouse, FaEye, FaTimes, FaSave, FaSearch, FaHistory,FaSpinner} from 'react-icons/fa';
+import { FaArrowLeft, FaPlus, FaTrash, FaEdit, FaBox, FaSnowflake, FaTruck, FaFileInvoice, FaMoneyBill, FaChartBar, FaWarehouse, FaEye, FaTimes, FaSave, FaSearch, FaHistory, FaSpinner, FaCheckCircle, FaExclamationTriangle, FaBuilding, FaThermometerHalf, FaClipboardList, FaDollarSign, FaFilePdf, FaDownload, FaShare, FaPrint } from 'react-icons/fa';
 import { storage } from '../data/storage';
 import axios from 'axios';
 import ApiService from '../components/ApiService';
@@ -56,12 +56,17 @@ const StoreDetails = ({ onLogout }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [inventoryData, setInventoryData] = useState([]);
   const [invoices, setInvoices] = useState([]);
+  const [waybills, setWaybills] = useState([]);
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedWaybill, setSelectedWaybill] = useState(null);
+  const [showWaybillModal, setShowWaybillModal] = useState(false);
 
   useEffect(() => {
     loadStoreData();
     loadCategories();
+    loadWaybills();
   }, [id]);
 
   const loadStoreData = async () => {
@@ -152,6 +157,31 @@ const StoreDetails = ({ onLogout }) => {
     }
   };
 
+  const loadWaybills = async () => {
+    try {
+      const response = await ApiService.get(`/stores/${id}/waybills`, {
+        headers: {
+          Authorization: `Bearer ${clientToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (response.waybills) {
+        setWaybills(response.waybills);
+      } else {
+        // Fallback: Load from localStorage if API not ready
+        const allWaybills = JSON.parse(localStorage.getItem('waybills') || '[]');
+        const storeWaybills = allWaybills.filter(wb => wb.storeId === parseInt(id));
+        setWaybills(storeWaybills);
+      }
+    } catch (error) {
+      console.error('Error loading waybills:', error);
+      // Fallback data
+      const allWaybills = JSON.parse(localStorage.getItem('waybills') || '[]');
+      const storeWaybills = allWaybills.filter(wb => wb.storeId === parseInt(id));
+      setWaybills(storeWaybills);
+    }
+  };
+
   const loadCategories = async () => {
     try {
       const response = await ApiService.get(`/categories`,{
@@ -166,18 +196,7 @@ const StoreDetails = ({ onLogout }) => {
     } catch (error) {
       console.error('Error loading categories:', error);
       // Fallback categories
-      setCategories([
-        // 'Beverages',
-        // 'Snacks',
-        // 'Frozen',
-        // 'Dairy',
-        // 'Bakery',
-        // 'Meat',
-        // 'Produce',
-        // 'Canned Goods',
-        // 'Cleaning Supplies',
-        // 'Personal Care'
-      ]);
+      setCategories([]);
     }
   };
 
@@ -200,7 +219,7 @@ const StoreDetails = ({ onLogout }) => {
       return;
     }
     
-    setLoading(true);
+    setIsSubmitting(true);
     try {
       const roomData = {
         name: newRoom.name,
@@ -217,7 +236,7 @@ const StoreDetails = ({ onLogout }) => {
       });
       
       if (response) {
-        loadStoreData();
+        await loadStoreData();
         setNewRoom({ name: '', roomNumber: '', capacity: '' });
         setShowAddRoom(false);
         alert('Room added successfully!');
@@ -226,45 +245,49 @@ const StoreDetails = ({ onLogout }) => {
       console.error('Error adding room:', error);
       alert('❌ Failed to add room. Please try again.');
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
-  const handleAddRack = async () => {
-    if (!newRack.name || !newRack.rackNumber || !newRack.roomId || !newRack.capacity) {
-      alert('Please fill in all required fields');
-      return;
-    }
-    
-    setLoading(true);
-    try {
-      const rackData = {
-        name: newRack.name,
-        rackNumber: newRack.rackNumber,
-        roomId: parseInt(newRack.roomId),
-        capacity: parseInt(newRack.capacity)
-      };
-      
-      const response = await ApiService.post(`/stores/rooms/${newRack.roomId}/racks`, rackData,{
+ const handleAddRack = async () => {
+  if (!newRack.name || !newRack.rackNumber || !newRack.roomId || !newRack.capacity) {
+    alert('Please fill in all required fields');
+    return;
+  }
+
+  setIsSubmitting(true);
+  try {
+    const rackData = {
+      name: newRack.name,
+      rackNumber: newRack.rackNumber,
+      roomId: parseInt(newRack.roomId),
+      capacity: parseInt(newRack.capacity)
+    };
+
+    const response = await ApiService.post(
+      `/stores/rooms/${newRack.roomId}/racks`,
+      rackData,
+      {
         headers: {
           Authorization: `Bearer ${clientToken}`,
           'Content-Type': 'application/json',
         },
-      });
-      
-      if (response.data) {
-        loadStoreData();
-        setNewRack({ name: '', rackNumber: '', roomId: '', capacity: '' });
-        setShowAddRack(false);
-        alert('Rack added successfully!');
       }
-    } catch (error) {
-      console.error('Error adding rack:', error);
-      alert('❌ Failed to add rack. Please try again.');
-    } finally {
-      setLoading(false);
+    );
+
+    if (response) {
+      await loadStoreData();
+      setNewRack({ name: '', rackNumber: '', roomId: '', capacity: '' });
+      setShowAddRack(false);
+      alert('Rack added successfully!');
     }
-  };
+  } catch (error) {
+    console.error('Error adding rack:', error);
+    alert('❌ Failed to add rack. Please try again.');
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   const handleAddFreezer = async () => {
     if (!newFreezer.name || !newFreezer.freezerNumber || !newFreezer.roomId || !newFreezer.capacity) {
@@ -272,7 +295,7 @@ const StoreDetails = ({ onLogout }) => {
       return;
     }
     
-    setLoading(true);
+    setIsSubmitting(true);
     try {
       const freezerData = {
         name: newFreezer.name,
@@ -290,7 +313,7 @@ const StoreDetails = ({ onLogout }) => {
       });
       
       if (response) {
-        loadStoreData();
+        await loadStoreData();
         setNewFreezer({ name: '', freezerNumber: '', roomId: '', capacity: '', temperature: '' });
         setShowAddFreezer(false);
         alert('Freezer added successfully!');
@@ -299,7 +322,7 @@ const StoreDetails = ({ onLogout }) => {
       console.error('Error adding freezer:', error);
       alert('❌ Failed to add freezer. Please try again.');
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -313,7 +336,7 @@ const StoreDetails = ({ onLogout }) => {
             'Content-Type': 'application/json',
           },
         });
-        loadStoreData();
+        await loadStoreData();
         alert('Room deleted successfully!');
       } catch (error) {
         console.error('Error deleting room:', error);
@@ -334,7 +357,7 @@ const StoreDetails = ({ onLogout }) => {
             'Content-Type': 'application/json',
           },
         });
-        loadStoreData();
+        await loadStoreData();
         alert('Rack deleted successfully!');
       } catch (error) {
         console.error('Error deleting rack:', error);
@@ -355,7 +378,7 @@ const StoreDetails = ({ onLogout }) => {
             'Content-Type': 'application/json',
           },
         });
-        loadStoreData();
+        await loadStoreData();
         alert('Freezer deleted successfully!');
       } catch (error) {
         console.error('Error deleting freezer:', error);
@@ -374,22 +397,20 @@ const StoreDetails = ({ onLogout }) => {
       return;
     }
     
-    setLoading(true);
+    setIsSubmitting(true);
     try {
       let inventoryData = {
-        productId: editingProduct?.productId || 1, // In real app, get from product selection
+        productId: editingProduct?.productId || 1,
         storeId: parseInt(id),
         quantity: parseInt(productForm.quantity),
         reorderLevel: parseInt(productForm.minStock) || 10
       };
       
-      // Add location if selected
       if (productForm.roomId) inventoryData.roomId = parseInt(productForm.roomId);
       if (productForm.rackId) inventoryData.rackId = parseInt(productForm.rackId);
       if (productForm.freezerId) inventoryData.freezerId = parseInt(productForm.freezerId);
       
       if (editingProduct) {
-        // Update existing inventory item
         await ApiService.put(`/inventory/${editingProduct.id}`, inventoryData,{
           headers: {
             Authorization: `Bearer ${clientToken}`,
@@ -398,14 +419,12 @@ const StoreDetails = ({ onLogout }) => {
         });
         alert('Product updated successfully!');
       } else {
-        // Add new inventory item
-        // First, check if product exists or create new one
         const productData = {
           name: productForm.name,
           sku: productForm.sku || `SKU-${Date.now().toString().slice(-6)}`,
           description: productForm.description,
           price: parseFloat(productForm.price),
-          costPrice: parseFloat(productForm.price) * 0.8, // Assuming 80% of selling price
+          costPrice: parseFloat(productForm.price) * 0.8,
           thresholdQuantity: parseInt(productForm.minStock) || 10,
           categoryId: productForm.category || 1,
           isActive: true
@@ -430,7 +449,7 @@ const StoreDetails = ({ onLogout }) => {
         }
       }
       
-      loadStoreData();
+      await loadStoreData();
       resetProductForm();
       setShowAddProduct(false);
       setShowEditProduct(false);
@@ -438,7 +457,7 @@ const StoreDetails = ({ onLogout }) => {
       console.error('Error saving product:', error);
       alert('❌ Failed to save product. Please try again.');
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -470,7 +489,7 @@ const StoreDetails = ({ onLogout }) => {
             'Content-Type': 'application/json',
           },
         });
-        loadStoreData();
+        await loadStoreData();
         alert('Product deleted successfully!');
       } catch (error) {
         console.error('Error deleting product:', error);
@@ -498,6 +517,126 @@ const StoreDetails = ({ onLogout }) => {
     setEditingProduct(null);
   };
 
+  const handleViewWaybill = (waybill) => {
+    setSelectedWaybill(waybill);
+    setShowWaybillModal(true);
+  };
+
+  const handleDownloadWaybill = async (waybill) => {
+    try {
+      const response = await ApiService.get(`/waybills/${waybill.id}/pdf`, {
+        headers: {
+          Authorization: `Bearer ${clientToken}`,
+          'Content-Type': 'application/json',
+        },
+        responseType: 'blob'
+      });
+      
+      const url = window.URL.createObjectURL(new Blob([response]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `waybill_${waybill.waybillNumber}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading waybill:', error);
+      alert('Failed to download waybill. Please try again.');
+    }
+  };
+
+  const handlePrintWaybill = (waybill) => {
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Waybill ${waybill.waybillNumber}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 40px; }
+            .header { text-align: center; margin-bottom: 30px; }
+            .waybill-number { font-size: 24px; font-weight: bold; color: #2563eb; }
+            .store-info { margin-bottom: 20px; padding: 15px; background: #f3f4f6; border-radius: 8px; }
+            .details-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 20px; }
+            .detail-item { margin-bottom: 10px; }
+            .detail-label { font-weight: bold; color: #4b5563; }
+            .products-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            .products-table th, .products-table td { border: 1px solid #e5e7eb; padding: 10px; text-align: left; }
+            .products-table th { background: #f9fafb; font-weight: bold; }
+            .total { margin-top: 20px; text-align: right; font-size: 18px; font-weight: bold; }
+            .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #6b7280; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>DISTRIBUTION WAYBILL</h1>
+            <div class="waybill-number">${waybill.waybillNumber}</div>
+          </div>
+          
+          <div class="store-info">
+            <h3>Store Information</h3>
+            <p><strong>Store:</strong> ${store?.name || 'N/A'}</p>
+            <p><strong>Address:</strong> ${store?.address || 'N/A'}</p>
+          </div>
+          
+          <div class="details-grid">
+            <div class="detail-item">
+              <div class="detail-label">Date:</div>
+              <div>${new Date(waybill.createdAt).toLocaleDateString()}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Payment Type:</div>
+              <div>${waybill.paymentType || 'Paid'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Total Amount:</div>
+              <div>$${(waybill.totalAmount || 0).toLocaleString()}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Status:</div>
+              <div>${waybill.status || 'Completed'}</div>
+            </div>
+          </div>
+          
+          <h3>Products Distributed</h3>
+          <table class="products-table">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>SKU</th>
+                <th>Quantity</th>
+                <th>Price</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${waybill.items?.map(item => `
+                <tr>
+                  <td>${item.productName}</td>
+                  <td>${item.sku || 'N/A'}</td>
+                  <td>${item.quantity}</td>
+                  <td>$${(item.price || 0).toFixed(2)}</td>
+                  <td>$${((item.price || 0) * (item.quantity || 0)).toFixed(2)}</td>
+                </tr>
+              `).join('') || ''}
+            </tbody>
+          </table>
+          
+          <div class="total">
+            Grand Total: $${(waybill.totalAmount || 0).toLocaleString()}
+          </div>
+          
+          <div class="footer">
+            <p>This is a system-generated waybill. Valid with electronic signature.</p>
+            <p>Generated on: ${new Date().toLocaleString()}</p>
+          </div>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
+  };
+
   const filteredInventory = inventoryData.filter(item =>
     item.product.toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -509,6 +648,28 @@ const StoreDetails = ({ onLogout }) => {
     inv.status?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     inv.type?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const filteredWaybills = waybills.filter(wb =>
+    wb.waybillNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    wb.status?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    wb.paymentType?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Helper function to get status color
+  const getStatusColor = (status) => {
+    switch(status) {
+      case 'Active': return 'bg-emerald-100 text-emerald-800';
+      case 'Inactive': return 'bg-gray-100 text-gray-800';
+      case 'In Stock': return 'bg-emerald-100 text-emerald-800';
+      case 'Low Stock': return 'bg-amber-100 text-amber-800';
+      case 'Out of Stock': return 'bg-red-100 text-red-800';
+      case 'completed': return 'bg-emerald-100 text-emerald-800';
+      case 'pending': return 'bg-amber-100 text-amber-800';
+      case 'Completed': return 'bg-emerald-100 text-emerald-800';
+      case 'Processing': return 'bg-blue-100 text-blue-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
 
   if (!store) {
     return (
@@ -530,7 +691,7 @@ const StoreDetails = ({ onLogout }) => {
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <Sidebar onLogout={onLogout} />
       
       <div className="flex-1">
@@ -541,282 +702,336 @@ const StoreDetails = ({ onLogout }) => {
           <div className="mb-6">
             <Link
               to="/stores"
-              className="inline-flex items-center text-blue-600 hover:text-blue-800 mb-4 text-lg font-medium"
+              className="inline-flex items-center text-blue-600 hover:text-blue-800 mb-4 text-sm font-medium bg-white px-3 py-1.5 rounded-lg shadow-sm transition-all hover:shadow"
             >
-              <FaArrowLeft className="mr-2" />
+              <FaArrowLeft className="mr-2" size={12} />
               Back to Stores
             </Link>
             
-            <div className="mb-8">
-              <h1 className="text-3xl font-bold text-gray-800 mb-2">{store.name}</h1>
-              <p className="text-gray-600 text-lg">{store.address}</p>
-              <div className="flex items-center space-x-4 mt-2">
-                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  store.status === 'Active' ? 'bg-green-100 text-green-800' :
-                  store.status === 'Inactive' ? 'bg-red-100 text-red-800' :
-                  'bg-yellow-100 text-yellow-800'
-                }`}>
-                  {store.status}
-                </span>
-                <span className="text-sm text-gray-600">
-                  Manager: {store.manager || 'Unassigned'}
-                </span>
+            <div className="bg-white rounded-xl shadow-md p-6 mb-6 border border-gray-100">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-800 mb-2">{store.name}</h1>
+                  <p className="text-gray-600">{store.address}</p>
+                  <div className="flex flex-wrap items-center gap-3 mt-3">
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(store.status)}`}>
+                      {store.status}
+                    </span>
+                    <span className="text-sm text-gray-600 flex items-center">
+                      <FaBuilding className="mr-1" size={12} />
+                      Manager: {store.manager || 'Unassigned'}
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-4 md:mt-0">
+                  <div className="text-right">
+                    <p className="text-sm text-gray-500">Credit Limit</p>
+                    <p className="text-2xl font-bold text-gray-800">${parseFloat(store.creditLimit || 0).toLocaleString()}</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Store Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <div className="bg-white p-4 rounded-lg border border-gray-200">
-              <p className="text-sm text-gray-600 mb-1">Stock Value</p>
-              <p className="text-xl font-bold text-gray-800">{store.totalValue || '$0'}</p>
+          {/* Store Stats - Redesigned Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-5 rounded-xl shadow-sm border border-blue-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-blue-700 font-medium mb-1">Stock Value</p>
+                  <p className="text-2xl font-bold text-gray-800">{store.totalValue || '$0'}</p>
+                </div>
+                <div className="bg-blue-200 p-3 rounded-full">
+                  <FaDollarSign className="text-blue-700" size={20} />
+                </div>
+              </div>
             </div>
-            <div className="bg-white p-4 rounded-lg border border-gray-200">
-              <p className="text-sm text-gray-600 mb-1">Total Products</p>
-              <p className="text-xl font-bold text-gray-800">{inventoryData.length}</p>
+            <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 p-5 rounded-xl shadow-sm border border-emerald-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-emerald-700 font-medium mb-1">Total Products</p>
+                  <p className="text-2xl font-bold text-gray-800">{inventoryData.length}</p>
+                </div>
+                <div className="bg-emerald-200 p-3 rounded-full">
+                  <FaBox className="text-emerald-700" size={20} />
+                </div>
+              </div>
             </div>
-            <div className="bg-white p-4 rounded-lg border border-gray-200">
-              <p className="text-sm text-gray-600 mb-1">Total Items</p>
-              <p className="text-xl font-bold text-gray-800">{store.totalItems || 0}</p>
+            <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-5 rounded-xl shadow-sm border border-purple-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-purple-700 font-medium mb-1">Total Items</p>
+                  <p className="text-2xl font-bold text-gray-800">{store.totalItems || 0}</p>
+                </div>
+                <div className="bg-purple-200 p-3 rounded-full">
+                  <FaClipboardList className="text-purple-700" size={20} />
+                </div>
+              </div>
             </div>
-            <div className="bg-white p-4 rounded-lg border border-gray-200">
-              <p className="text-sm text-gray-600 mb-1">Credit Limit</p>
-              <p className="text-xl font-bold text-gray-800">${parseFloat(store.creditLimit || 0).toLocaleString()}</p>
+            <div className="bg-gradient-to-br from-amber-50 to-amber-100 p-5 rounded-xl shadow-sm border border-amber-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-amber-700 font-medium mb-1">Low Stock Alerts</p>
+                  <p className="text-2xl font-bold text-gray-800">{inventoryData.filter(p => p.status === 'Low Stock').length}</p>
+                </div>
+                <div className="bg-amber-200 p-3 rounded-full">
+                  <FaExclamationTriangle className="text-amber-700" size={20} />
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Tabs */}
+          {/* Tabs - Modern Design with 4 tabs */}
           <div className="mb-6">
-            <div className="border-b border-gray-200">
-              <nav className="-mb-px flex space-x-8">
+            <div className="border-b border-gray-200 bg-white rounded-t-lg px-4">
+              <nav className="flex space-x-8 overflow-x-auto">
                 <button
                   onClick={() => setActiveTab('infrastructure')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  className={`py-4 px-1 border-b-2 font-medium text-sm transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${
                     activeTab === 'infrastructure'
                       ? 'border-blue-500 text-blue-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
                   disabled={loading}
                 >
-                  <FaWarehouse className="inline mr-2" />
+                  <FaWarehouse className={activeTab === 'infrastructure' ? 'text-blue-500' : 'text-gray-400'} />
                   Infrastructure
                 </button>
                 <button
                   onClick={() => setActiveTab('inventory')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  className={`py-4 px-1 border-b-2 font-medium text-sm transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${
                     activeTab === 'inventory'
                       ? 'border-blue-500 text-blue-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
                   disabled={loading}
                 >
-                  <FaBox className="inline mr-2" />
+                  <FaBox className={activeTab === 'inventory' ? 'text-blue-500' : 'text-gray-400'} />
                   Inventory ({inventoryData.length})
                 </button>
                 <button
                   onClick={() => setActiveTab('invoices')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  className={`py-4 px-1 border-b-2 font-medium text-sm transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${
                     activeTab === 'invoices'
                       ? 'border-blue-500 text-blue-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
                   disabled={loading}
                 >
-                  <FaTruck className="inline mr-2" />
+                  <FaFileInvoice className={activeTab === 'invoices' ? 'text-blue-500' : 'text-gray-400'} />
                   Invoices ({invoices.length})
+                </button>
+                <button
+                  onClick={() => setActiveTab('waybills')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${
+                    activeTab === 'waybills'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                  disabled={loading}
+                >
+                  <FaFilePdf className={activeTab === 'waybills' ? 'text-blue-500' : 'text-gray-400'} />
+                  Waybills ({waybills.length})
                 </button>
               </nav>
             </div>
           </div>
 
-          {/* Search Bar */}
+          {/* Search Bar - Improved */}
           <div className="mb-6">
             <div className="relative max-w-md">
               <input
                 type="text"
-                placeholder="Search..."
+                placeholder="Search by product, category, SKU, invoice or waybill..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full pl-11 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm"
                 disabled={loading}
               />
-              <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <FaSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
             </div>
           </div>
 
           {/* Loading State */}
           {loading && (
-            <div className="flex justify-center items-center py-8">
-              <FaSpinner className="animate-spin text-3xl text-blue-600 mr-3" />
-              <span className="text-gray-600">Loading...</span>
+            <div className="flex flex-col justify-center items-center py-12 bg-white rounded-xl shadow-sm">
+              <FaSpinner className="animate-spin text-4xl text-blue-600 mb-4" />
+              <span className="text-gray-600">Loading store data...</span>
             </div>
           )}
 
           {/* Tab Content */}
           {!loading && (
-            <div className="bg-white rounded-lg border border-gray-200">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
               {/* Infrastructure Tab */}
               {activeTab === 'infrastructure' && (
                 <div className="p-6">
-                  <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-2xl font-bold text-gray-800">Infrastructure Management</h2>
-                    <div className="flex space-x-3">
+                  <div className="flex flex-wrap justify-between items-center gap-4 mb-8">
+                    <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                      <FaWarehouse className="text-blue-600" />
+                      Infrastructure Management
+                    </h2>
+                    <div className="flex flex-wrap gap-3">
                       <button
                         onClick={() => setShowAddRoom(true)}
-                        className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition flex items-center space-x-2"
+                        className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 flex items-center gap-2 shadow-sm"
                         disabled={loading}
                       >
-                        <FaPlus />
+                        <FaPlus size={12} />
                         <span>Add Room</span>
                       </button>
                       <button
                         onClick={() => setShowAddRack(true)}
-                        className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition flex items-center space-x-2"
+                        className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-4 py-2 rounded-lg hover:from-emerald-700 hover:to-emerald-800 transition-all duration-200 flex items-center gap-2 shadow-sm"
                         disabled={loading}
                       >
-                        <FaPlus />
+                        <FaPlus size={12} />
                         <span>Add Rack</span>
                       </button>
                       <button
                         onClick={() => setShowAddFreezer(true)}
-                        className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition flex items-center space-x-2"
+                        className="bg-gradient-to-r from-purple-600 to-purple-700 text-white px-4 py-2 rounded-lg hover:from-purple-700 hover:to-purple-800 transition-all duration-200 flex items-center gap-2 shadow-sm"
                         disabled={loading}
                       >
-                        <FaPlus />
+                        <FaPlus size={12} />
                         <span>Add Freezer</span>
                       </button>
                     </div>
                   </div>
 
-                  {/* Rooms Section */}
-                  <div className="mb-8">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Rooms ({store.infrastructure?.length || 0})</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {store.infrastructure && store.infrastructure.length > 0 ? (
-                        store.infrastructure.map((room) => (
-                          <div key={room.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
-                            <div className="flex justify-between items-start mb-3">
+                  {/* Rooms Section - Redesigned Cards */}
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                      <FaBuilding className="text-gray-600" />
+                      Rooms ({store.infrastructure?.length || 0})
+                    </h3>
+                    {store.infrastructure && store.infrastructure.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                        {store.infrastructure.map((room) => (
+                          <div key={room.id} className="bg-gradient-to-br from-white to-gray-50 border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-200">
+                            <div className="bg-gradient-to-r from-gray-800 to-gray-900 px-4 py-3 flex justify-between items-center">
                               <div>
-                                <h4 className="font-medium text-gray-800">{room.name}</h4>
-                                <p className="text-sm text-gray-500">Room #{room.roomNumber}</p>
+                                <h4 className="font-semibold text-white">{room.name}</h4>
+                                <p className="text-xs text-gray-300">Room #{room.roomNumber}</p>
                               </div>
                               <button
                                 onClick={() => handleDeleteRoom(room.id)}
-                                className="text-red-600 hover:text-red-800 text-sm"
+                                className="text-red-400 hover:text-red-300 transition-colors"
                                 title="Delete Room"
                                 disabled={loading}
                               >
                                 {loading ? <FaSpinner className="animate-spin" /> : <FaTrash />}
                               </button>
                             </div>
-                            <div className="space-y-2">
-                              <div>
-                                <p className="text-sm text-gray-600">Capacity</p>
-                                <p className="font-medium">{room.capacity} units</p>
+                            <div className="p-4">
+                              <div className="grid grid-cols-2 gap-3 mb-4">
+                                <div className="bg-blue-50 rounded-lg p-2 text-center">
+                                  <p className="text-xs text-gray-500">Capacity</p>
+                                  <p className="font-bold text-gray-800">{room.capacity} units</p>
+                                </div>
+                                <div className="bg-emerald-50 rounded-lg p-2 text-center">
+                                  <p className="text-xs text-gray-500">Current Occupancy</p>
+                                  <p className="font-bold text-gray-800">{room.currentOccupancy || 0} units</p>
+                                </div>
                               </div>
-                              <div>
-                                <p className="text-sm text-gray-600">Current Occupancy</p>
-                                <p className="font-medium">{room.currentOccupancy} units</p>
-                              </div>
-                            </div>
-                            
-                            {/* Racks in this room */}
-                            <div className="mt-4 pt-3 border-t border-gray-200">
-                              <h5 className="text-sm font-medium text-gray-700 mb-2">Racks:</h5>
-                              {store.racks && store.racks.filter(rack => rack.roomId === room.id).length > 0 ? (
-                                <div className="space-y-2">
-                                  {store.racks.filter(rack => rack.roomId === room.id).map((rack) => (
-                                    <div key={rack.id} className="text-sm bg-gray-50 p-2 rounded">
-                                      <div className="flex justify-between items-center">
+                              
+                              {/* Racks in this room */}
+                              <div className="mt-4">
+                                <h5 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+                                  <FaBox size={12} className="text-gray-500" />
+                                  Racks ({store.racks?.filter(rack => rack.roomId === room.id).length || 0})
+                                </h5>
+                                {store.racks && store.racks.filter(rack => rack.roomId === room.id).length > 0 ? (
+                                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                                    {store.racks.filter(rack => rack.roomId === room.id).map((rack) => (
+                                      <div key={rack.id} className="bg-gray-100 rounded-lg p-2 flex justify-between items-center">
                                         <div>
-                                          <p className="font-medium">{rack.name}</p>
-                                          <p className="text-gray-600">Rack #{rack.rackNumber}</p>
-                                          <p className="text-gray-500 text-xs">
-                                            Capacity: {rack.capacity} units
-                                          </p>
+                                          <p className="font-medium text-gray-800 text-sm">{rack.name}</p>
+                                          <p className="text-xs text-gray-500">Rack #{rack.rackNumber} | Cap: {rack.capacity}</p>
                                         </div>
                                         <button
                                           onClick={() => handleDeleteRack(rack.id)}
-                                          className="text-red-600 hover:text-red-800"
+                                          className="text-red-500 hover:text-red-700 transition"
                                           disabled={loading}
                                         >
-                                          {loading ? <FaSpinner className="animate-spin text-xs" /> : <FaTrash className="text-xs" />}
+                                          <FaTrash size={12} />
                                         </button>
                                       </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <p className="text-sm text-gray-500">No racks in this room</p>
-                              )}
-                            </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <p className="text-sm text-gray-400 italic">No racks in this room</p>
+                                )}
+                              </div>
 
-                            {/* Freezers in this room */}
-                            <div className="mt-4 pt-3 border-t border-gray-200">
-                              <h5 className="text-sm font-medium text-gray-700 mb-2 flex items-center">
-                                <FaSnowflake className="text-blue-600 mr-1" />
-                                Freezers:
-                              </h5>
-                              {store.freezers && store.freezers.filter(freezer => freezer.roomId === room.id).length > 0 ? (
-                                <div className="space-y-2">
-                                  {store.freezers.filter(freezer => freezer.roomId === room.id).map((freezer) => (
-                                    <div key={freezer.id} className="text-sm bg-blue-50 p-2 rounded">
-                                      <div className="flex justify-between items-center">
+                              {/* Freezers in this room */}
+                              <div className="mt-4">
+                                <h5 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+                                  <FaSnowflake size={12} className="text-blue-500" />
+                                  Freezers ({store.freezers?.filter(freezer => freezer.roomId === room.id).length || 0})
+                                </h5>
+                                {store.freezers && store.freezers.filter(freezer => freezer.roomId === room.id).length > 0 ? (
+                                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                                    {store.freezers.filter(freezer => freezer.roomId === room.id).map((freezer) => (
+                                      <div key={freezer.id} className="bg-blue-50 rounded-lg p-2 flex justify-between items-center">
                                         <div>
-                                          <p className="font-medium">{freezer.name}</p>
-                                          <p className="text-gray-600">Freezer #{freezer.freezerNumber}</p>
-                                          <p className="text-gray-500 text-xs">
-                                            Capacity: {freezer.capacity} units
+                                          <p className="font-medium text-gray-800 text-sm">{freezer.name}</p>
+                                          <p className="text-xs text-gray-500">
+                                            Freezer #{freezer.freezerNumber} | Cap: {freezer.capacity}
+                                            {freezer.temperature && ` | ${freezer.temperature}°C`}
                                           </p>
                                         </div>
                                         <button
                                           onClick={() => handleDeleteFreezer(freezer.id)}
-                                          className="text-red-600 hover:text-red-800"
+                                          className="text-red-500 hover:text-red-700 transition"
                                           disabled={loading}
                                         >
-                                          {loading ? <FaSpinner className="animate-spin text-xs" /> : <FaTrash className="text-xs" />}
+                                          <FaTrash size={12} />
                                         </button>
                                       </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <p className="text-sm text-gray-500">No freezers in this room</p>
-                              )}
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <p className="text-sm text-gray-400 italic">No freezers in this room</p>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        ))
-                      ) : (
-                        <div className="col-span-3 text-center py-8 border border-dashed border-gray-300 rounded-lg">
-                          <FaWarehouse className="text-4xl text-gray-400 mx-auto mb-4" />
-                          <p className="text-gray-600">No rooms added yet</p>
-                          <p className="text-sm text-gray-500 mt-2">Add your first room to get started</p>
-                        </div>
-                      )}
-                    </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-xl bg-gray-50">
+                        <FaWarehouse className="text-5xl text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-600 font-medium">No rooms added yet</p>
+                        <p className="text-sm text-gray-400 mt-1">Click "Add Room" to get started</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
 
-              {/* Inventory Tab */}
+              {/* Inventory Tab - Improved Table Design */}
               {activeTab === 'inventory' && (
                 <div className="p-6">
-                  <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-2xl font-bold text-gray-800">Inventory Management</h2>
+                  <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
+                    <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                      <FaBox className="text-emerald-600" />
+                      Inventory Management
+                    </h2>
                     <button
                       onClick={() => {
                         resetProductForm();
                         setShowAddProduct(true);
                       }}
-                      className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition flex items-center space-x-2"
+                      className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-4 py-2 rounded-lg hover:from-emerald-700 hover:to-emerald-800 transition-all duration-200 flex items-center gap-2 shadow-sm"
                     >
-                      <FaPlus />
+                      <FaPlus size={12} />
                       <span>Add Product</span>
                     </button>
                   </div>
 
                   {/* Inventory Table */}
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto rounded-lg border border-gray-200">
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
                         <tr>
@@ -833,58 +1048,67 @@ const StoreDetails = ({ onLogout }) => {
                       <tbody className="bg-white divide-y divide-gray-200">
                         {filteredInventory.length > 0 ? (
                           filteredInventory.map((item) => (
-                            <tr key={item.id} className="hover:bg-gray-50">
+                            <tr key={item.id} className="hover:bg-gray-50 transition-colors">
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="font-medium text-gray-900">{item.product}</div>
-                                <div className="text-xs text-gray-500">{item.description?.substring(0, 50)}...</div>
-                              </td>
+                                {item.description && <div className="text-xs text-gray-500 truncate max-w-xs">{item.description}</div>}
+                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-gray-900">{item.category}</div>
-                              </td>
+                                <span className="px-2 py-1 bg-gray-100 rounded-full text-xs text-gray-700">{item.category}</span>
+                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-gray-900">{item.sku}</div>
-                              </td>
+                                <code className="text-xs bg-gray-100 px-2 py-1 rounded">{item.sku}</code>
+                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-gray-900">{item.location}</div>
-                              </td>
+                                <div className="text-sm text-gray-700">{item.location}</div>
+                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-gray-900">{item.quantity} units</div>
+                                <div className="text-gray-900 font-medium">{item.quantity} units</div>
                                 <div className="text-xs text-gray-500">Min: {item.minStock}</div>
-                              </td>
+                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-gray-900">${item.price}</div>
-                              </td>
+                                <div className="text-gray-900 font-medium">${item.price}</div>
+                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                  item.status === 'In Stock' ? 'bg-green-100 text-green-800' :
-                                  item.status === 'Low Stock' ? 'bg-yellow-100 text-yellow-800' :
-                                  item.status === 'Out of Stock' ? 'bg-red-100 text-red-800' :
-                                  'bg-gray-100 text-gray-800'
-                                }`}>
+                                <span className={`px-2 py-1 inline-flex text-xs leading-4 font-semibold rounded-full ${getStatusColor(item.status)}`}>
                                   {item.status}
                                 </span>
-                              </td>
+                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                 <button
                                   onClick={() => handleEditProduct(item)}
-                                  className="text-blue-600 hover:text-blue-900 mr-3"
+                                  className="text-blue-600 hover:text-blue-800 mr-3 transition"
                                 >
-                                  <FaEdit />
+                                  <FaEdit size={16} />
                                 </button>
                                 <button
                                   onClick={() => handleDeleteProduct(item.id)}
-                                  className="text-red-600 hover:text-red-900"
+                                  className="text-red-600 hover:text-red-800 transition"
                                 >
-                                  <FaTrash />
+                                  <FaTrash size={16} />
                                 </button>
-                              </td>
-                            </tr>
+                               </td>
+                             </tr>
                           ))
                         ) : (
                           <tr>
-                            <td colSpan="8" className="px-6 py-8 text-center">
-                              <div className="text-gray-500">
-                                {searchTerm ? 'No products found matching your search' : 'No products available'}
+                            <td colSpan="8" className="px-6 py-12 text-center">
+                              <div className="flex flex-col items-center">
+                                <FaBox className="text-4xl text-gray-300 mb-3" />
+                                <p className="text-gray-500">
+                                  {searchTerm ? 'No products found matching your search' : 'No products available'}
+                                </p>
+                                {!searchTerm && (
+                                  <button
+                                    onClick={() => {
+                                      resetProductForm();
+                                      setShowAddProduct(true);
+                                    }}
+                                    className="mt-3 text-emerald-600 hover:text-emerald-700 text-sm font-medium"
+                                  >
+                                    + Add your first product
+                                  </button>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -893,20 +1117,20 @@ const StoreDetails = ({ onLogout }) => {
                     </table>
                   </div>
 
-                  {/* Summary */}
-                  <div className="mt-6 grid grid-cols-3 gap-4">
-                    <div className="bg-blue-50 p-4 rounded-lg">
-                      <p className="text-sm text-gray-600">Total Products</p>
+                  {/* Summary Cards */}
+                  <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-4 rounded-xl">
+                      <p className="text-sm text-blue-700 font-medium">Total Products</p>
                       <p className="text-2xl font-bold text-gray-800">{inventoryData.length}</p>
                     </div>
-                    <div className="bg-green-50 p-4 rounded-lg">
-                      <p className="text-sm text-gray-600">In Stock</p>
+                    <div className="bg-gradient-to-r from-emerald-50 to-emerald-100 p-4 rounded-xl">
+                      <p className="text-sm text-emerald-700 font-medium">In Stock</p>
                       <p className="text-2xl font-bold text-gray-800">
                         {inventoryData.filter(p => p.status === 'In Stock').length}
                       </p>
                     </div>
-                    <div className="bg-yellow-50 p-4 rounded-lg">
-                      <p className="text-sm text-gray-600">Low Stock</p>
+                    <div className="bg-gradient-to-r from-amber-50 to-amber-100 p-4 rounded-xl">
+                      <p className="text-sm text-amber-700 font-medium">Low Stock</p>
                       <p className="text-2xl font-bold text-gray-800">
                         {inventoryData.filter(p => p.status === 'Low Stock').length}
                       </p>
@@ -918,19 +1142,22 @@ const StoreDetails = ({ onLogout }) => {
               {/* Invoice Tab */}
               {activeTab === 'invoices' && (
                 <div className="p-6">
-                  <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-2xl font-bold text-gray-800">Invoice History</h2>
+                  <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
+                    <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                      <FaFileInvoice className="text-purple-600" />
+                      Invoice History
+                    </h2>
                     <Link
                       to="/invoice/create"
-                      className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition flex items-center space-x-2"
+                      className="bg-gradient-to-r from-purple-600 to-purple-700 text-white px-4 py-2 rounded-lg hover:from-purple-700 hover:to-purple-800 transition-all duration-200 flex items-center gap-2 shadow-sm"
                     >
-                      <FaPlus />
+                      <FaPlus size={12} />
                       <span>New Invoice</span>
                     </Link>
                   </div>
                   
                   {/* Invoice Table */}
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto rounded-lg border border-gray-200">
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
                         <tr>
@@ -940,50 +1167,56 @@ const StoreDetails = ({ onLogout }) => {
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">TOTAL AMOUNT</th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PAYMENT METHOD</th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">STATUS</th>
-                        </tr>
+                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
                         {filteredInvoices.length > 0 ? (
                           filteredInvoices.map((invoice) => (
-                            <tr key={invoice.id} className="hover:bg-gray-50">
+                            <tr key={invoice.id} className="hover:bg-gray-50 transition-colors">
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="font-medium text-gray-900">{invoice.invoiceNumber}</div>
-                              </td>
+                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-gray-900">
+                                <div className="text-gray-700">
                                   {new Date(invoice.invoiceDate).toLocaleDateString()}
                                 </div>
-                              </td>
+                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-gray-900 capitalize">{invoice.type}</div>
-                              </td>
+                                <span className="capitalize text-gray-700">{invoice.type}</span>
+                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-gray-900">${parseFloat(invoice.totalAmount || 0).toLocaleString()}</div>
-                              </td>
+                                <div className="text-gray-900 font-medium">${parseFloat(invoice.totalAmount || 0).toLocaleString()}</div>
+                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                  invoice.paymentMethod === 'paid' ? 'bg-green-100 text-green-800' :
-                                  'bg-blue-100 text-blue-800'
+                                <span className={`px-2 py-1 inline-flex text-xs leading-4 font-semibold rounded-full ${
+                                  invoice.paymentMethod === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
                                 }`}>
                                   {invoice.paymentMethod}
                                 </span>
-                              </td>
+                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                  invoice.status === 'completed' ? 'bg-green-100 text-green-800' :
-                                  invoice.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                                  'bg-red-100 text-red-800'
-                                }`}>
+                                <span className={`px-2 py-1 inline-flex text-xs leading-4 font-semibold rounded-full ${getStatusColor(invoice.status)}`}>
                                   {invoice.status}
                                 </span>
-                              </td>
-                            </tr>
+                               </td>
+                             </tr>
                           ))
                         ) : (
                           <tr>
-                            <td colSpan="6" className="px-6 py-8 text-center">
-                              <div className="text-gray-500">
-                                {searchTerm ? 'No invoices found matching your search' : 'No invoice history available'}
+                            <td colSpan="6" className="px-6 py-12 text-center">
+                              <div className="flex flex-col items-center">
+                                <FaFileInvoice className="text-4xl text-gray-300 mb-3" />
+                                <p className="text-gray-500">
+                                  {searchTerm ? 'No invoices found matching your search' : 'No invoice history available'}
+                                </p>
+                                {!searchTerm && (
+                                  <Link
+                                    to="/invoice/create"
+                                    className="mt-3 text-purple-600 hover:text-purple-700 text-sm font-medium"
+                                  >
+                                    + Create your first invoice
+                                  </Link>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -993,27 +1226,173 @@ const StoreDetails = ({ onLogout }) => {
                   </div>
 
                   {/* Invoice Summary */}
-                  <div className="mt-6 grid grid-cols-4 gap-4">
-                    <div className="bg-blue-50 p-4 rounded-lg">
-                      <p className="text-sm text-gray-600">Total Invoices</p>
+                  <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-4 rounded-xl">
+                      <p className="text-sm text-blue-700 font-medium">Total Invoices</p>
                       <p className="text-2xl font-bold text-gray-800">{invoices.length}</p>
                     </div>
-                    <div className="bg-green-50 p-4 rounded-lg">
-                      <p className="text-sm text-gray-600">Total Amount</p>
+                    <div className="bg-gradient-to-r from-emerald-50 to-emerald-100 p-4 rounded-xl">
+                      <p className="text-sm text-emerald-700 font-medium">Total Amount</p>
                       <p className="text-2xl font-bold text-gray-800">
                         ${invoices.reduce((sum, inv) => sum + parseFloat(inv.totalAmount || 0), 0).toLocaleString()}
                       </p>
                     </div>
-                    <div className="bg-purple-50 p-4 rounded-lg">
-                      <p className="text-sm text-gray-600">Completed</p>
+                    <div className="bg-gradient-to-r from-purple-50 to-purple-100 p-4 rounded-xl">
+                      <p className="text-sm text-purple-700 font-medium">Completed</p>
                       <p className="text-2xl font-bold text-gray-800">
                         {invoices.filter(d => d.status === 'completed').length}
                       </p>
                     </div>
-                    <div className="bg-yellow-50 p-4 rounded-lg">
-                      <p className="text-sm text-gray-600">Pending</p>
+                    <div className="bg-gradient-to-r from-amber-50 to-amber-100 p-4 rounded-xl">
+                      <p className="text-sm text-amber-700 font-medium">Pending</p>
                       <p className="text-2xl font-bold text-gray-800">
                         {invoices.filter(d => d.status === 'pending').length}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Waybills Tab - NEW */}
+              {activeTab === 'waybills' && (
+                <div className="p-6">
+                  <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
+                    <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                      <FaFilePdf className="text-red-600" />
+                      Waybills & Distribution Records
+                    </h2>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => loadWaybills()}
+                        className="bg-gradient-to-r from-gray-600 to-gray-700 text-white px-4 py-2 rounded-lg hover:from-gray-700 hover:to-gray-800 transition-all duration-200 flex items-center gap-2 shadow-sm"
+                      >
+                        <FaHistory size={12} />
+                        <span>Refresh</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Waybills Table */}
+                  <div className="overflow-x-auto rounded-lg border border-gray-200">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">WAYBILL NUMBER</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">DATE</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">TYPE</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">TOTAL AMOUNT</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PAYMENT METHOD</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">STATUS</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ACTIONS</th>
+                         </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {filteredWaybills.length > 0 ? (
+                          filteredWaybills.map((waybill) => (
+                            <tr key={waybill.id} className="hover:bg-gray-50 transition-colors">
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="font-medium text-gray-900">{waybill.waybillNumber}</div>
+                               </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-gray-700">
+                                  {new Date(waybill.createdAt).toLocaleDateString()}
+                                </div>
+                               </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className={`px-2 py-1 inline-flex text-xs leading-4 font-semibold rounded-full ${
+                                  waybill.type === 'stock' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
+                                }`}>
+                                  {waybill.type === 'stock' ? 'Stock Distribution' : 'Outlet Distribution'}
+                                </span>
+                               </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-gray-900 font-medium">${parseFloat(waybill.totalAmount || 0).toLocaleString()}</div>
+                               </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className={`px-2 py-1 inline-flex text-xs leading-4 font-semibold rounded-full ${
+                                  waybill.paymentType === 'Paid' ? 'bg-emerald-100 text-emerald-800' : 
+                                  waybill.paymentType === 'Credit' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
+                                }`}>
+                                  {waybill.paymentType || 'Paid'}
+                                </span>
+                               </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className={`px-2 py-1 inline-flex text-xs leading-4 font-semibold rounded-full ${getStatusColor(waybill.status)}`}>
+                                  {waybill.status || 'Completed'}
+                                </span>
+                               </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button
+                                  onClick={() => handleViewWaybill(waybill)}
+                                  className="text-blue-600 hover:text-blue-800 mr-3 transition"
+                                  title="View Details"
+                                >
+                                  <FaEye size={16} />
+                                </button>
+                                <button
+                                  onClick={() => handleDownloadWaybill(waybill)}
+                                  className="text-emerald-600 hover:text-emerald-800 mr-3 transition"
+                                  title="Download PDF"
+                                >
+                                  <FaDownload size={16} />
+                                </button>
+                                <button
+                                  onClick={() => handlePrintWaybill(waybill)}
+                                  className="text-purple-600 hover:text-purple-800 transition"
+                                  title="Print Waybill"
+                                >
+                                  <FaPrint size={16} />
+                                </button>
+                               </td>
+                             </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan="7" className="px-6 py-12 text-center">
+                              <div className="flex flex-col items-center">
+                                <FaFilePdf className="text-4xl text-gray-300 mb-3" />
+                                <p className="text-gray-500">
+                                  {searchTerm ? 'No waybills found matching your search' : 'No waybills generated yet'}
+                                </p>
+                                {!searchTerm && (
+                                  <Link
+                                    to={`/stores/${id}/distribute`}
+                                    className="mt-3 text-red-600 hover:text-red-700 text-sm font-medium flex items-center gap-2"
+                                  >
+                                    <FaTruck size={14} />
+                                    Create your first distribution
+                                  </Link>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Waybill Summary */}
+                  <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-4 rounded-xl">
+                      <p className="text-sm text-blue-700 font-medium">Total Waybills</p>
+                      <p className="text-2xl font-bold text-gray-800">{waybills.length}</p>
+                    </div>
+                    <div className="bg-gradient-to-r from-emerald-50 to-emerald-100 p-4 rounded-xl">
+                      <p className="text-sm text-emerald-700 font-medium">Total Distributed Value</p>
+                      <p className="text-2xl font-bold text-gray-800">
+                        ${waybills.reduce((sum, wb) => sum + parseFloat(wb.totalAmount || 0), 0).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="bg-gradient-to-r from-purple-50 to-purple-100 p-4 rounded-xl">
+                      <p className="text-sm text-purple-700 font-medium">Stock Distributions</p>
+                      <p className="text-2xl font-bold text-gray-800">
+                        {waybills.filter(w => w.type === 'stock').length}
+                      </p>
+                    </div>
+                    <div className="bg-gradient-to-r from-amber-50 to-amber-100 p-4 rounded-xl">
+                      <p className="text-sm text-amber-700 font-medium">Outlet Distributions</p>
+                      <p className="text-2xl font-bold text-gray-800">
+                        {waybills.filter(w => w.type === 'outlet').length}
                       </p>
                     </div>
                   </div>
@@ -1022,42 +1401,42 @@ const StoreDetails = ({ onLogout }) => {
             </div>
           )}
 
-          {/* Quick Action Buttons */}
-          <div className="mt-8 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+          {/* Quick Action Buttons - Modern Design */}
+          <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-8 gap-3">
             <Link
               to={`/stores/edit/${store.id}`}
-              className="bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition text-center font-medium flex items-center justify-center space-x-2"
+              className="bg-gradient-to-r from-blue-600 to-blue-700 text-white py-2.5 px-3 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 text-center font-medium flex items-center justify-center gap-2 shadow-sm text-sm"
             >
-              <FaEdit />
+              <FaEdit size={14} />
               <span>Edit Store</span>
             </Link>
             <Link
-              to="/invoice/create"
-              className="bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition text-center font-medium flex items-center justify-center space-x-2"
+              to={`/stores/${id}/distribute`}
+              className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white py-2.5 px-3 rounded-lg hover:from-emerald-700 hover:to-emerald-800 transition-all duration-200 text-center font-medium flex items-center justify-center gap-2 shadow-sm text-sm"
             >
-              <FaTruck />
-              <span>Stock Distribution</span>
+              <FaTruck size={14} />
+              <span>Stock Dist.</span>
             </Link>
             <Link
               to="/invoices"
-              className="bg-purple-600 text-white py-3 px-4 rounded-lg hover:bg-purple-700 transition text-center font-medium flex items-center justify-center space-x-2"
+              className="bg-gradient-to-r from-purple-600 to-purple-700 text-white py-2.5 px-3 rounded-lg hover:from-purple-700 hover:to-purple-800 transition-all duration-200 text-center font-medium flex items-center justify-center gap-2 shadow-sm text-sm"
             >
-              <FaFileInvoice />
-              <span>Invoice Management</span>
+              <FaFileInvoice size={14} />
+              <span>Invoices</span>
             </Link>
             <Link
               to="/expenditures"
-              className="bg-yellow-600 text-white py-3 px-4 rounded-lg hover:bg-yellow-700 transition text-center font-medium flex items-center justify-center space-x-2"
+              className="bg-gradient-to-r from-amber-600 to-amber-700 text-white py-2.5 px-3 rounded-lg hover:from-amber-700 hover:to-amber-800 transition-all duration-200 text-center font-medium flex items-center justify-center gap-2 shadow-sm text-sm"
             >
-              <FaMoneyBill />
+              <FaMoneyBill size={14} />
               <span>Expenditures</span>
             </Link>
             <Link
               to="/reports"
-              className="bg-indigo-600 text-white py-3 px-4 rounded-lg hover:bg-indigo-700 transition text-center font-medium flex items-center justify-center space-x-2"
+              className="bg-gradient-to-r from-indigo-600 to-indigo-700 text-white py-2.5 px-3 rounded-lg hover:from-indigo-700 hover:to-indigo-800 transition-all duration-200 text-center font-medium flex items-center justify-center gap-2 shadow-sm text-sm"
             >
-              <FaChartBar />
-              <span>Reports & Analytics</span>
+              <FaChartBar size={14} />
+              <span>Reports</span>
             </Link>
             <button
               onClick={() => {
@@ -1066,14 +1445,14 @@ const StoreDetails = ({ onLogout }) => {
                   navigate('/stores');
                 }
               }}
-              className="bg-red-600 text-white py-3 px-4 rounded-lg hover:bg-red-700 transition text-center font-medium flex items-center justify-center space-x-2"
+              className="bg-gradient-to-r from-red-600 to-red-700 text-white py-2.5 px-3 rounded-lg hover:from-red-700 hover:to-red-800 transition-all duration-200 text-center font-medium flex items-center justify-center gap-2 shadow-sm text-sm"
             >
-              <FaTrash />
+              <FaTrash size={14} />
               <span>Delete Store</span>
             </button>
             <button
               onClick={onLogout}
-              className="bg-gray-600 text-white py-3 px-4 rounded-lg hover:bg-gray-700 transition text-center font-medium flex items-center justify-center space-x-2"
+              className="bg-gradient-to-r from-gray-600 to-gray-700 text-white py-2.5 px-3 rounded-lg hover:from-gray-700 hover:to-gray-800 transition-all duration-200 text-center font-medium flex items-center justify-center gap-2 shadow-sm text-sm"
             >
               <span>Logout</span>
             </button>
@@ -1081,11 +1460,11 @@ const StoreDetails = ({ onLogout }) => {
         </main>
       </div>
 
-      {/* Add/Edit Product Modal */}
+      {/* Add/Edit Product Modal - Improved Design */}
       {(showAddProduct || showEditProduct) && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center rounded-t-2xl">
               <h3 className="text-xl font-bold text-gray-800">
                 {editingProduct ? 'Edit Product' : 'Add New Product'}
               </h3>
@@ -1095,13 +1474,13 @@ const StoreDetails = ({ onLogout }) => {
                   setShowEditProduct(false);
                   resetProductForm();
                 }}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-gray-600 transition p-2 rounded-full hover:bg-gray-100"
               >
                 <FaTimes className="text-xl" />
               </button>
             </div>
             
-            <form onSubmit={handleAddProduct}>
+            <form onSubmit={handleAddProduct} className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 {/* Product Name */}
                 <div>
@@ -1112,7 +1491,7 @@ const StoreDetails = ({ onLogout }) => {
                     type="text"
                     value={productForm.name}
                     onChange={(e) => setProductForm({...productForm, name: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                     placeholder="Enter product name"
                     required
                   />
@@ -1127,7 +1506,7 @@ const StoreDetails = ({ onLogout }) => {
                     type="text"
                     value={productForm.sku}
                     onChange={(e) => setProductForm({...productForm, sku: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                     placeholder="Enter SKU"
                   />
                 </div>
@@ -1140,7 +1519,7 @@ const StoreDetails = ({ onLogout }) => {
                   <select
                     value={productForm.category}
                     onChange={(e) => setProductForm({...productForm, category: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                     required
                   >
                     <option value="">Select Category</option>
@@ -1162,7 +1541,7 @@ const StoreDetails = ({ onLogout }) => {
                     step="0.01"
                     value={productForm.price}
                     onChange={(e) => setProductForm({...productForm, price: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                     placeholder="0.00"
                     required
                   />
@@ -1176,7 +1555,7 @@ const StoreDetails = ({ onLogout }) => {
                   <select
                     value={productForm.roomId}
                     onChange={(e) => setProductForm({...productForm, roomId: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                   >
                     <option value="">Select Room</option>
                     {store.infrastructure?.map((room) => (
@@ -1193,7 +1572,7 @@ const StoreDetails = ({ onLogout }) => {
                   <select
                     value={productForm.rackId}
                     onChange={(e) => setProductForm({...productForm, rackId: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                   >
                     <option value="">Select Rack</option>
                     {store.racks?.map((rack) => (
@@ -1210,7 +1589,7 @@ const StoreDetails = ({ onLogout }) => {
                   <select
                     value={productForm.freezerId}
                     onChange={(e) => setProductForm({...productForm, freezerId: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                   >
                     <option value="">Select Freezer</option>
                     {store.freezers?.map((freezer) => (
@@ -1228,7 +1607,7 @@ const StoreDetails = ({ onLogout }) => {
                     type="number"
                     value={productForm.quantity}
                     onChange={(e) => setProductForm({...productForm, quantity: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                     placeholder="0"
                     required
                   />
@@ -1243,7 +1622,7 @@ const StoreDetails = ({ onLogout }) => {
                     type="number"
                     value={productForm.minStock}
                     onChange={(e) => setProductForm({...productForm, minStock: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                     placeholder="10"
                   />
                 </div>
@@ -1257,19 +1636,19 @@ const StoreDetails = ({ onLogout }) => {
                 <textarea
                   value={productForm.description}
                   onChange={(e) => setProductForm({...productForm, description: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                   placeholder="Enter product description"
                   rows="3"
                 />
               </div>
               
-              <div className="flex space-x-3">
+              <div className="flex gap-3 pt-4 border-t border-gray-100">
                 <button
                   type="submit"
-                  disabled={loading}
-                  className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition flex items-center justify-center space-x-2"
+                  disabled={isSubmitting}
+                  className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white py-2.5 px-4 rounded-lg hover:from-emerald-700 hover:to-emerald-800 transition-all duration-200 flex items-center justify-center gap-2 font-medium"
                 >
-                  {loading ? <FaSpinner className="animate-spin" /> : <FaSave />}
+                  {isSubmitting ? <FaSpinner className="animate-spin" /> : <FaSave />}
                   <span>{editingProduct ? 'Update Product' : 'Add Product'}</span>
                 </button>
                 <button
@@ -1279,7 +1658,7 @@ const StoreDetails = ({ onLogout }) => {
                     setShowEditProduct(false);
                     resetProductForm();
                   }}
-                  className="flex-1 bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition"
+                  className="flex-1 bg-gray-200 text-gray-700 py-2.5 px-4 rounded-lg hover:bg-gray-300 transition-all duration-200 font-medium"
                 >
                   Cancel
                 </button>
@@ -1289,266 +1668,474 @@ const StoreDetails = ({ onLogout }) => {
         </div>
       )}
 
-      {/* Add Room Modal */}
+      {/* Add Room Modal - Improved Design */}
       {showAddRoom && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-xl font-bold text-gray-800 mb-4">Add New Room</h3>
-            
-            <div className="space-y-4 mb-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Room Name *
-                </label>
-                <input
-                  type="text"
-                  value={newRoom.name}
-                  onChange={(e) => setNewRoom({...newRoom, name: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g., ARK Room 1"
-                  disabled={loading}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Room Number *
-                </label>
-                <input
-                  type="text"
-                  value={newRoom.roomNumber}
-                  onChange={(e) => setNewRoom({...newRoom, roomNumber: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g., R-001"
-                  disabled={loading}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Capacity (units) *
-                </label>
-                <input
-                  type="number"
-                  value={newRoom.capacity}
-                  onChange={(e) => setNewRoom({...newRoom, capacity: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g., 300"
-                  disabled={loading}
-                />
-              </div>
-            </div>
-            
-            <div className="flex space-x-3">
-              <button
-                onClick={handleAddRoom}
-                disabled={loading}
-                className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition flex items-center justify-center space-x-2"
-              >
-                {loading ? <FaSpinner className="animate-spin" /> : null}
-                <span>{loading ? 'Adding...' : 'Add Room'}</span>
-              </button>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+            <div className="border-b border-gray-100 px-6 py-4 flex justify-between items-center">
+              <h3 className="text-xl font-bold text-gray-800">Add New Room</h3>
               <button
                 onClick={() => setShowAddRoom(false)}
-                disabled={loading}
-                className="flex-1 bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition"
+                className="text-gray-400 hover:text-gray-600 transition p-2 rounded-full hover:bg-gray-100"
               >
-                Cancel
+                <FaTimes />
               </button>
+            </div>
+            <div className="p-6">
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Room Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={newRoom.name}
+                    onChange={(e) => setNewRoom({...newRoom, name: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                    placeholder="e.g., ARK Room 1"
+                    disabled={isSubmitting}
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Room Number *
+                  </label>
+                  <input
+                    type="text"
+                    value={newRoom.roomNumber}
+                    onChange={(e) => setNewRoom({...newRoom, roomNumber: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                    placeholder="e.g., R-001"
+                    disabled={isSubmitting}
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Capacity (units) *
+                  </label>
+                  <input
+                    type="number"
+                    value={newRoom.capacity}
+                    onChange={(e) => setNewRoom({...newRoom, capacity: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                    placeholder="e.g., 300"
+                    disabled={isSubmitting}
+                  />
+                </div>
+              </div>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={handleAddRoom}
+                  disabled={isSubmitting}
+                  className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 text-white py-2.5 px-4 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 flex items-center justify-center gap-2 font-medium"
+                >
+                  {isSubmitting ? <FaSpinner className="animate-spin" /> : null}
+                  <span>{isSubmitting ? 'Adding...' : 'Add Room'}</span>
+                </button>
+                <button
+                  onClick={() => setShowAddRoom(false)}
+                  disabled={isSubmitting}
+                  className="flex-1 bg-gray-200 text-gray-700 py-2.5 px-4 rounded-lg hover:bg-gray-300 transition-all duration-200 font-medium"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Add Rack Modal */}
+      {/* Add Rack Modal - Improved Design */}
       {showAddRack && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-xl font-bold text-gray-800 mb-4">Add New Rack</h3>
-            
-            <div className="space-y-4 mb-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Rack Name *
-                </label>
-                <input
-                  type="text"
-                  value={newRack.name}
-                  onChange={(e) => setNewRack({...newRack, name: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g., ARK Rack A"
-                  disabled={loading}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Rack Number *
-                </label>
-                <input
-                  type="text"
-                  value={newRack.rackNumber}
-                  onChange={(e) => setNewRack({...newRack, rackNumber: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g., RA-01"
-                  disabled={loading}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Room *
-                </label>
-                <select
-                  value={newRack.roomId}
-                  onChange={(e) => setNewRack({...newRack, roomId: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  disabled={loading}
-                >
-                  <option value="">Select Room</option>
-                  {store.infrastructure?.map((room) => (
-                    <option key={room.id} value={room.id}>
-                      {room.name} (#{room.roomNumber})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Capacity (units) *
-                </label>
-                <input
-                  type="number"
-                  value={newRack.capacity}
-                  onChange={(e) => setNewRack({...newRack, capacity: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g., 200"
-                  disabled={loading}
-                />
-              </div>
-            </div>
-            
-            <div className="flex space-x-3">
-              <button
-                onClick={handleAddRack}
-                disabled={loading}
-                className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition flex items-center justify-center space-x-2"
-              >
-                {loading ? <FaSpinner className="animate-spin" /> : null}
-                <span>{loading ? 'Adding...' : 'Add Rack'}</span>
-              </button>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+            <div className="border-b border-gray-100 px-6 py-4 flex justify-between items-center">
+              <h3 className="text-xl font-bold text-gray-800">Add New Rack</h3>
               <button
                 onClick={() => setShowAddRack(false)}
-                disabled={loading}
-                className="flex-1 bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition"
+                className="text-gray-400 hover:text-gray-600 transition p-2 rounded-full hover:bg-gray-100"
               >
-                Cancel
+                <FaTimes />
               </button>
+            </div>
+            <div className="p-6">
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Rack Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={newRack.name}
+                    onChange={(e) => setNewRack({...newRack, name: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                    placeholder="e.g., ARK Rack A"
+                    disabled={isSubmitting}
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Rack Number *
+                  </label>
+                  <input
+                    type="text"
+                    value={newRack.rackNumber}
+                    onChange={(e) => setNewRack({...newRack, rackNumber: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                    placeholder="e.g., RA-01"
+                    disabled={isSubmitting}
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Room *
+                  </label>
+                  <select
+                    value={newRack.roomId}
+                    onChange={(e) => setNewRack({...newRack, roomId: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                    disabled={isSubmitting}
+                  >
+                    <option value="">Select Room</option>
+                    {store.infrastructure?.map((room) => (
+                      <option key={room.id} value={room.id}>
+                        {room.name} (#{room.roomNumber})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Capacity (units) *
+                  </label>
+                  <input
+                    type="number"
+                    value={newRack.capacity}
+                    onChange={(e) => setNewRack({...newRack, capacity: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                    placeholder="e.g., 200"
+                    disabled={isSubmitting}
+                  />
+                </div>
+              </div>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={handleAddRack}
+                  disabled={isSubmitting}
+                  className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white py-2.5 px-4 rounded-lg hover:from-emerald-700 hover:to-emerald-800 transition-all duration-200 flex items-center justify-center gap-2 font-medium"
+                >
+                  {isSubmitting ? <FaSpinner className="animate-spin" /> : null}
+                  <span>{isSubmitting ? 'Adding...' : 'Add Rack'}</span>
+                </button>
+                <button
+                  onClick={() => setShowAddRack(false)}
+                  disabled={isSubmitting}
+                  className="flex-1 bg-gray-200 text-gray-700 py-2.5 px-4 rounded-lg hover:bg-gray-300 transition-all duration-200 font-medium"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Add Freezer Modal */}
+      {/* Add Freezer Modal - Improved Design */}
       {showAddFreezer && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-xl font-bold text-gray-800 mb-4">Add New Freezer</h3>
-            
-            <div className="space-y-4 mb-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Freezer Name *
-                </label>
-                <input
-                  type="text"
-                  value={newFreezer.name}
-                  onChange={(e) => setNewFreezer({...newFreezer, name: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g., ARK Freezer A"
-                  disabled={loading}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Freezer Number *
-                </label>
-                <input
-                  type="text"
-                  value={newFreezer.freezerNumber}
-                  onChange={(e) => setNewFreezer({...newFreezer, freezerNumber: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g., 1"
-                  disabled={loading}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Room *
-                </label>
-                <select
-                  value={newFreezer.roomId}
-                  onChange={(e) => setNewFreezer({...newFreezer, roomId: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  disabled={loading}
-                >
-                  <option value="">Select Room</option>
-                  {store.infrastructure?.map((room) => (
-                    <option key={room.id} value={room.id}>
-                      {room.name} (#{room.roomNumber})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Temperature (°C)
-                </label>
-                <input
-                  type="text"
-                  value={newFreezer.temperature}
-                  onChange={(e) => setNewFreezer({...newFreezer, temperature: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g., -18°C"
-                  disabled={loading}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Capacity (units) *
-                </label>
-                <input
-                  type="number"
-                  value={newFreezer.capacity}
-                  onChange={(e) => setNewFreezer({...newFreezer, capacity: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g., 200"
-                  disabled={loading}
-                />
-              </div>
-            </div>
-            
-            <div className="flex space-x-3">
-              <button
-                onClick={handleAddFreezer}
-                disabled={loading}
-                className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition flex items-center justify-center space-x-2"
-              >
-                {loading ? <FaSpinner className="animate-spin" /> : null}
-                <span>{loading ? 'Adding...' : 'Add Freezer'}</span>
-              </button>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+            <div className="border-b border-gray-100 px-6 py-4 flex justify-between items-center">
+              <h3 className="text-xl font-bold text-gray-800">Add New Freezer</h3>
               <button
                 onClick={() => setShowAddFreezer(false)}
-                disabled={loading}
-                className="flex-1 bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition"
+                className="text-gray-400 hover:text-gray-600 transition p-2 rounded-full hover:bg-gray-100"
               >
-                Cancel
+                <FaTimes />
               </button>
+            </div>
+            <div className="p-6">
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Freezer Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={newFreezer.name}
+                    onChange={(e) => setNewFreezer({...newFreezer, name: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                    placeholder="e.g., ARK Freezer A"
+                    disabled={isSubmitting}
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Freezer Number *
+                  </label>
+                  <input
+                    type="text"
+                    value={newFreezer.freezerNumber}
+                    onChange={(e) => setNewFreezer({...newFreezer, freezerNumber: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                    placeholder="e.g., 1"
+                    disabled={isSubmitting}
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Room *
+                  </label>
+                  <select
+                    value={newFreezer.roomId}
+                    onChange={(e) => setNewFreezer({...newFreezer, roomId: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                    disabled={isSubmitting}
+                  >
+                    <option value="">Select Room</option>
+                    {store.infrastructure?.map((room) => (
+                      <option key={room.id} value={room.id}>
+                        {room.name} (#{room.roomNumber})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Temperature (°C)
+                  </label>
+                  <input
+                    type="text"
+                    value={newFreezer.temperature}
+                    onChange={(e) => setNewFreezer({...newFreezer, temperature: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                    placeholder="e.g., -18"
+                    disabled={isSubmitting}
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Capacity (units) *
+                  </label>
+                  <input
+                    type="number"
+                    value={newFreezer.capacity}
+                    onChange={(e) => setNewFreezer({...newFreezer, capacity: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                    placeholder="e.g., 200"
+                    disabled={isSubmitting}
+                  />
+                </div>
+              </div>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={handleAddFreezer}
+                  disabled={isSubmitting}
+                  className="flex-1 bg-gradient-to-r from-purple-600 to-purple-700 text-white py-2.5 px-4 rounded-lg hover:from-purple-700 hover:to-purple-800 transition-all duration-200 flex items-center justify-center gap-2 font-medium"
+                >
+                  {isSubmitting ? <FaSpinner className="animate-spin" /> : null}
+                  <span>{isSubmitting ? 'Adding...' : 'Add Freezer'}</span>
+                </button>
+                <button
+                  onClick={() => setShowAddFreezer(false)}
+                  disabled={isSubmitting}
+                  className="flex-1 bg-gray-200 text-gray-700 py-2.5 px-4 rounded-lg hover:bg-gray-300 transition-all duration-200 font-medium"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Waybill Details Modal */}
+      {showWaybillModal && selectedWaybill && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center rounded-t-2xl">
+              <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                <FaFilePdf className="text-red-600" />
+                Waybill Details - {selectedWaybill.waybillNumber}
+              </h3>
+              <button
+                onClick={() => {
+                  setShowWaybillModal(false);
+                  setSelectedWaybill(null);
+                }}
+                className="text-gray-400 hover:text-gray-600 transition p-2 rounded-full hover:bg-gray-100"
+              >
+                <FaTimes className="text-xl" />
+              </button>
+            </div>
+            
+            <div className="p-6">
+              {/* Waybill Header */}
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-600">Waybill Number</p>
+                    <p className="text-2xl font-bold text-blue-800">{selectedWaybill.waybillNumber}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm text-gray-600">Date</p>
+                    <p className="text-lg font-semibold text-gray-800">
+                      {new Date(selectedWaybill.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Distribution Details */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                    <FaTruck className="text-emerald-600" />
+                    Distribution Info
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Type:</span>
+                      <span className="font-medium capitalize">{selectedWaybill.type} Distribution</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Payment Type:</span>
+                      <span className="font-medium">{selectedWaybill.paymentType || 'Paid'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Status:</span>
+                      <span className={`px-2 py-0.5 rounded-full text-xs ${getStatusColor(selectedWaybill.status)}`}>
+                        {selectedWaybill.status || 'Completed'}
+                      </span>
+                    </div>
+                    {selectedWaybill.discount > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Discount:</span>
+                        <span className="font-medium text-orange-600">{selectedWaybill.discount}%</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                    <FaDollarSign className="text-green-600" />
+                    Payment Details
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Subtotal:</span>
+                      <span className="font-medium">${(selectedWaybill.subtotal || 0).toLocaleString()}</span>
+                    </div>
+                    {selectedWaybill.discountAmount > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Discount Amount:</span>
+                        <span className="font-medium text-green-600">-${selectedWaybill.discountAmount.toLocaleString()}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between border-t pt-2">
+                      <span className="font-semibold text-gray-800">Total Amount:</span>
+                      <span className="font-bold text-gray-900">${(selectedWaybill.totalAmount || 0).toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Paid Amount:</span>
+                      <span className="font-medium text-green-600">${(selectedWaybill.paidAmount || 0).toLocaleString()}</span>
+                    </div>
+                    {selectedWaybill.creditAmount > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Credit Amount:</span>
+                        <span className="font-medium text-blue-600">${selectedWaybill.creditAmount.toLocaleString()}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Products Table */}
+              <div className="mb-6">
+                <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                  <FaBox className="text-purple-600" />
+                  Products Distributed
+                </h4>
+                <div className="overflow-x-auto rounded-lg border border-gray-200">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Product</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">SKU</th>
+                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500">Quantity</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500">Price</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {selectedWaybill.items?.map((item, idx) => (
+                        <tr key={idx} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-sm text-gray-900">{item.productName}</td>
+                          <td className="px-4 py-3 text-sm text-gray-500">{item.sku || 'N/A'}</td>
+                          <td className="px-4 py-3 text-sm text-center text-gray-700">{item.quantity}</td>
+                          <td className="px-4 py-3 text-sm text-right text-gray-700">${(item.price || 0).toFixed(2)}</td>
+                          <td className="px-4 py-3 text-sm text-right font-medium text-gray-900">
+                            ${((item.price || 0) * (item.quantity || 0)).toFixed(2)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-gray-50">
+                      <tr>
+                        <td colSpan="4" className="px-4 py-3 text-right font-semibold text-gray-800">Grand Total:</td>
+                        <td className="px-4 py-3 text-right font-bold text-gray-900">${(selectedWaybill.totalAmount || 0).toLocaleString()}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+
+              {/* Notes */}
+              {selectedWaybill.notes && (
+                <div className="mb-6 bg-amber-50 rounded-lg p-4">
+                  <h4 className="font-semibold text-gray-800 mb-2">Notes</h4>
+                  <p className="text-gray-700 text-sm">{selectedWaybill.notes}</p>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-4 border-t border-gray-100">
+                <button
+                  onClick={() => handleDownloadWaybill(selectedWaybill)}
+                  className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white py-2.5 px-4 rounded-lg hover:from-emerald-700 hover:to-emerald-800 transition-all duration-200 flex items-center justify-center gap-2"
+                >
+                  <FaDownload size={14} />
+                  <span>Download PDF</span>
+                </button>
+                <button
+                  onClick={() => handlePrintWaybill(selectedWaybill)}
+                  className="flex-1 bg-gradient-to-r from-purple-600 to-purple-700 text-white py-2.5 px-4 rounded-lg hover:from-purple-700 hover:to-purple-800 transition-all duration-200 flex items-center justify-center gap-2"
+                >
+                  <FaPrint size={14} />
+                  <span>Print Waybill</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setShowWaybillModal(false);
+                    setSelectedWaybill(null);
+                  }}
+                  className="flex-1 bg-gray-200 text-gray-700 py-2.5 px-4 rounded-lg hover:bg-gray-300 transition-all duration-200 font-medium"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
