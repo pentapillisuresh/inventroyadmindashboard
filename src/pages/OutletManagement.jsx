@@ -492,7 +492,7 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
   const handleProcessPayment = async () => {
     if (!paymentAmount || isNaN(paymentAmount) || parseFloat(paymentAmount) <= 0) {
       alert('Please enter a valid payment amount');
-      return;
+      return; 
     }
 
     if (!outlet?.storeId || !outlet?.id) {
