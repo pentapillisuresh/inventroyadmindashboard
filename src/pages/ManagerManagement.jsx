@@ -19,7 +19,11 @@ const CreateManagerModal = ({ isOpen, onClose, manager, onSubmit, stores }) => {
       expenditure_management: false,
       create_outlets: false
     },
-    expiryDate: ''
+    expiryDate: '',
+    officeAddress: '',
+    FSSAI_No: '',
+    GST_No: '',
+    CIN_No: ''
   });
 
   const [loading, setLoading] = useState(false);
@@ -38,7 +42,11 @@ const CreateManagerModal = ({ isOpen, onClose, manager, onSubmit, stores }) => {
           expenditure_management: false,
           create_outlets: false
         },
-        expiryDate: manager.expiryDate || ''
+        expiryDate: manager.expiryDate || '',
+        officeAddress: manager.officeAddress || '',
+        FSSAI_No: manager.FSSAI_No || '',
+        GST_No: manager.GST_No || '',
+        CIN_No: manager.CIN_No || ''
       });
     } else {
       setFormData({
@@ -53,7 +61,11 @@ const CreateManagerModal = ({ isOpen, onClose, manager, onSubmit, stores }) => {
           expenditure_management: false,
           create_outlets: false
         },
-        expiryDate: ''
+        expiryDate: '',
+        officeAddress: '',
+        FSSAI_No: '',
+        GST_No: '',
+        CIN_No: ''
       });
     }
   }, [manager, isOpen]);
@@ -90,7 +102,11 @@ const CreateManagerModal = ({ isOpen, onClose, manager, onSubmit, stores }) => {
       storeId: parseInt(formData.storeId),
       password: formData.password,
       permissions: formData.permissions,
-      expiryDate: formData.expiryDate || null
+      expiryDate: formData.expiryDate || null,
+      officeAddress: formData.officeAddress,
+      FSSAI_No: formData.FSSAI_No,
+      GST_No: formData.GST_No,
+      CIN_No: formData.CIN_No
     };
     
     try {
@@ -225,6 +241,65 @@ const CreateManagerModal = ({ isOpen, onClose, manager, onSubmit, stores }) => {
                   onChange={handleChange}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
+              </div>
+
+              {/* New Business Registration Fields */}
+              <div className="pt-2">
+                <h3 className="text-md font-medium text-gray-700 mb-2">Business Registration Details</h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Office Address
+                    </label>
+                    <input
+                      type="text"
+                      name="officeAddress"
+                      value={formData.officeAddress}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Full office address"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      FSSAI Number
+                    </label>
+                    <input
+                      type="text"
+                      name="FSSAI_No"
+                      value={formData.FSSAI_No}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="FSSAI registration number"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      GST Number
+                    </label>
+                    <input
+                      type="text"
+                      name="GST_No"
+                      value={formData.GST_No}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="GST identification number"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      CIN Number
+                    </label>
+                    <input
+                      type="text"
+                      name="CIN_No"
+                      value={formData.CIN_No}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Company Identification Number"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Permissions Section */}
@@ -363,7 +438,11 @@ const ManagerManagement = ({ onLogout }) => {
           permissions: manager.permissions,
           expiryDate: manager.expiryDate,
           isActive: manager.isActive,
-          createdBy: manager.createdBy
+          createdBy: manager.createdBy,
+          officeAddress: manager.officeAddress || '',
+          FSSAI_No: manager.FSSAI_No || '',
+          GST_No: manager.GST_No || '',
+          CIN_No: manager.CIN_No || ''
         }));
         
         setManagers(transformedManagers);

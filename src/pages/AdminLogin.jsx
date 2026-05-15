@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaUser, FaLock } from 'react-icons/fa';
+import { FaUser, FaLock,FaEye,FaEyeSlash } from 'react-icons/fa';
 import ApiService from '../components/ApiService';
 import { saveUserData } from '../data/localStorage';
+import { useAuth } from '../contest/AuthContest';
 
 const AdminLogin = ({ onLogin }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-
+  const {fetchUserData}=useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -38,15 +40,11 @@ const AdminLogin = ({ onLogin }) => {
 
       // ✅ Store token & user in localStorage
       await saveUserData(response.user, response.token)
-
-      // Optional callback
-      if (onLogin) onLogin(response.user);
-
-      // Redirect
-      navigate('/dashboard');
-
+const userID=response.user.id;
+console.log("userID:::",userID);
+      fetchUserData(userID);
     } catch (err) {
-      setError(err.message || 'Invalid email or password');
+      setError(err.data.error || 'Invalid email or password');
     } finally {
       setLoading(false);
     }
@@ -123,13 +121,25 @@ const AdminLogin = ({ onLogin }) => {
                   <FaLock className="text-gray-400" />
                 </div>
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   value={password}
+                   name="password"
                   onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Enter password"
                   required
                 />
+                <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  >
+                    {showPassword ? (
+                      <FaEyeSlash className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                    ) : (
+                      <FaEye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                    )}
+                  </button>
               </div>
             </div>
 

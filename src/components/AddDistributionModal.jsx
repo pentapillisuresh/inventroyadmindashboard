@@ -24,7 +24,6 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
     notes: '',
     paidAmount: 0,
     creditAmount: 0,
-    waybillNumber: ''
   });
 
   // Get token from localStorage inside component
@@ -159,6 +158,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
         freezerId: '',
         locationType: '',
         locationId: '',
+        boxName: '',
         quantity: 0,
         price: parseFloat(firstProduct.price),
         total: parseFloat(firstProduct.price),
@@ -211,7 +211,8 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
           rackId: '',
           freezerId: '',
           locationType: '',
-          locationId: ''
+          locationId: '',
+          boxName:""
         };
       }
     } else if (field === 'quantity') {
@@ -386,14 +387,6 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
     }));
   }, [totals?.total]);
 
-  // Generate waybill number
-  const generateWaybillNumber = () => {
-    const prefix = distributionMode === 'stock' ? 'STK' : 'OUT';
-    const timestamp = Date.now();
-    const random = Math.floor(Math.random() * 1000);
-    return `${prefix}-${timestamp}-${random}`;
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -407,10 +400,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
     
     try {
       setLoading(prev => ({ ...prev, submitting: true }));
-      
-      // Generate waybill number
-      const waybillNumber = generateWaybillNumber();
-      
+            
       // For mixed payment, ensure credit amount is calculated correctly
       let finalPaidAmount = formData.paidAmount;
       let finalCreditAmount = formData.creditAmount;
@@ -427,14 +417,14 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
           paymentMethod: formData.paymentType,
           paidAmount: finalPaidAmount,
           creditAmount: finalCreditAmount,
-          waybillNumber: waybillNumber,
           items: selectedProducts.map(item => ({
             productId: item.productId,
             quantity: item.quantity,
             price: item.price,
             roomId: item.roomId,
             locationType: item.locationType,
-            locationId: item.locationId
+            locationId: item.locationId,
+            boxName:item.boxName
           }))
         };
         
@@ -448,6 +438,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
             },
           }
         );
+
       } else {
         // Outlet distribution
         const selectedOutlet = outlets.find(o => o.id === parseInt(formData.outletId));
@@ -456,7 +447,6 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
           paymentMethod: formData.paymentType,
           paidAmount: finalPaidAmount,
           creditAmount: finalCreditAmount,
-          waybillNumber: waybillNumber,
           outletName: selectedOutlet?.name,
           outletAddress: selectedOutlet?.address,
           contactPerson: selectedOutlet?.contactPerson,
@@ -466,7 +456,8 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
             quantity: item.quantity,
             price: item.price,
             productName: item.productName,
-            sku: item.sku
+            sku: item.sku,
+            boxName:item.boxName
           }))
         };
         
@@ -483,12 +474,13 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
       }
 
       if (response) {
+        console.log("response:::",response.invoice.invoiceNumber)
         // Prepare distribution data for parent component
         const distributionData = {
           mode: distributionMode,
           storeId: formData.storeId,
+          invoice:response.invoice.invoiceNumber,
           outletId: formData.outletId,
-          waybillNumber: waybillNumber,
           paymentType: formData.paymentType === 'paid' ? 'Paid' : formData.paymentType === 'credit' ? 'Credit' : 'Mixed',
           discount: formData.discount,
           notes: formData.notes,
@@ -501,6 +493,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
             quantity: item.quantity,
             price: item.price,
             total: item.total,
+            boxName:item.boxName,
             sku: item.sku,
             room: distributionMode === 'stock' && item.roomId ? rooms.find(r => r.id === parseInt(item.roomId))?.name || '' : '',
             rack: distributionMode === 'stock' && item.rackId ? rooms
@@ -515,7 +508,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
         
         onSave(distributionData);
         
-        // Show success popup with waybill
+        // Show success popup
         showSuccessPopup(distributionData);
       } else {
         alert('Failed to create distribution. Please try again.');
@@ -530,124 +523,324 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
   };
 
   const showSuccessPopup = (distributionData) => {
-    // Create a modal-like popup for success message
+    console.log('rrr:::', distributionData);
+  
+    // Group products by boxName
+    const groupedBoxes = distributionData.products.reduce((acc, product) => {
+      if (!acc[product.boxName]) {
+        acc[product.boxName] = {
+          products: [],
+          total: 0
+        };
+      }
+  
+      acc[product.boxName].products.push(product);
+      acc[product.boxName].total += product.total;
+  
+      return acc;
+    }, {});
+  
+    // Create popup
     const popupDiv = document.createElement('div');
-    popupDiv.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]';
+    popupDiv.className =
+      'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]';
+  
     popupDiv.innerHTML = `
-      <div class="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div class="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
-          <h2 class="text-2xl font-bold text-green-600">✓ Distribution Created Successfully!</h2>
-          <button class="close-popup text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+      <div class="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        
+        <!-- Header -->
+        <div class="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center z-10">
+          <h2 class="text-2xl font-bold text-green-600">
+            ✓ Distribution Created Successfully!
+          </h2>
+  
+          <button class="close-popup text-gray-400 hover:text-gray-600 text-2xl">
+            &times;
+          </button>
         </div>
+  
         <div class="p-6">
+  
+          <!-- Invoice Summary -->
           <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
             <div class="flex items-center justify-between">
               <div>
-                <p class="text-sm text-gray-600">Waybill Number</p>
-                <p class="text-2xl font-bold text-blue-800">${distributionData.waybillNumber}</p>
+                <p class="text-sm text-gray-600">Invoice Number</p>
+                <p class="text-2xl font-bold text-blue-800">
+                  ${distributionData.invoice}
+                </p>
               </div>
+  
               <div class="text-right">
                 <p class="text-sm text-gray-600">Total Amount</p>
-                <p class="text-2xl font-bold text-green-600">$${distributionData.totalValue.toFixed(2)}</p>
+                <p class="text-2xl font-bold text-green-600">
+                  $${distributionData.totalValue.toFixed(2)}
+                </p>
               </div>
             </div>
           </div>
-          
+  
+          <!-- Distribution Details -->
           <div class="mb-6">
-            <h3 class="font-semibold text-gray-800 mb-3">Distribution Details</h3>
+            <h3 class="font-semibold text-gray-800 mb-3">
+              Distribution Details
+            </h3>
+  
             <div class="grid grid-cols-2 gap-4 text-sm">
+  
               <div>
                 <p class="text-gray-600">Type:</p>
-                <p class="font-medium capitalize">${distributionData.mode} Distribution</p>
+                <p class="font-medium capitalize">
+                  ${distributionData.mode} Distribution
+                </p>
               </div>
+  
               <div>
                 <p class="text-gray-600">Payment Type:</p>
-                <p class="font-medium">${distributionData.paymentType}</p>
+                <p class="font-medium">
+                  ${distributionData.paymentType}
+                </p>
               </div>
+  
               <div>
                 <p class="text-gray-600">Paid Amount:</p>
-                <p class="font-medium text-green-600">$${distributionData.paidAmount.toFixed(2)}</p>
+                <p class="font-medium text-green-600">
+                  $${distributionData.paidAmount.toFixed(2)}
+                </p>
               </div>
-              ${distributionData.creditAmount > 0 ? `
-                <div>
-                  <p class="text-gray-600">Credit Amount:</p>
-                  <p class="font-medium text-blue-600">$${distributionData.creditAmount.toFixed(2)}</p>
-                </div>
-              ` : ''}
-              ${distributionData.discount > 0 ? `
-                <div>
-                  <p class="text-gray-600">Discount:</p>
-                  <p class="font-medium text-orange-600">${distributionData.discount}%</p>
-                </div>
-              ` : ''}
+  
+              ${
+                distributionData.creditAmount > 0
+                  ? `
+                  <div>
+                    <p class="text-gray-600">Credit Amount:</p>
+                    <p class="font-medium text-blue-600">
+                      $${distributionData.creditAmount.toFixed(2)}
+                    </p>
+                  </div>
+                `
+                  : ''
+              }
+  
+              ${
+                distributionData.discount > 0
+                  ? `
+                  <div>
+                    <p class="text-gray-600">Discount:</p>
+                    <p class="font-medium text-orange-600">
+                      ${distributionData.discount}%
+                    </p>
+                  </div>
+                `
+                  : ''
+              }
             </div>
           </div>
-          
-          <div class="mb-6">
-            <h3 class="font-semibold text-gray-800 mb-3">Products Distributed</h3>
-            <div class="overflow-x-auto">
+  
+          <!-- All Products Table -->
+          <div class="mb-8">
+            <h3 class="font-semibold text-gray-800 mb-3">
+              Products Distributed
+            </h3>
+  
+            <div class="overflow-x-auto border rounded-lg">
               <table class="w-full text-sm">
+                
                 <thead class="bg-gray-50">
                   <tr>
                     <th class="px-3 py-2 text-left">Product</th>
-                    <th class="px-3 py-2 text-center">Quantity</th>
+                    <th class="px-3 py-2 text-center">Qty</th>
                     <th class="px-3 py-2 text-right">Price</th>
+                    <th class="px-3 py-2 text-left">Box</th>
                     <th class="px-3 py-2 text-right">Total</th>
                   </tr>
                 </thead>
+  
                 <tbody>
-                  ${distributionData.products.map(product => `
-                    <tr class="border-t border-gray-200">
-                      <td class="px-3 py-2">${product.productName}</td>
-                      <td class="px-3 py-2 text-center">${product.quantity}</td>
-                      <td class="px-3 py-2 text-right">$${product.price.toFixed(2)}</td>
-                      <td class="px-3 py-2 text-right">$${product.total.toFixed(2)}</td>
-                    </tr>
-                  `).join('')}
+                  ${distributionData.products
+                    .map(
+                      (product) => `
+                      <tr class="border-t border-gray-200">
+                        <td class="px-3 py-2">
+                          ${product.productName}
+                        </td>
+  
+                        <td class="px-3 py-2 text-center">
+                          ${product.quantity}
+                        </td>
+  
+                        <td class="px-3 py-2 text-right">
+                          $${product.price.toFixed(2)}
+                        </td>
+  
+                        <td class="px-3 py-2">
+                          ${product.boxName}
+                        </td>
+  
+                        <td class="px-3 py-2 text-right">
+                          $${product.total.toFixed(2)}
+                        </td>
+                      </tr>
+                    `
+                    )
+                    .join('')}
                 </tbody>
+  
                 <tfoot class="bg-gray-50">
                   <tr>
-                    <td colspan="3" class="px-3 py-2 text-right font-semibold">Total:</td>
-                    <td class="px-3 py-2 text-right font-bold">$${distributionData.totalValue.toFixed(2)}</td>
+                    <td colspan="4" class="px-3 py-2 text-right font-semibold">
+                      Grand Total:
+                    </td>
+  
+                    <td class="px-3 py-2 text-right font-bold text-green-700">
+                      $${distributionData.totalValue.toFixed(2)}
+                    </td>
                   </tr>
                 </tfoot>
+  
               </table>
             </div>
           </div>
-          
-          ${distributionData.notes ? `
-            <div class="mb-6">
-              <h3 class="font-semibold text-gray-800 mb-2">Notes</h3>
-              <p class="text-gray-600 text-sm">${distributionData.notes}</p>
+  
+          <!-- BOXES SECTION -->
+          <div class="mb-6">
+            <h3 class="font-bold text-xl text-gray-800 mb-4">
+              Box Wise Distribution
+            </h3>
+  
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+  
+              ${Object.entries(groupedBoxes)
+                .map(
+                  ([boxName, boxData]) => `
+                
+                <div class="border border-gray-300 rounded-xl shadow-sm overflow-hidden">
+  
+                  <!-- Box Header -->
+                  <div class="bg-indigo-600 text-white px-4 py-3">
+                    <div class="flex justify-between items-center">
+                      <h4 class="font-semibold text-lg">
+                        ${boxName}
+                      </h4>
+  
+                      <span class="bg-white text-indigo-700 text-xs px-2 py-1 rounded-full font-bold">
+                        ${boxData.products.length} Item(s)
+                      </span>
+                    </div>
+                  </div>
+  
+                  <!-- Products -->
+                  <div class="p-4">
+  
+                    <table class="w-full text-sm">
+                      
+                      <thead>
+                        <tr class="border-b">
+                          <th class="text-left py-2">Product</th>
+                          <th class="text-center py-2">Qty</th>
+                          <th class="text-right py-2">Price</th>
+                          <th class="text-right py-2">Amount</th>
+                        </tr>
+                      </thead>
+  
+                      <tbody>
+                        ${boxData.products
+                          .map(
+                            (product) => `
+                            <tr class="border-b border-gray-100">
+                              
+                              <td class="py-2">
+                                ${product.productName}
+                              </td>
+  
+                              <td class="py-2 text-center">
+                                ${product.quantity}
+                              </td>
+  
+                              <td class="py-2 text-right">
+                                $${product.price.toFixed(2)}
+                              </td>
+  
+                              <td class="py-2 text-right font-medium">
+                                $${product.total.toFixed(2)}
+                              </td>
+  
+                            </tr>
+                          `
+                          )
+                          .join('')}
+                      </tbody>
+  
+                      <tfoot>
+                        <tr>
+                          <td colspan="3" class="pt-3 text-right font-bold text-gray-700">
+                            Box Total:
+                          </td>
+  
+                          <td class="pt-3 text-right font-bold text-green-700">
+                            $${boxData.total.toFixed(2)}
+                          </td>
+                        </tr>
+                      </tfoot>
+  
+                    </table>
+  
+                  </div>
+  
+                </div>
+  
+              `
+                )
+                .join('')}
+  
             </div>
-          ` : ''}
-          
+          </div>
+  
+          ${
+            distributionData.notes
+              ? `
+              <div class="mb-6">
+                <h3 class="font-semibold text-gray-800 mb-2">
+                  Notes
+                </h3>
+  
+                <p class="text-gray-600 text-sm">
+                  ${distributionData.notes}
+                </p>
+              </div>
+            `
+              : ''
+          }
+  
+          <!-- Footer -->
           <div class="flex justify-end">
             <button class="close-popup bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">
               Close
             </button>
           </div>
+  
         </div>
       </div>
     `;
-    
+  
     document.body.appendChild(popupDiv);
-    
+  
+    // Close handlers
     const closeButtons = popupDiv.querySelectorAll('.close-popup');
-    closeButtons.forEach(btn => {
+  
+    closeButtons.forEach((btn) => {
       btn.addEventListener('click', () => {
         popupDiv.remove();
       });
     });
-    
-    // Close when clicking outside
+  
+    // Outside click close
     popupDiv.addEventListener('click', (e) => {
       if (e.target === popupDiv) {
         popupDiv.remove();
       }
     });
   };
-
   // Initialize form with proper payment amounts when component mounts
   useEffect(() => {
     if (formData.paymentType === 'paid') {
@@ -1008,6 +1201,18 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                                 <p className="text-xs text-gray-600">Subtotal</p>
                                 <p className="text-sm font-medium text-gray-900">${product.total?.toFixed(2) || '0.00'}</p>
                               </div>
+                              <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                              Box Name * 
+                            </label>
+                            <input
+                              value={product.boxName}
+                              onChange={(e) => handleProductChange(index, 'boxName', e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
+                              placeholder="Box Name"
+                              required
+                            />
+                          </div>
                             </div>
                           </div>
                         )}
@@ -1181,7 +1386,6 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                   </div>
                   
                   <div className="mt-4 text-sm text-gray-500">
-                    <p>This distribution will generate a waybill number for tracking.</p>
                     {distributionMode === 'stock' && selectedProducts.some(p => p.roomId) && (
                       <p className="mt-1">Products will be allocated to specific locations as specified.</p>
                     )}
@@ -1224,7 +1428,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                   ) : (
                     <>
                       <FaTruck />
-                      <span>Create Distribution & Generate Waybill</span>
+                      <span>Create Distribution </span>
                     </>
                   )}
                 </button>

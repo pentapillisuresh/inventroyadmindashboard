@@ -1,20 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import {
-  FaTachometerAlt,
-  FaStore,
-  FaShoppingBag,
-  FaUserTie,
-  FaBox,
-  FaTruck,
-  FaFileInvoice,
-  FaMoneyBill,
-  FaChartBar,
-  FaSignOutAlt,
-  FaBuilding,
-  FaWarehouse,
-  FaUserCircle,
-} from 'react-icons/fa';
+import {FaTachometerAlt,FaStore,FaShoppingBag,FaUserTie,FaBox,FaTruck,FaFileInvoice,FaMoneyBill,FaChartBar,FaSignOutAlt,FaBuilding,FaWarehouse,FaUserCircle} from 'react-icons/fa';
 
 const Sidebar = ({ onLogout }) => {
   const [userData, setUserData] = useState(null);
@@ -25,6 +11,7 @@ const Sidebar = ({ onLogout }) => {
     const loadUserData = () => {
       try {
         const storedUser = localStorage.getItem('user');
+
         if (storedUser) {
           const parsedUser = JSON.parse(storedUser);
           setUserData(parsedUser);
@@ -60,16 +47,16 @@ const Sidebar = ({ onLogout }) => {
       requiredPermission: 'create_store'
     },
     { 
-      path: '/outlets', 
-      icon: <FaShoppingBag />, 
-      label: 'Outlet Management',
-      requiredPermission: 'create_outlets'
-    },
-    { 
       path: '/managers', 
       icon: <FaUserTie />, 
       label: 'Manager Management',
       requiredPermission: null // Admin only feature
+    },
+    { 
+      path: '/outlets', 
+      icon: <FaShoppingBag />, 
+      label: 'Outlet Management',
+      requiredPermission: 'create_outlets'
     },
     { 
       path: '/products', 
@@ -106,7 +93,7 @@ const Sidebar = ({ onLogout }) => {
   // Check if user has permission to view a menu item
   const hasPermission = (requiredPermission) => {
     if (!requiredPermission) return true; // No permission required
-    if (userData?.role === 'super_admin') return true; // Super admin has all permissions
+    if (userData?.role === 'admin') return true; // Super admin has all permissions
     
     // Check specific permission
     return permissions[requiredPermission] === true;

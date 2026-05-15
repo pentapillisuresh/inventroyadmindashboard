@@ -2,14 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
-import { FaArrowLeft, FaPlus, FaTrash, FaEdit, FaBox, FaSnowflake, FaTruck, FaFileInvoice, FaMoneyBill, FaChartBar, FaWarehouse, FaEye, FaTimes, FaSave, FaSearch, FaHistory, FaSpinner, FaCheckCircle, FaExclamationTriangle, FaBuilding, FaThermometerHalf, FaClipboardList, FaDollarSign, FaFilePdf, FaDownload, FaShare, FaPrint } from 'react-icons/fa';
-import { storage } from '../data/storage';
+import {
+  FaArrowLeft, FaPlus, FaTrash, FaEdit, FaBox, FaSnowflake, FaTruck,
+  FaFileInvoice, FaMoneyBill, FaChartBar, FaWarehouse, FaEye, FaTimes,
+  FaSave, FaSearch, FaHistory, FaSpinner, FaCheckCircle, FaExclamationTriangle,
+  FaBuilding, FaThermometerHalf, FaClipboardList, FaDollarSign, FaFilePdf,
+  FaDownload, FaShare, FaPrint, FaChevronRight
+} from 'react-icons/fa'; import { storage } from '../data/storage';
 import axios from 'axios';
 import ApiService from '../components/ApiService';
 
 const API_BASE_URL = 'http://localhost:5001/api';
 
-const StoreDetails = ({ onLogout }) => {  
+const StoreDetails = ({ onLogout }) => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [store, setStore] = useState(null);
@@ -21,32 +26,32 @@ const StoreDetails = ({ onLogout }) => {
   const [showEditProduct, setShowEditProduct] = useState(false);
   const clientToken = localStorage.getItem('token');
 
-  const [newRoom, setNewRoom] = useState({ 
-    name: '', 
-    roomNumber: '', 
-    capacity: '' 
+  const [newRoom, setNewRoom] = useState({
+    name: '',
+    roomNumber: '',
+    capacity: ''
   });
-  const [newRack, setNewRack] = useState({ 
-    name: '', 
-    rackNumber: '', 
-    roomId: '', 
-    capacity: '' 
+  const [newRack, setNewRack] = useState({
+    name: '',
+    rackNumber: '',
+    roomId: '',
+    capacity: ''
   });
-  const [newFreezer, setNewFreezer] = useState({ 
-    name: '', 
-    freezerNumber: '', 
-    roomId: '', 
-    capacity: '', 
-    temperature: '' 
+  const [newFreezer, setNewFreezer] = useState({
+    name: '',
+    freezerNumber: '',
+    roomId: '',
+    capacity: '',
+    temperature: ''
   });
-  const [productForm, setProductForm] = useState({ 
-    name: '', 
+  const [productForm, setProductForm] = useState({
+    name: '',
     category: '',
     sku: '',
-    roomId: '', 
-    rackId: '', 
+    roomId: '',
+    rackId: '',
     freezerId: '',
-    quantity: '', 
+    quantity: '',
     price: '',
     minStock: '',
     status: 'In Stock',
@@ -63,7 +68,24 @@ const StoreDetails = ({ onLogout }) => {
   const [selectedWaybill, setSelectedWaybill] = useState(null);
   const [showWaybillModal, setShowWaybillModal] = useState(false);
 
-  useEffect(() => {
+  // add this state at top of component
+  const [openBatch, setOpenBatch] = useState(null);
+
+  // group waybills by batchId
+  // Add this after your useState declarations (around line 96)
+  const batchArray = Object.entries(
+    waybills.reduce((acc, item) => {
+      if (!acc[item.batchId]) {
+        acc[item.batchId] = [];
+      }
+      acc[item.batchId].push(item);
+      return acc;
+    }, {})
+  ).map(([batchId, items]) => ({
+    batchId,
+    items,
+    totalAmount: items.reduce((sum, item) => sum + Number(item.totalPrice || 0), 0)
+  })); useEffect(() => {
     loadStoreData();
     loadCategories();
     loadWaybills();
@@ -72,13 +94,13 @@ const StoreDetails = ({ onLogout }) => {
   const loadStoreData = async () => {
     setLoading(true);
     try {
-      const response = await ApiService.get(`/stores/${id}`,{
+      const response = await ApiService.get(`/stores/${id}`, {
         headers: {
           Authorization: `Bearer ${clientToken}`,
           'Content-Type': 'application/json',
         },
       });
-        if (response.success) {
+      if (response.success) {
         const storeData = response.data;
         const transformedStore = {
           ...storeData,
@@ -90,11 +112,11 @@ const StoreDetails = ({ onLogout }) => {
           racks: response.racks || [],
           freezers: response.freezers || []
         };
-        console.log("rack:::",response.racks);
-        console.log("freezers:::",response.freezers);
-        console.log("room:::",response.rooms );
+        console.log("rack:::", response.racks);
+        console.log("freezers:::", response.freezers);
+        console.log("room:::", response.rooms);
         setStore(transformedStore);
-        
+
         // Transform inventory data from API
         const transformedInventory = response.inventory?.map(item => ({
           id: item.id,
@@ -114,22 +136,22 @@ const StoreDetails = ({ onLogout }) => {
           description: item.Product?.description || '',
           location: getLocation(item)
         }));
-        
+
         setInventoryData(transformedInventory || []);
         setInvoices(response.invoices || []);
-              }
+      }
     } catch (error) {
       console.error('Error loading store data:', error);
       // Fallback to local storage if API fails
       const storeData = storage.getStoreById(parseInt(id));
       if (storeData) {
         setStore(storeData);
-        
+
         const allProducts = storage.getProducts();
-        const storeInventory = allProducts.filter(product => 
+        const storeInventory = allProducts.filter(product =>
           product.storeId === parseInt(id)
         );
-        
+
         const transformedInventory = storeInventory.map(product => ({
           id: product.id,
           product: product.name,
@@ -143,12 +165,12 @@ const StoreDetails = ({ onLogout }) => {
           status: product.status,
           description: product.description
         }));
-        
+
         setInventoryData(transformedInventory);
       }
-      
+
       const allInvoices = storage.getInvoices();
-      const storeInvoices = allInvoices.filter(inv => 
+      const storeInvoices = allInvoices.filter(inv =>
         inv.storeId === parseInt(id)
       );
       setInvoices(storeInvoices);
@@ -164,14 +186,10 @@ const StoreDetails = ({ onLogout }) => {
           Authorization: `Bearer ${clientToken}`,
           'Content-Type': 'application/json',
         },
+
       });
       if (response.waybills) {
         setWaybills(response.waybills);
-      } else {
-        // Fallback: Load from localStorage if API not ready
-        const allWaybills = JSON.parse(localStorage.getItem('waybills') || '[]');
-        const storeWaybills = allWaybills.filter(wb => wb.storeId === parseInt(id));
-        setWaybills(storeWaybills);
       }
     } catch (error) {
       console.error('Error loading waybills:', error);
@@ -184,7 +202,7 @@ const StoreDetails = ({ onLogout }) => {
 
   const loadCategories = async () => {
     try {
-      const response = await ApiService.get(`/categories`,{
+      const response = await ApiService.get(`/categories`, {
         headers: {
           Authorization: `Bearer ${clientToken}`,
           'Content-Type': 'application/json',
@@ -218,7 +236,7 @@ const StoreDetails = ({ onLogout }) => {
       alert('Please fill in all required fields');
       return;
     }
-    
+
     setIsSubmitting(true);
     try {
       const roomData = {
@@ -227,14 +245,14 @@ const StoreDetails = ({ onLogout }) => {
         storeId: parseInt(id),
         capacity: parseInt(newRoom.capacity)
       };
-      
-      const response = await ApiService.post(`/stores/${id}/rooms`, roomData,{
+
+      const response = await ApiService.post(`/stores/${id}/rooms`, roomData, {
         headers: {
           Authorization: `Bearer ${clientToken}`,
           'Content-Type': 'application/json',
         },
       });
-      
+
       if (response) {
         await loadStoreData();
         setNewRoom({ name: '', roomNumber: '', capacity: '' });
@@ -249,52 +267,52 @@ const StoreDetails = ({ onLogout }) => {
     }
   };
 
- const handleAddRack = async () => {
-  if (!newRack.name || !newRack.rackNumber || !newRack.roomId || !newRack.capacity) {
-    alert('Please fill in all required fields');
-    return;
-  }
-
-  setIsSubmitting(true);
-  try {
-    const rackData = {
-      name: newRack.name,
-      rackNumber: newRack.rackNumber,
-      roomId: parseInt(newRack.roomId),
-      capacity: parseInt(newRack.capacity)
-    };
-
-    const response = await ApiService.post(
-      `/stores/rooms/${newRack.roomId}/racks`,
-      rackData,
-      {
-        headers: {
-          Authorization: `Bearer ${clientToken}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
-
-    if (response) {
-      await loadStoreData();
-      setNewRack({ name: '', rackNumber: '', roomId: '', capacity: '' });
-      setShowAddRack(false);
-      alert('Rack added successfully!');
+  const handleAddRack = async () => {
+    if (!newRack.name || !newRack.rackNumber || !newRack.roomId || !newRack.capacity) {
+      alert('Please fill in all required fields');
+      return;
     }
-  } catch (error) {
-    console.error('Error adding rack:', error);
-    alert('❌ Failed to add rack. Please try again.');
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+
+    setIsSubmitting(true);
+    try {
+      const rackData = {
+        name: newRack.name,
+        rackNumber: newRack.rackNumber,
+        roomId: parseInt(newRack.roomId),
+        capacity: parseInt(newRack.capacity)
+      };
+
+      const response = await ApiService.post(
+        `/stores/rooms/${newRack.roomId}/racks`,
+        rackData,
+        {
+          headers: {
+            Authorization: `Bearer ${clientToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (response) {
+        await loadStoreData();
+        setNewRack({ name: '', rackNumber: '', roomId: '', capacity: '' });
+        setShowAddRack(false);
+        alert('Rack added successfully!');
+      }
+    } catch (error) {
+      console.error('Error adding rack:', error);
+      alert('❌ Failed to add rack. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const handleAddFreezer = async () => {
     if (!newFreezer.name || !newFreezer.freezerNumber || !newFreezer.roomId || !newFreezer.capacity) {
       alert('Please fill in all required fields');
       return;
     }
-    
+
     setIsSubmitting(true);
     try {
       const freezerData = {
@@ -304,14 +322,14 @@ const StoreDetails = ({ onLogout }) => {
         capacity: parseInt(newFreezer.capacity),
         temperature: newFreezer.temperature || null
       };
-      
-      const response = await ApiService.post(`/stores/rooms/${newFreezer.roomId}/freezers`, freezerData,{
+
+      const response = await ApiService.post(`/stores/rooms/${newFreezer.roomId}/freezers`, freezerData, {
         headers: {
           Authorization: `Bearer ${clientToken}`,
           'Content-Type': 'application/json',
         },
       });
-      
+
       if (response) {
         await loadStoreData();
         setNewFreezer({ name: '', freezerNumber: '', roomId: '', capacity: '', temperature: '' });
@@ -330,7 +348,7 @@ const StoreDetails = ({ onLogout }) => {
     if (window.confirm('Are you sure you want to delete this room? This will also delete all racks and freezers in this room.')) {
       setLoading(true);
       try {
-        await ApiService.delete(`/stores/rooms/${roomId}`,{
+        await ApiService.delete(`/stores/rooms/${roomId}`, {
           headers: {
             Authorization: `Bearer ${clientToken}`,
             'Content-Type': 'application/json',
@@ -351,7 +369,7 @@ const StoreDetails = ({ onLogout }) => {
     if (window.confirm('Are you sure you want to delete this rack?')) {
       setLoading(true);
       try {
-        await ApiService.delete(`/stores/racks/${rackId}`,{
+        await ApiService.delete(`/stores/racks/${rackId}`, {
           headers: {
             Authorization: `Bearer ${clientToken}`,
             'Content-Type': 'application/json',
@@ -372,7 +390,7 @@ const StoreDetails = ({ onLogout }) => {
     if (window.confirm('Are you sure you want to delete this freezer?')) {
       setLoading(true);
       try {
-        await ApiService.delete(`/stores/freezers/${freezerId}`,{
+        await ApiService.delete(`/stores/freezers/${freezerId}`, {
           headers: {
             Authorization: `Bearer ${clientToken}`,
             'Content-Type': 'application/json',
@@ -391,12 +409,12 @@ const StoreDetails = ({ onLogout }) => {
 
   const handleAddProduct = async (e) => {
     e.preventDefault();
-    
+
     if (!productForm.name || !productForm.quantity || !productForm.price) {
       alert('Please fill in all required fields');
       return;
     }
-    
+
     setIsSubmitting(true);
     try {
       let inventoryData = {
@@ -405,13 +423,13 @@ const StoreDetails = ({ onLogout }) => {
         quantity: parseInt(productForm.quantity),
         reorderLevel: parseInt(productForm.minStock) || 10
       };
-      
+
       if (productForm.roomId) inventoryData.roomId = parseInt(productForm.roomId);
       if (productForm.rackId) inventoryData.rackId = parseInt(productForm.rackId);
       if (productForm.freezerId) inventoryData.freezerId = parseInt(productForm.freezerId);
-      
+
       if (editingProduct) {
-        await ApiService.put(`/inventory/${editingProduct.id}`, inventoryData,{
+        await ApiService.put(`/inventory/${editingProduct.id}`, inventoryData, {
           headers: {
             Authorization: `Bearer ${clientToken}`,
             'Content-Type': 'application/json',
@@ -429,17 +447,17 @@ const StoreDetails = ({ onLogout }) => {
           categoryId: productForm.category || 1,
           isActive: true
         };
-        
-        const productResponse = await ApiService.post(`/products`, productData,{
+
+        const productResponse = await ApiService.post(`/products`, productData, {
           headers: {
             Authorization: `Bearer ${clientToken}`,
             'Content-Type': 'application/json',
           },
         });
-        
+
         if (productResponse.success) {
           inventoryData.productId = productResponse.product.id;
-          await ApiService.post(`/inventory`, inventoryData,{
+          await ApiService.post(`/inventory`, inventoryData, {
             headers: {
               Authorization: `Bearer ${clientToken}`,
               'Content-Type': 'application/json',
@@ -448,7 +466,7 @@ const StoreDetails = ({ onLogout }) => {
           alert('Product added successfully!');
         }
       }
-      
+
       await loadStoreData();
       resetProductForm();
       setShowAddProduct(false);
@@ -483,7 +501,7 @@ const StoreDetails = ({ onLogout }) => {
     if (window.confirm('Are you sure you want to delete this product?')) {
       setLoading(true);
       try {
-        await ApiService.delete(`/inventory/${productId}`,{
+        await ApiService.delete(`/inventory/${productId}`, {
           headers: {
             Authorization: `Bearer ${clientToken}`,
             'Content-Type': 'application/json',
@@ -501,14 +519,14 @@ const StoreDetails = ({ onLogout }) => {
   };
 
   const resetProductForm = () => {
-    setProductForm({ 
-      name: '', 
+    setProductForm({
+      name: '',
       category: '',
       sku: '',
-      roomId: '', 
-      rackId: '', 
+      roomId: '',
+      rackId: '',
       freezerId: '',
-      quantity: '', 
+      quantity: '',
       price: '',
       minStock: '',
       status: 'In Stock',
@@ -522,29 +540,29 @@ const StoreDetails = ({ onLogout }) => {
     setShowWaybillModal(true);
   };
 
-  const handleDownloadWaybill = async (waybill) => {
-    try {
-      const response = await ApiService.get(`/waybills/${waybill.id}/pdf`, {
-        headers: {
-          Authorization: `Bearer ${clientToken}`,
-          'Content-Type': 'application/json',
-        },
-        responseType: 'blob'
-      });
-      
-      const url = window.URL.createObjectURL(new Blob([response]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `waybill_${waybill.waybillNumber}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Error downloading waybill:', error);
-      alert('Failed to download waybill. Please try again.');
-    }
-  };
+  // const handleDownloadWaybill = async (waybill) => {
+  //   try {
+  //     const response = await ApiService.get(`/waybills/${waybill.id}/pdf`, {
+  //       headers: {
+  //         Authorization: `Bearer ${clientToken}`,
+  //         'Content-Type': 'application/json',
+  //       },
+  //       responseType: 'blob'
+  //     });
+
+  //     const url = window.URL.createObjectURL(new Blob([response]));
+  //     const link = document.createElement('a');
+  //     link.href = url;
+  //     link.setAttribute('download', `waybill_${waybill.waybillNumber}.pdf`);
+  //     document.body.appendChild(link);
+  //     link.click();
+  //     link.remove();
+  //     window.URL.revokeObjectURL(url);
+  //   } catch (error) {
+  //     console.error('Error downloading waybill:', error);
+  //     alert('Failed to download waybill. Please try again.');
+  //   }
+  // };
 
   const handlePrintWaybill = (waybill) => {
     const printWindow = window.open('', '_blank');
@@ -649,15 +667,9 @@ const StoreDetails = ({ onLogout }) => {
     inv.type?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const filteredWaybills = waybills.filter(wb =>
-    wb.waybillNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    wb.status?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    wb.paymentType?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
   // Helper function to get status color
   const getStatusColor = (status) => {
-    switch(status) {
+    switch (status) {
       case 'Active': return 'bg-emerald-100 text-emerald-800';
       case 'Inactive': return 'bg-gray-100 text-gray-800';
       case 'In Stock': return 'bg-emerald-100 text-emerald-800';
@@ -693,10 +705,10 @@ const StoreDetails = ({ onLogout }) => {
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <Sidebar onLogout={onLogout} />
-      
+
       <div className="flex-1">
         <Header title="Store Details" showSearch={false} />
-        
+
         <main className="p-6">
           {/* Back Button and Store Title */}
           <div className="mb-6">
@@ -707,7 +719,7 @@ const StoreDetails = ({ onLogout }) => {
               <FaArrowLeft className="mr-2" size={12} />
               Back to Stores
             </Link>
-            
+
             <div className="bg-white rounded-xl shadow-md p-6 mb-6 border border-gray-100">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
                 <div>
@@ -787,11 +799,10 @@ const StoreDetails = ({ onLogout }) => {
               <nav className="flex space-x-8 overflow-x-auto">
                 <button
                   onClick={() => setActiveTab('infrastructure')}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${
-                    activeTab === 'infrastructure'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${activeTab === 'infrastructure'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
                   disabled={loading}
                 >
                   <FaWarehouse className={activeTab === 'infrastructure' ? 'text-blue-500' : 'text-gray-400'} />
@@ -799,11 +810,10 @@ const StoreDetails = ({ onLogout }) => {
                 </button>
                 <button
                   onClick={() => setActiveTab('inventory')}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${
-                    activeTab === 'inventory'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${activeTab === 'inventory'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
                   disabled={loading}
                 >
                   <FaBox className={activeTab === 'inventory' ? 'text-blue-500' : 'text-gray-400'} />
@@ -811,11 +821,10 @@ const StoreDetails = ({ onLogout }) => {
                 </button>
                 <button
                   onClick={() => setActiveTab('invoices')}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${
-                    activeTab === 'invoices'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${activeTab === 'invoices'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
                   disabled={loading}
                 >
                   <FaFileInvoice className={activeTab === 'invoices' ? 'text-blue-500' : 'text-gray-400'} />
@@ -823,11 +832,10 @@ const StoreDetails = ({ onLogout }) => {
                 </button>
                 <button
                   onClick={() => setActiveTab('waybills')}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${
-                    activeTab === 'waybills'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${activeTab === 'waybills'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
                   disabled={loading}
                 >
                   <FaFilePdf className={activeTab === 'waybills' ? 'text-blue-500' : 'text-gray-400'} />
@@ -934,7 +942,7 @@ const StoreDetails = ({ onLogout }) => {
                                   <p className="font-bold text-gray-800">{room.currentOccupancy || 0} units</p>
                                 </div>
                               </div>
-                              
+
                               {/* Racks in this room */}
                               <div className="mt-4">
                                 <h5 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
@@ -1052,28 +1060,28 @@ const StoreDetails = ({ onLogout }) => {
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="font-medium text-gray-900">{item.product}</div>
                                 {item.description && <div className="text-xs text-gray-500 truncate max-w-xs">{item.description}</div>}
-                               </td>
+                              </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <span className="px-2 py-1 bg-gray-100 rounded-full text-xs text-gray-700">{item.category}</span>
-                               </td>
+                              </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <code className="text-xs bg-gray-100 px-2 py-1 rounded">{item.sku}</code>
-                               </td>
+                              </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="text-sm text-gray-700">{item.location}</div>
-                               </td>
+                              </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="text-gray-900 font-medium">{item.quantity} units</div>
                                 <div className="text-xs text-gray-500">Min: {item.minStock}</div>
-                               </td>
+                              </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="text-gray-900 font-medium">${item.price}</div>
-                               </td>
+                              </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <span className={`px-2 py-1 inline-flex text-xs leading-4 font-semibold rounded-full ${getStatusColor(item.status)}`}>
                                   {item.status}
                                 </span>
-                               </td>
+                              </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                 <button
                                   onClick={() => handleEditProduct(item)}
@@ -1087,8 +1095,8 @@ const StoreDetails = ({ onLogout }) => {
                                 >
                                   <FaTrash size={16} />
                                 </button>
-                               </td>
-                             </tr>
+                              </td>
+                            </tr>
                           ))
                         ) : (
                           <tr>
@@ -1155,7 +1163,7 @@ const StoreDetails = ({ onLogout }) => {
                       <span>New Invoice</span>
                     </Link>
                   </div>
-                  
+
                   {/* Invoice Table */}
                   <div className="overflow-x-auto rounded-lg border border-gray-200">
                     <table className="min-w-full divide-y divide-gray-200">
@@ -1167,7 +1175,7 @@ const StoreDetails = ({ onLogout }) => {
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">TOTAL AMOUNT</th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PAYMENT METHOD</th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">STATUS</th>
-                         </tr>
+                        </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
                         {filteredInvoices.length > 0 ? (
@@ -1175,31 +1183,30 @@ const StoreDetails = ({ onLogout }) => {
                             <tr key={invoice.id} className="hover:bg-gray-50 transition-colors">
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="font-medium text-gray-900">{invoice.invoiceNumber}</div>
-                               </td>
+                              </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="text-gray-700">
                                   {new Date(invoice.invoiceDate).toLocaleDateString()}
                                 </div>
-                               </td>
+                              </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <span className="capitalize text-gray-700">{invoice.type}</span>
-                               </td>
+                              </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="text-gray-900 font-medium">${parseFloat(invoice.totalAmount || 0).toLocaleString()}</div>
-                               </td>
+                              </td>
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <span className={`px-2 py-1 inline-flex text-xs leading-4 font-semibold rounded-full ${
-                                  invoice.paymentMethod === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
-                                }`}>
+                                <span className={`px-2 py-1 inline-flex text-xs leading-4 font-semibold rounded-full ${invoice.paymentMethod === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
+                                  }`}>
                                   {invoice.paymentMethod}
                                 </span>
-                               </td>
+                              </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <span className={`px-2 py-1 inline-flex text-xs leading-4 font-semibold rounded-full ${getStatusColor(invoice.status)}`}>
                                   {invoice.status}
                                 </span>
-                               </td>
-                             </tr>
+                              </td>
+                            </tr>
                           ))
                         ) : (
                           <tr>
@@ -1254,13 +1261,22 @@ const StoreDetails = ({ onLogout }) => {
               )}
 
               {/* Waybills Tab - NEW */}
+              {/* Waybills Tab - NEW with Collapsible Batches */}
+              {/* Waybills Tab - Fixed Version */}
               {activeTab === 'waybills' && (
                 <div className="p-6">
+                  {/* Header */}
                   <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
-                    <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                      <FaFilePdf className="text-red-600" />
-                      Waybills & Distribution Records
-                    </h2>
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                        <FaFilePdf className="text-red-600" />
+                        Waybills & Distribution Records
+                      </h2>
+                      <p className="text-sm text-gray-500 mt-1">
+                        Batch wise distribution and box tracking
+                      </p>
+                    </div>
+
                     <div className="flex gap-2">
                       <button
                         onClick={() => loadWaybills()}
@@ -1272,133 +1288,175 @@ const StoreDetails = ({ onLogout }) => {
                     </div>
                   </div>
 
-                  {/* Waybills Table */}
-                  <div className="overflow-x-auto rounded-lg border border-gray-200">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">WAYBILL NUMBER</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">DATE</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">TYPE</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">TOTAL AMOUNT</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PAYMENT METHOD</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">STATUS</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ACTIONS</th>
-                         </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {filteredWaybills.length > 0 ? (
-                          filteredWaybills.map((waybill) => (
-                            <tr key={waybill.id} className="hover:bg-gray-50 transition-colors">
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="font-medium text-gray-900">{waybill.waybillNumber}</div>
-                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-gray-700">
-                                  {new Date(waybill.createdAt).toLocaleDateString()}
-                                </div>
-                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <span className={`px-2 py-1 inline-flex text-xs leading-4 font-semibold rounded-full ${
-                                  waybill.type === 'stock' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
-                                }`}>
-                                  {waybill.type === 'stock' ? 'Stock Distribution' : 'Outlet Distribution'}
-                                </span>
-                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-gray-900 font-medium">${parseFloat(waybill.totalAmount || 0).toLocaleString()}</div>
-                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <span className={`px-2 py-1 inline-flex text-xs leading-4 font-semibold rounded-full ${
-                                  waybill.paymentType === 'Paid' ? 'bg-emerald-100 text-emerald-800' : 
-                                  waybill.paymentType === 'Credit' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
-                                }`}>
-                                  {waybill.paymentType || 'Paid'}
-                                </span>
-                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <span className={`px-2 py-1 inline-flex text-xs leading-4 font-semibold rounded-full ${getStatusColor(waybill.status)}`}>
-                                  {waybill.status || 'Completed'}
-                                </span>
-                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                <button
-                                  onClick={() => handleViewWaybill(waybill)}
-                                  className="text-blue-600 hover:text-blue-800 mr-3 transition"
-                                  title="View Details"
-                                >
-                                  <FaEye size={16} />
-                                </button>
-                                <button
-                                  onClick={() => handleDownloadWaybill(waybill)}
-                                  className="text-emerald-600 hover:text-emerald-800 mr-3 transition"
-                                  title="Download PDF"
-                                >
-                                  <FaDownload size={16} />
-                                </button>
-                                <button
-                                  onClick={() => handlePrintWaybill(waybill)}
-                                  className="text-purple-600 hover:text-purple-800 transition"
-                                  title="Print Waybill"
-                                >
-                                  <FaPrint size={16} />
-                                </button>
-                               </td>
-                             </tr>
-                          ))
-                        ) : (
-                          <tr>
-                            <td colSpan="7" className="px-6 py-12 text-center">
-                              <div className="flex flex-col items-center">
-                                <FaFilePdf className="text-4xl text-gray-300 mb-3" />
-                                <p className="text-gray-500">
-                                  {searchTerm ? 'No waybills found matching your search' : 'No waybills generated yet'}
-                                </p>
-                                {!searchTerm && (
-                                  <Link
-                                    to={`/stores/${id}/distribute`}
-                                    className="mt-3 text-red-600 hover:text-red-700 text-sm font-medium flex items-center gap-2"
-                                  >
-                                    <FaTruck size={14} />
-                                    Create your first distribution
-                                  </Link>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                  {/* Waybill List */}
+                  <div className="space-y-5">
+                    {batchArray.length > 0 ? (
+                      batchArray.map((batch, batchIndex) => {
+                        const isOpen = openBatch === batch.batchId;
+                        const batchId = batch.batchId;
+                        const batchItems = batch.items;
+                        const batchTotal = batch.totalAmount;
 
-                  {/* Waybill Summary */}
-                  <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-4 rounded-xl">
-                      <p className="text-sm text-blue-700 font-medium">Total Waybills</p>
-                      <p className="text-2xl font-bold text-gray-800">{waybills.length}</p>
-                    </div>
-                    <div className="bg-gradient-to-r from-emerald-50 to-emerald-100 p-4 rounded-xl">
-                      <p className="text-sm text-emerald-700 font-medium">Total Distributed Value</p>
-                      <p className="text-2xl font-bold text-gray-800">
-                        ${waybills.reduce((sum, wb) => sum + parseFloat(wb.totalAmount || 0), 0).toLocaleString()}
-                      </p>
-                    </div>
-                    <div className="bg-gradient-to-r from-purple-50 to-purple-100 p-4 rounded-xl">
-                      <p className="text-sm text-purple-700 font-medium">Stock Distributions</p>
-                      <p className="text-2xl font-bold text-gray-800">
-                        {waybills.filter(w => w.type === 'stock').length}
-                      </p>
-                    </div>
-                    <div className="bg-gradient-to-r from-amber-50 to-amber-100 p-4 rounded-xl">
-                      <p className="text-sm text-amber-700 font-medium">Outlet Distributions</p>
-                      <p className="text-2xl font-bold text-gray-800">
-                        {waybills.filter(w => w.type === 'outlet').length}
-                      </p>
-                    </div>
+                        // Group boxes within this batch
+                        const boxesInBatch = batchItems.reduce((acc, item) => {
+                          if (!acc[item.boxName]) {
+                            acc[item.boxName] = {
+                              items: [],
+                              total: 0
+                            };
+                          }
+                          acc[item.boxName].items.push(item);
+                          acc[item.boxName].total += Number(item.totalPrice || 0);
+                          return acc;
+                        }, {});
+
+                        return (
+                          <div
+                            key={batchIndex}
+                            className="bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden"
+                          >
+                            {/* Batch Header - Click to Expand */}
+                            <button
+                              onClick={() => setOpenBatch(isOpen ? null : batch.batchId)}
+                              className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 transition-all duration-200 p-5 text-white"
+                            >
+                              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                                <div className="flex items-center gap-3">
+                                  <div className={`transform transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`}>
+                                    <FaChevronRight className="text-white" size={16} />
+                                  </div>
+                                  <div className="text-left">
+                                    <p className="text-xs uppercase tracking-wider opacity-80">
+                                      Batch ID
+                                    </p>
+                                    <h3 className="text-xl font-bold">
+                                      {batch.batchId}
+                                    </h3>
+                                  </div>
+                                </div>
+                                <div className="flex flex-wrap gap-4">
+                                  <div className="text-right">
+                                    <p className="text-xs opacity-80">Total Boxes</p>
+                                    <p className="text-lg font-semibold">{Object.keys(boxesInBatch).length}</p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-xs opacity-80">Total Products</p>
+                                    <p className="text-lg font-semibold">{batchItems.length}</p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-xs opacity-80">Total Amount</p>
+                                    <p className="text-xl font-bold">₹{batchTotal.toLocaleString()}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            </button>
+
+                            {/* Expandable Content */}
+                            {isOpen && (
+                              <div className="p-5 bg-white">
+                                <div className="space-y-4">
+                                  {Object.entries(boxesInBatch).map(([boxName, boxData], boxIndex) => {
+                                    const boxItems = boxData.items;
+                                    const boxTotal = boxData.total;
+
+                                    return (
+                                      <div
+                                        key={boxIndex}
+                                        className="bg-gradient-to-r from-blue-50/30 to-purple-50/30 rounded-xl p-4 border border-blue-100"
+                                      >
+                                        {/* Box Header */}
+                                        <div className="flex justify-between items-center mb-3 pb-2 border-b border-blue-200">
+                                          <h4 className="font-semibold text-gray-800 flex items-center gap-2">
+                                            <FaBox className="text-blue-600" size={16} />
+                                            Box: {boxName}
+                                          </h4>
+                                          <div className="text-right">
+                                            <p className="font-bold text-gray-800">₹{boxTotal.toLocaleString()}</p>
+                                            <p className="text-xs text-gray-500">Box Total</p>
+                                          </div>
+                                        </div>
+
+                                        {/* Products Table */}
+                                        <div className="overflow-x-auto">
+                                          <table className="min-w-full divide-y divide-gray-200">
+                                            <thead className="bg-gray-50">
+                                              <tr>
+                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Product</th>
+                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">HSN No.</th>
+                                                <th className="px-3 py-2 text-center text-xs font-medium text-gray-500">Quantity</th>
+                                                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">Price/Unit</th>
+                                                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">Amount</th>
+                                              </tr>
+                                            </thead>
+                                            <tbody className="bg-white divide-y divide-gray-100">
+                                              {boxItems.map((item, itemIndex) => (
+                                                <tr key={itemIndex} className="hover:bg-gray-50">
+                                                  <td className="px-3 py-2 text-sm text-gray-900">
+                                                    <div>
+                                                      <p className="font-medium">{item.Product?.name || 'N/A'}</p>
+                                                    </div>
+                                                  </td>
+                                                  <td className="px-3 py-2 text-sm text-gray-500">
+                                                    {item.Product?.HSN_No || 'N/A'}
+                                                  </td>
+                                                  <td className="px-3 py-2 text-sm text-center text-gray-700">
+                                                    {item.quantity}
+                                                  </td>
+                                                  <td className="px-3 py-2 text-sm text-right text-gray-700">
+                                                    ₹{parseFloat(item.price || 0).toLocaleString()}
+                                                  </td>
+                                                  <td className="px-3 py-2 text-sm text-right font-medium text-gray-900">
+                                                    ₹{parseFloat(item.totalPrice || 0).toLocaleString()}
+                                                  </td>
+                                                </tr>
+                                              ))}
+                                            </tbody>
+                                            <tfoot className="bg-gray-50">
+                                              <tr>
+                                                <td colSpan="4" className="px-3 py-2 text-right font-semibold text-gray-800">
+                                                  Box Total:
+                                                </td>
+                                                <td className="px-3 py-2 text-right font-bold text-gray-900">
+                                                  ₹{boxTotal.toLocaleString()}
+                                                </td>
+                                              </tr>
+                                            </tfoot>
+                                          </table>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="bg-white border border-gray-200 rounded-2xl p-12 text-center">
+                        <FaFilePdf className="text-5xl text-gray-300 mx-auto mb-4" />
+                        <h3 className="text-lg font-semibold text-gray-700 mb-2">
+                          No Waybills Found
+                        </h3>
+                        <p className="text-gray-500">
+                          {searchTerm
+                            ? 'No matching waybills available'
+                            : 'No waybills generated yet'}
+                        </p>
+                        {!searchTerm && (
+                          <Link
+                            to={`/stores/${id}/distribute`}
+                            className="inline-flex items-center gap-2 mt-5 bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl transition"
+                          >
+                            <FaTruck size={14} />
+                            Create Distribution
+                          </Link>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
-              )}
-            </div>
+              )}            </div>
           )}
 
           {/* Quick Action Buttons - Modern Design */}
@@ -1479,7 +1537,7 @@ const StoreDetails = ({ onLogout }) => {
                 <FaTimes className="text-xl" />
               </button>
             </div>
-            
+
             <form onSubmit={handleAddProduct} className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 {/* Product Name */}
@@ -1490,7 +1548,7 @@ const StoreDetails = ({ onLogout }) => {
                   <input
                     type="text"
                     value={productForm.name}
-                    onChange={(e) => setProductForm({...productForm, name: e.target.value})}
+                    onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                     placeholder="Enter product name"
                     required
@@ -1505,7 +1563,7 @@ const StoreDetails = ({ onLogout }) => {
                   <input
                     type="text"
                     value={productForm.sku}
-                    onChange={(e) => setProductForm({...productForm, sku: e.target.value})}
+                    onChange={(e) => setProductForm({ ...productForm, sku: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                     placeholder="Enter SKU"
                   />
@@ -1518,7 +1576,7 @@ const StoreDetails = ({ onLogout }) => {
                   </label>
                   <select
                     value={productForm.category}
-                    onChange={(e) => setProductForm({...productForm, category: e.target.value})}
+                    onChange={(e) => setProductForm({ ...productForm, category: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                     required
                   >
@@ -1540,7 +1598,7 @@ const StoreDetails = ({ onLogout }) => {
                     type="number"
                     step="0.01"
                     value={productForm.price}
-                    onChange={(e) => setProductForm({...productForm, price: e.target.value})}
+                    onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                     placeholder="0.00"
                     required
@@ -1554,7 +1612,7 @@ const StoreDetails = ({ onLogout }) => {
                   </label>
                   <select
                     value={productForm.roomId}
-                    onChange={(e) => setProductForm({...productForm, roomId: e.target.value})}
+                    onChange={(e) => setProductForm({ ...productForm, roomId: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                   >
                     <option value="">Select Room</option>
@@ -1571,7 +1629,7 @@ const StoreDetails = ({ onLogout }) => {
                   </label>
                   <select
                     value={productForm.rackId}
-                    onChange={(e) => setProductForm({...productForm, rackId: e.target.value})}
+                    onChange={(e) => setProductForm({ ...productForm, rackId: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                   >
                     <option value="">Select Rack</option>
@@ -1588,7 +1646,7 @@ const StoreDetails = ({ onLogout }) => {
                   </label>
                   <select
                     value={productForm.freezerId}
-                    onChange={(e) => setProductForm({...productForm, freezerId: e.target.value})}
+                    onChange={(e) => setProductForm({ ...productForm, freezerId: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                   >
                     <option value="">Select Freezer</option>
@@ -1606,7 +1664,7 @@ const StoreDetails = ({ onLogout }) => {
                   <input
                     type="number"
                     value={productForm.quantity}
-                    onChange={(e) => setProductForm({...productForm, quantity: e.target.value})}
+                    onChange={(e) => setProductForm({ ...productForm, quantity: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                     placeholder="0"
                     required
@@ -1621,7 +1679,7 @@ const StoreDetails = ({ onLogout }) => {
                   <input
                     type="number"
                     value={productForm.minStock}
-                    onChange={(e) => setProductForm({...productForm, minStock: e.target.value})}
+                    onChange={(e) => setProductForm({ ...productForm, minStock: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                     placeholder="10"
                   />
@@ -1635,13 +1693,13 @@ const StoreDetails = ({ onLogout }) => {
                 </label>
                 <textarea
                   value={productForm.description}
-                  onChange={(e) => setProductForm({...productForm, description: e.target.value})}
+                  onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                   placeholder="Enter product description"
                   rows="3"
                 />
               </div>
-              
+
               <div className="flex gap-3 pt-4 border-t border-gray-100">
                 <button
                   type="submit"
@@ -1690,13 +1748,13 @@ const StoreDetails = ({ onLogout }) => {
                   <input
                     type="text"
                     value={newRoom.name}
-                    onChange={(e) => setNewRoom({...newRoom, name: e.target.value})}
+                    onChange={(e) => setNewRoom({ ...newRoom, name: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                     placeholder="e.g., ARK Room 1"
                     disabled={isSubmitting}
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Room Number *
@@ -1704,13 +1762,13 @@ const StoreDetails = ({ onLogout }) => {
                   <input
                     type="text"
                     value={newRoom.roomNumber}
-                    onChange={(e) => setNewRoom({...newRoom, roomNumber: e.target.value})}
+                    onChange={(e) => setNewRoom({ ...newRoom, roomNumber: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                     placeholder="e.g., R-001"
                     disabled={isSubmitting}
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Capacity (units) *
@@ -1718,14 +1776,14 @@ const StoreDetails = ({ onLogout }) => {
                   <input
                     type="number"
                     value={newRoom.capacity}
-                    onChange={(e) => setNewRoom({...newRoom, capacity: e.target.value})}
+                    onChange={(e) => setNewRoom({ ...newRoom, capacity: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                     placeholder="e.g., 300"
                     disabled={isSubmitting}
                   />
                 </div>
               </div>
-              
+
               <div className="flex gap-3">
                 <button
                   onClick={handleAddRoom}
@@ -1770,13 +1828,13 @@ const StoreDetails = ({ onLogout }) => {
                   <input
                     type="text"
                     value={newRack.name}
-                    onChange={(e) => setNewRack({...newRack, name: e.target.value})}
+                    onChange={(e) => setNewRack({ ...newRack, name: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                     placeholder="e.g., ARK Rack A"
                     disabled={isSubmitting}
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Rack Number *
@@ -1784,20 +1842,20 @@ const StoreDetails = ({ onLogout }) => {
                   <input
                     type="text"
                     value={newRack.rackNumber}
-                    onChange={(e) => setNewRack({...newRack, rackNumber: e.target.value})}
+                    onChange={(e) => setNewRack({ ...newRack, rackNumber: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                     placeholder="e.g., RA-01"
                     disabled={isSubmitting}
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Room *
                   </label>
                   <select
                     value={newRack.roomId}
-                    onChange={(e) => setNewRack({...newRack, roomId: e.target.value})}
+                    onChange={(e) => setNewRack({ ...newRack, roomId: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                     disabled={isSubmitting}
                   >
@@ -1809,7 +1867,7 @@ const StoreDetails = ({ onLogout }) => {
                     ))}
                   </select>
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Capacity (units) *
@@ -1817,14 +1875,14 @@ const StoreDetails = ({ onLogout }) => {
                   <input
                     type="number"
                     value={newRack.capacity}
-                    onChange={(e) => setNewRack({...newRack, capacity: e.target.value})}
+                    onChange={(e) => setNewRack({ ...newRack, capacity: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                     placeholder="e.g., 200"
                     disabled={isSubmitting}
                   />
                 </div>
               </div>
-              
+
               <div className="flex gap-3">
                 <button
                   onClick={handleAddRack}
@@ -1869,13 +1927,13 @@ const StoreDetails = ({ onLogout }) => {
                   <input
                     type="text"
                     value={newFreezer.name}
-                    onChange={(e) => setNewFreezer({...newFreezer, name: e.target.value})}
+                    onChange={(e) => setNewFreezer({ ...newFreezer, name: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                     placeholder="e.g., ARK Freezer A"
                     disabled={isSubmitting}
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Freezer Number *
@@ -1883,20 +1941,20 @@ const StoreDetails = ({ onLogout }) => {
                   <input
                     type="text"
                     value={newFreezer.freezerNumber}
-                    onChange={(e) => setNewFreezer({...newFreezer, freezerNumber: e.target.value})}
+                    onChange={(e) => setNewFreezer({ ...newFreezer, freezerNumber: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                     placeholder="e.g., 1"
                     disabled={isSubmitting}
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Room *
                   </label>
                   <select
                     value={newFreezer.roomId}
-                    onChange={(e) => setNewFreezer({...newFreezer, roomId: e.target.value})}
+                    onChange={(e) => setNewFreezer({ ...newFreezer, roomId: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                     disabled={isSubmitting}
                   >
@@ -1908,7 +1966,7 @@ const StoreDetails = ({ onLogout }) => {
                     ))}
                   </select>
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Temperature (°C)
@@ -1916,13 +1974,13 @@ const StoreDetails = ({ onLogout }) => {
                   <input
                     type="text"
                     value={newFreezer.temperature}
-                    onChange={(e) => setNewFreezer({...newFreezer, temperature: e.target.value})}
+                    onChange={(e) => setNewFreezer({ ...newFreezer, temperature: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                     placeholder="e.g., -18"
                     disabled={isSubmitting}
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Capacity (units) *
@@ -1930,14 +1988,14 @@ const StoreDetails = ({ onLogout }) => {
                   <input
                     type="number"
                     value={newFreezer.capacity}
-                    onChange={(e) => setNewFreezer({...newFreezer, capacity: e.target.value})}
+                    onChange={(e) => setNewFreezer({ ...newFreezer, capacity: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                     placeholder="e.g., 200"
                     disabled={isSubmitting}
                   />
                 </div>
               </div>
-              
+
               <div className="flex gap-3">
                 <button
                   onClick={handleAddFreezer}
@@ -1979,7 +2037,7 @@ const StoreDetails = ({ onLogout }) => {
                 <FaTimes className="text-xl" />
               </button>
             </div>
-            
+
             <div className="p-6">
               {/* Waybill Header */}
               <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 mb-6">
@@ -2112,13 +2170,13 @@ const StoreDetails = ({ onLogout }) => {
 
               {/* Action Buttons */}
               <div className="flex gap-3 pt-4 border-t border-gray-100">
-                <button
+                {/* <button
                   onClick={() => handleDownloadWaybill(selectedWaybill)}
                   className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white py-2.5 px-4 rounded-lg hover:from-emerald-700 hover:to-emerald-800 transition-all duration-200 flex items-center justify-center gap-2"
                 >
                   <FaDownload size={14} />
                   <span>Download PDF</span>
-                </button>
+                </button> */}
                 <button
                   onClick={() => handlePrintWaybill(selectedWaybill)}
                   className="flex-1 bg-gradient-to-r from-purple-600 to-purple-700 text-white py-2.5 px-4 rounded-lg hover:from-purple-700 hover:to-purple-800 transition-all duration-200 flex items-center justify-center gap-2"

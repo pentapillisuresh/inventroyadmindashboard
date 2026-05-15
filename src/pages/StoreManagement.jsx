@@ -673,7 +673,7 @@ const StoreManagement = ({ onLogout }) => {
                   </div>
 
                   {/* Assign Manager */}
-                  <div>
+                  {/* <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Assign Manager
                     </label>
@@ -704,10 +704,10 @@ const StoreManagement = ({ onLogout }) => {
                         </p>
                       )}
                     </div>
-                  </div>
+                  </div> */}
 
                   {/* Current Manager Info (if any) */}
-                  {editingStore && getStoreManager(editingStore) && !formData.managerId && (
+                  {/* {editingStore && getStoreManager(editingStore) && !formData.managerId && (
                     <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
                       <p className="text-sm text-gray-700">
                         <span className="font-medium">Current Manager:</span> {getStoreManager(editingStore)?.name}
@@ -716,7 +716,7 @@ const StoreManagement = ({ onLogout }) => {
                         Selecting a new manager will replace the current assignment.
                       </p>
                     </div>
-                  )}
+                  )} */}
 
                   {/* Status */}
                   <div>

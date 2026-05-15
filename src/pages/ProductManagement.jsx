@@ -32,7 +32,6 @@ const ProductManagement = ({ onLogout }) => {
 
   const loadProducts = async () => {
     setLoading(true);
-
     try {
       const response = await ApiService.get('/products',{
         headers: {
@@ -40,13 +39,13 @@ const ProductManagement = ({ onLogout }) => {
           'Content-Type': 'application/json',
         },
       });
-
       if (response.products) {
         // Transform API data to match your existing format
         const transformedProducts = response.products.map(product => ({
           id: product.id,
           name: product.name,
           sku: product.sku,
+          HSN_No: product.HSN_No,
           description: product.description || '',
           category: product.Category?.name || 'Uncategorized',
           price: parseFloat(product.price),
@@ -56,7 +55,12 @@ const ProductManagement = ({ onLogout }) => {
           status: getProductStatus(product.quantity, product.thresholdQuantity),
           image: product.image,
           isActive: product.isActive,
-          categoryId: product.categoryId
+          categoryId: product.categoryId,
+          units:product.units,
+          IGST: parseInt(product.IGST),
+          SGST: parseInt(product.SGST),
+          CGST: parseInt(product.CGST)
+  
         }));
         
         setProducts(transformedProducts);
@@ -161,14 +165,20 @@ const ProductManagement = ({ onLogout }) => {
         quantity: parseInt(productData.quantity),
         price: parseFloat(productData.price),
         costPrice: parseFloat(productData.costPrice || 0),
-        thresholdQuantity: parseInt(productData.thresholdQuantity)
+        thresholdQuantity: parseInt(productData.thresholdQuantity),
+        HSN_No: productData.HSN_No,
+        units:productData.units,
+        IGST: parseInt(productData.IGST),
+        SGST: parseInt(productData.SGST),
+        CGST: parseInt(productData.CGST)
+
       };
+      
 
       // Add description if it exists
       if (productData.description && productData.description.trim()) {
         productPayload.description = productData.description.trim();
       }
-      console.log("productPayload::",productPayload)
       let response;
       
       if (editingProduct) {
@@ -300,9 +310,13 @@ const ProductManagement = ({ onLogout }) => {
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PRODUCT</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SKU</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">HSN</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CATEGORY</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PRICE</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">STOCK</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">IGST</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CGST</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SGST</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">STATUS</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ACTIONS</th>
                     </tr>
@@ -324,6 +338,7 @@ const ProductManagement = ({ onLogout }) => {
                             <div className="font-medium text-gray-900">{product.name}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{product.sku}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{product.HSN_No}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{product.category}</td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm font-semibold text-gray-900">${product.price.toFixed(2)}</div>
@@ -334,6 +349,9 @@ const ProductManagement = ({ onLogout }) => {
                               <div className="text-xs text-gray-500">Min: {product.minStock}</div>
                             </div>
                           </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{product.IGST}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{product.CGST}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{product.SGST}</td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(product.status)}`}>
                               {product.status}

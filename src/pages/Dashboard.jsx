@@ -9,6 +9,7 @@ import RecentActivity from './RecentActivity';
 import { FaStore, FaShoppingCart, FaFileInvoice, FaBoxes, FaCreditCard, FaUserTie, FaChartLine, FaExclamationTriangle, FaCheckCircle, FaSpinner } from 'react-icons/fa';
 import { storage } from '../data/storage';
 import ApiService from '../components/ApiService';
+import { useAuth } from '../contest/AuthContest';
 
 const API_BASE_URL = 'http://localhost:5001/api';
 const clientToken = localStorage.getItem('token');
@@ -204,7 +205,7 @@ const Dashboard = ({ onLogout }) => {
   const [loadingStockAlerts, setLoadingStockAlerts] = useState(true);
   const [statsError, setStatsError] = useState('');
   const [stockAlertsError, setStockAlertsError] = useState('');
-
+  const {}=useAuth;
   useEffect(() => {
     fetchDashboardStats();
     // fetchLowStockAlerts();

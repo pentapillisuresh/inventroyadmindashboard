@@ -11,7 +11,13 @@ const AddProductModal = ({ product, categories = [], onSave, onClose }) => {
     stock: '',
     costPrice: '',
     minStock: '10',
-    description: ''
+    description: '',
+    // New fields
+    HSN_No: '',
+    units: '',
+    IGST: '',
+    SGST: '',
+    CGST: ''
   });
   const clientToken = localStorage.getItem('token');
   const [loading, setLoading] = useState(false);
@@ -22,14 +28,19 @@ const AddProductModal = ({ product, categories = [], onSave, onClose }) => {
     // If editing, populate form with product data
     if (product) {
       setFormData({
-        name: product.name,
-        sku: product.sku,
+        name: product.name || '',
+        sku: product.sku || '',
         categoryId: product.categoryId?.toString() || '',
         price: product.price?.toString() || '',
         stock: product.stock?.toString() || '',
         costPrice: product.costPrice?.toString() || '',
         minStock: product.minStock?.toString() || '10',
-        description: product.description || ''
+        description: product.description || '',
+        HSN_No: product.HSN_No || '',
+        units: product.units || '',
+        IGST: product.IGST?.toString() || '',
+        SGST: product.SGST?.toString() || '',
+        CGST: product.CGST?.toString() || ''
       });
     } else {
       // Set default values for new product
@@ -41,7 +52,12 @@ const AddProductModal = ({ product, categories = [], onSave, onClose }) => {
         stock: '',
         costPrice: '',
         minStock: '10',
-        description: ''
+        description: '',
+        HSN_No: '',
+        units: '',
+        IGST: '',
+        SGST: '',
+        CGST: ''
       });
     }
   }, [product, categories]);
@@ -55,28 +71,21 @@ const AddProductModal = ({ product, categories = [], onSave, onClose }) => {
     if (newCategory.trim()) {
       try {
         setLoading(true);
-        const categoryProduct={
+        const categoryProduct = {
           name: newCategory.trim(),
           description: ''
-        }
-        // Assuming you have an API to add categories
-        const response = await ApiService.post('/categories',categoryProduct, {
+        };
+        const response = await ApiService.post('/categories', categoryProduct, {
           headers: {
             Authorization: `Bearer ${clientToken}`,
             'Content-Type': 'application/json',
           },
         });
-                
         if (response) {
-          // You might want to reload categories in parent component
-          // or handle this differently based on your app structure
           alert('Category added successfully! Please refresh the page to see it.');
           setNewCategory('');
           setShowNewCategory(false);
-          const rrr=response.category
-          console.log("rrr:::",response.category)
-          categories.push(rrr)
-          console.log("rrr:::",response.category)
+          categories.push(response.category);
         } else {
           throw new Error(data.message || 'Failed to add category');
         }
@@ -106,14 +115,20 @@ const AddProductModal = ({ product, categories = [], onSave, onClose }) => {
         quantity: parseInt(formData.stock),
         price: parseFloat(formData.price),
         costPrice: parseFloat(formData.costPrice || 0),
-        thresholdQuantity: parseInt(formData.minStock)
+        thresholdQuantity: parseInt(formData.minStock),
+        // New fields
+        HSN_No: formData.HSN_No.trim() || null,
+        units: formData.units.trim() || null,
+        IGST: formData.IGST ? parseFloat(formData.IGST) : null,
+        SGST: formData.SGST ? parseFloat(formData.SGST) : null,
+        CGST: formData.CGST ? parseFloat(formData.CGST) : null
       };
 
       // Add description if provided
       if (formData.description.trim()) {
         productData.description = formData.description.trim();
       }
-
+console.log("productData:::",productData)
       // Call parent's onSave function with the data
       await onSave(productData);
       
@@ -349,6 +364,92 @@ const AddProductModal = ({ product, categories = [], onSave, onClose }) => {
               />
               <p className="text-xs text-gray-500 mt-1">
                 System will alert when stock falls below this level
+              </p>
+            </div>
+
+            {/* HSN, GST, CIN, Units */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  HSN Number
+                </label>
+                <input
+                  type="text"
+                  name="HSN_No"
+                  value={formData.HSN_No}
+                  onChange={handleChange}
+                  placeholder="e.g., 330499"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                  disabled={loading}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Units
+                </label>
+                <input
+                  type="text"
+                  name="units"
+                  value={formData.units}
+                  onChange={handleChange}
+                  placeholder="e.g., pcs, kg, liters"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                  disabled={loading}
+                />
+              </div>
+            </div>
+
+            {/* Tax Rates: IGST, SGST, CGST */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Tax Rates (Optional)
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">IGST (%)</label>
+                  <input
+                    type="number"
+                    name="IGST"
+                    value={formData.IGST}
+                    onChange={handleChange}
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                    disabled={loading}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">SGST (%)</label>
+                  <input
+                    type="number"
+                    name="SGST"
+                    value={formData.SGST}
+                    onChange={handleChange}
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                    disabled={loading}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">CGST (%)</label>
+                  <input
+                    type="number"
+                    name="CGST"
+                    value={formData.CGST}
+                    onChange={handleChange}
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                These tax rates will be applied to invoices for this product.
               </p>
             </div>
 

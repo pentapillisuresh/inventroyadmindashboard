@@ -159,6 +159,7 @@ const AddTestOrderModal = ({ isOpen, onClose, outlet, onSubmit }) => {
 };
 
 // Create Outlet Modal (FIXED ALIGNMENT)
+// Create Outlet Modal (with Business Registration fields)
 const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
   const [stores, setStores] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -168,7 +169,10 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
     address: '',
     contactPerson: '',
     phoneNumber: '',
-    creditLimit: 0
+    creditLimit: 0,
+    FSSAI_No: '',
+    GST_No: '',
+    CIN_No: ''
   });
 
   const loadStores = async () => {
@@ -198,7 +202,10 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
           contactPerson: outlet.contactPerson || '',
           phoneNumber: outlet.phoneNumber || '',
           creditLimit: outlet.creditLimit || 0,
-          currentCredit: outlet.currentCredit || 0
+          currentCredit: outlet.currentCredit || 0,
+          FSSAI_No: outlet.FSSAI_No || '',
+          GST_No: outlet.GST_No || '',
+          CIN_No: outlet.CIN_No || ''
         });
       } else {
         setFormData({
@@ -207,7 +214,10 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
           address: '',
           contactPerson: '',
           phoneNumber: '',
-          creditLimit: 300000
+          creditLimit: 300000,
+          FSSAI_No: '',
+          GST_No: '',
+          CIN_No: ''
         });
       }
     }
@@ -235,7 +245,10 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
         contactPerson: formData.contactPerson,
         phoneNumber: formData.phoneNumber,
         creditLimit: parseFloat(formData.creditLimit),
-        type: 'custom'
+        type: 'custom',
+        FSSAI_No: formData.FSSAI_No,
+        GST_No: formData.GST_No,
+        CIN_No: formData.CIN_No
       };
       
       if (outlet) {
@@ -389,6 +402,55 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
                 </p>
               </div>
 
+              {/* Business Registration Details */}
+              <div className="pt-2 border-t border-gray-200">
+                <h3 className="text-md font-medium text-gray-800 mb-3">Business Registration Details</h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      FSSAI Number
+                    </label>
+                    <input
+                      type="text"
+                      name="FSSAI_No"
+                      value={formData.FSSAI_No}
+                      onChange={handleChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                      placeholder="FSSAI registration number"
+                      disabled={loading}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      GST Number
+                    </label>
+                    <input
+                      type="text"
+                      name="GST_No"
+                      value={formData.GST_No}
+                      onChange={handleChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                      placeholder="GST identification number"
+                      disabled={loading}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      CIN Number
+                    </label>
+                    <input
+                      type="text"
+                      name="CIN_No"
+                      value={formData.CIN_No}
+                      onChange={handleChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                      placeholder="Company Identification Number"
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
+              </div>
+
               {outlet && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -434,7 +496,6 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
     </div>
   );
 };
-
 // View Details Modal (FIXED ALIGNMENT)
 const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
   const [activeTab, setActiveTab] = useState('orders');
