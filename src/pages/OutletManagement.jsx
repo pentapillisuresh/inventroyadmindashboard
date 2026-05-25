@@ -9,7 +9,12 @@ import ApiService from '../components/ApiService';
 const API_BASE_URL = 'http://localhost:5001/api';
 const clientToken = localStorage.getItem('token');
 
-// Add Test Order Modal Component (FIXED ALIGNMENT)
+// Helper function to format Rupee
+const formatRupee = (amount) => {
+  return `₹${parseFloat(amount || 0).toLocaleString('en-IN')}`;
+};
+
+// Add Test Order Modal Component
 const AddTestOrderModal = ({ isOpen, onClose, outlet, onSubmit }) => {
   const [orderData, setOrderData] = useState({
     items: 1,
@@ -46,7 +51,7 @@ const AddTestOrderModal = ({ isOpen, onClose, outlet, onSubmit }) => {
       }});
       
       onSubmit(response);
-      alert(`✅ Test order added successfully!\n\nInvoice: ${response.data.invoice.invoiceNumber}\nAmount: $${orderData.amount}`);
+      alert(`✅ Test order added successfully!\n\nInvoice: ${response.data.invoice.invoiceNumber}\nAmount: ${formatRupee(orderData.amount)}`);
     } catch (error) {
       console.error('Error adding test order:', error);
       alert('❌ Failed to add test order. Please try again.');
@@ -61,7 +66,6 @@ const AddTestOrderModal = ({ isOpen, onClose, outlet, onSubmit }) => {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-xl w-full max-w-md max-h-[90vh] overflow-hidden shadow-2xl">
-        {/* Fixed Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
           <h2 className="text-xl font-bold text-gray-800">
             Add Test Order - {outlet?.name}
@@ -75,7 +79,6 @@ const AddTestOrderModal = ({ isOpen, onClose, outlet, onSubmit }) => {
           </button>
         </div>
 
-        {/* Scrollable Content */}
         <div className="overflow-y-auto px-6 py-5" style={{ maxHeight: 'calc(90vh - 80px)' }}>
           <form onSubmit={handleSubmit}>
             <div className="space-y-4">
@@ -98,10 +101,10 @@ const AddTestOrderModal = ({ isOpen, onClose, outlet, onSubmit }) => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Order Amount ($) *
+                  Order Amount (₹) *
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₹</span>
                   <input
                     type="number"
                     name="amount"
@@ -158,8 +161,7 @@ const AddTestOrderModal = ({ isOpen, onClose, outlet, onSubmit }) => {
   );
 };
 
-// Create Outlet Modal (FIXED ALIGNMENT)
-// Create Outlet Modal (with Business Registration fields)
+// Create Outlet Modal
 const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
   const [stores, setStores] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -272,7 +274,6 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-xl w-full max-w-md max-h-[90vh] overflow-hidden shadow-2xl">
-        {/* Fixed Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
           <h2 className="text-xl font-bold text-gray-800">
             {outlet ? 'Edit Outlet' : 'Create New Outlet'}
@@ -286,7 +287,6 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
           </button>
         </div>
 
-        {/* Scrollable Content */}
         <div className="overflow-y-auto px-6 py-5" style={{ maxHeight: 'calc(90vh - 80px)' }}>
           <form onSubmit={handleSubmit}>
             <div className="space-y-4">
@@ -380,10 +380,10 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Credit Limit ($) *
+                  Credit Limit (₹) *
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₹</span>
                   <input
                     type="number"
                     name="creditLimit"
@@ -454,10 +454,10 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
               {outlet && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Current Credit ($)
+                    Current Credit (₹)
                   </label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₹</span>
                     <input
                       type="number"
                       name="currentCredit"
@@ -496,7 +496,8 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
     </div>
   );
 };
-// View Details Modal (FIXED ALIGNMENT)
+
+// View Details Modal
 const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
   const [activeTab, setActiveTab] = useState('orders');
   const [paymentAmount, setPaymentAmount] = useState('');
@@ -577,7 +578,7 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
       );
 
       if (response.message) {
-        alert(`✅ ${response.message}\n\nInvoice: ${response.invoice?.invoiceNumber}\nAmount: $${paymentAmt}`);
+        alert(`✅ ${response.message}\n\nInvoice: ${response.invoice?.invoiceNumber}\nAmount: ${formatRupee(paymentAmt)}`);
         
         const newCredit = Math.max(0, (outlet.currentCredit || 0) - paymentAmt);
         
@@ -709,7 +710,6 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl">
-        {/* Fixed Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
           <h2 className="text-xl font-bold text-gray-800">Outlet Details</h2>
           <button 
@@ -721,7 +721,6 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
           </button>
         </div>
 
-        {/* Scrollable Content */}
         <div className="overflow-y-auto p-6" style={{ maxHeight: 'calc(90vh - 80px)' }}>
           {/* Credit Status Banner */}
           <div className={`mb-6 p-4 rounded-lg border ${
@@ -746,7 +745,7 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
                      calculatePercentage(outlet.currentCredit || 0, outlet.creditLimit || 0) >= 80 ? 'NEAR LIMIT' : 'ACTIVE'}
                   </h3>
                   <p className="text-sm">
-                    Credit: ${(outlet.currentCredit || 0).toLocaleString()} / ${(outlet.creditLimit || 0).toLocaleString()} 
+                    Credit: {formatRupee(outlet.currentCredit || 0)} / {formatRupee(outlet.creditLimit || 0)} 
                     ({calculatePercentage(outlet.currentCredit || 0, outlet.creditLimit || 1)}%)
                   </p>
                 </div>
@@ -826,14 +825,14 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
                     <FaDollarSign className="text-sm" />
                     <span>Credit Limit:</span>
                   </span>
-                  <span className="font-medium">${(outlet.creditLimit || 0).toLocaleString()}</span>
+                  <span className="font-medium">{formatRupee(outlet.creditLimit || 0)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600 flex items-center space-x-1">
                     <FaDollarSign className="text-sm" />
                     <span>Current Credit:</span>
                   </span>
-                  <span className="font-medium">${(outlet.currentCredit || 0).toLocaleString()}</span>
+                  <span className="font-medium">{formatRupee(outlet.currentCredit || 0)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600 flex items-center space-x-1">
@@ -841,7 +840,7 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
                     <span>Available Credit:</span>
                   </span>
                   <span className="font-medium">
-                    ${((outlet.creditLimit || 0) - (outlet.currentCredit || 0)).toLocaleString()}
+                    {formatRupee((outlet.creditLimit || 0) - (outlet.currentCredit || 0))}
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -884,10 +883,10 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Payment Amount ($)
+                    Payment Amount (₹)
                   </label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₹</span>
                     <input
                       type="number"
                       value={paymentAmount}
@@ -1004,7 +1003,7 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
                               {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'N/A'}
                             </td>
                             <td className="px-4 py-3">{order.items?.length || 0}</td>
-                            <td className="px-4 py-3">${(order.totalAmount || 0).toLocaleString()}</td>
+                            <td className="px-4 py-3">{formatRupee(order.totalAmount || 0)}</td>
                             <td className="px-4 py-3">
                               <span className={`px-2 py-1 rounded text-sm ${
                                 (order.status || 'pending') === 'completed' 
@@ -1050,7 +1049,7 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
                               {invoice.invoiceDate ? new Date(invoice.invoiceDate).toLocaleDateString() : 'N/A'}
                             </td>
                             <td className="px-4 py-3">{invoice.type}</td>
-                            <td className="px-4 py-3">${(invoice.totalAmount || 0).toLocaleString()}</td>
+                            <td className="px-4 py-3">{formatRupee(invoice.totalAmount || 0)}</td>
                             <td className="px-4 py-3">{invoice.paymentMethod}</td>
                             <td className="px-4 py-3">
                               <span className={`px-2 py-1 rounded text-sm ${
@@ -1340,7 +1339,7 @@ const OutletManagement = ({ onLogout }) => {
                 </div>
                 <div>
                   <p className="text-gray-600 text-sm">Total Credit Limit</p>
-                  <p className="text-2xl font-bold">${stats.totalCreditLimit.toLocaleString()}</p>
+                  <p className="text-2xl font-bold">{formatRupee(stats.totalCreditLimit)}</p>
                 </div>
               </div>
             </div>
@@ -1352,7 +1351,7 @@ const OutletManagement = ({ onLogout }) => {
                 </div>
                 <div>
                   <p className="text-gray-600 text-sm">Credit Used</p>
-                  <p className="text-2xl font-bold">${stats.totalCurrentCredit.toLocaleString()}</p>
+                  <p className="text-2xl font-bold">{formatRupee(stats.totalCurrentCredit)}</p>
                 </div>
               </div>
             </div>
@@ -1450,7 +1449,7 @@ const OutletManagement = ({ onLogout }) => {
                       <div className="flex justify-between items-center mb-2">
                         <span className="text-sm text-gray-600">Credit Usage</span>
                         <span className="font-medium text-sm">
-                          ${(outlet.currentCredit || 0).toLocaleString()} / ${(outlet.creditLimit || 0).toLocaleString()}
+                          {formatRupee(outlet.currentCredit || 0)} / {formatRupee(outlet.creditLimit || 0)}
                         </span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2">

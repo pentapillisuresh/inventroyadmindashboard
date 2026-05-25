@@ -111,7 +111,7 @@ const StoreDetails = ({ onLogout }) => {
           ...storeData,
           status: storeData.isActive ? 'Active' : 'Inactive',
           manager: storeData.Manager?.name || 'Unassigned',
-          totalValue: `$${response.stockValue?.toLocaleString() || '0'}`,
+        totalValue: `₹${response.stockValue?.toLocaleString('en-IN') || '0'}`,
           totalItems: response.totalItems || 0,
           infrastructure: response.rooms || [],
           racks: response.racks || [],
@@ -902,7 +902,8 @@ const downloadWaybillPDF = async (batchId, batchItems, batchTotal) => {
                 <div className="mt-4 md:mt-0">
                   <div className="text-right">
                     <p className="text-sm text-gray-500">Credit Limit</p>
-                    <p className="text-2xl font-bold text-gray-800">${parseFloat(store.creditLimit || 0).toLocaleString()}</p>
+                    {/* <p className="text-2xl font-bold text-gray-800">${parseFloat(store.creditLimit || 0).toLocaleString()}</p> */}
+                    <p className="text-2xl font-bold text-gray-800">₹{parseFloat(store.creditLimit || 0).toLocaleString('en-IN')}</p>
                   </div>
                 </div>
               </div>
@@ -915,7 +916,8 @@ const downloadWaybillPDF = async (batchId, batchItems, batchTotal) => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-blue-700 font-medium mb-1">Stock Value</p>
-                  <p className="text-2xl font-bold text-gray-800">{store.totalValue || '$0'}</p>
+                  {/* <p className="text-2xl font-bold text-gray-800">{store.totalValue || '$0'}</p> */}
+                  <p className="text-2xl font-bold text-gray-800">{store.totalValue || '₹0'}</p>
                 </div>
                 <div className="bg-blue-200 p-3 rounded-full">
                   <FaDollarSign className="text-blue-700" size={20} />
@@ -1239,7 +1241,8 @@ const downloadWaybillPDF = async (batchId, batchItems, batchTotal) => {
                                 <div className="text-xs text-gray-500">Min: {item.minStock}</div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-gray-900 font-medium">${item.price}</div>
+                                {/* <div className="text-gray-900 font-medium">${item.price}</div> */}
+                                <div className="text-gray-900 font-medium">₹{Number(item.price).toLocaleString('en-IN')}</div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <span className={`px-2 py-1 inline-flex text-xs leading-4 font-semibold rounded-full ${getStatusColor(item.status)}`}>
@@ -1357,7 +1360,10 @@ const downloadWaybillPDF = async (batchId, batchItems, batchTotal) => {
                                 <span className="capitalize text-gray-700">{invoice.type}</span>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-gray-900 font-medium">${parseFloat(invoice.totalAmount || 0).toLocaleString()}</div>
+                                {/* <div className="text-gray-900 font-medium">${parseFloat(invoice.totalAmount || 0).toLocaleString()}</div> */}
+                                <div className="text-gray-900 font-medium">
+  ₹{parseFloat(invoice.totalAmount || 0).toLocaleString('en-IN')}
+</div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <span className={`px-2 py-1 inline-flex text-xs leading-4 font-semibold rounded-full ${invoice.paymentMethod === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
@@ -1405,7 +1411,9 @@ const downloadWaybillPDF = async (batchId, batchItems, batchTotal) => {
                     <div className="bg-gradient-to-r from-emerald-50 to-emerald-100 p-4 rounded-xl">
                       <p className="text-sm text-emerald-700 font-medium">Total Amount</p>
                       <p className="text-2xl font-bold text-gray-800">
-                        ${invoices.reduce((sum, inv) => sum + parseFloat(inv.totalAmount || 0), 0).toLocaleString()}
+                        {/* ${invoices.reduce((sum, inv) => sum + parseFloat(inv.totalAmount || 0), 0).toLocaleString()}
+                         */}
+                         ₹{invoices.reduce((sum, inv) => sum + parseFloat(inv.totalAmount || 0), 0).toLocaleString('en-IN')}
                       </p>
                     </div>
                     <div className="bg-gradient-to-r from-purple-50 to-purple-100 p-4 rounded-xl">
@@ -1753,7 +1761,7 @@ const downloadWaybillPDF = async (batchId, batchItems, batchTotal) => {
                 {/* Price */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Price ($) *
+                    Price *
                   </label>
                   <input
                     type="number"

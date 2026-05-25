@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { FaTimes, FaPlus, FaMinus, FaPercent, FaBox, FaWarehouse, FaTag, FaSnowflake, FaArchive, FaStore, FaToggleOn, FaToggleOff, FaTruck, FaFileInvoice } from 'react-icons/fa';
+import { FaTimes, FaPlus, FaMinus, FaPercent, FaBox, FaWarehouse, FaTag, FaSnowflake, FaArchive, FaStore, FaToggleOn, FaToggleOff, FaTruck, FaFileInvoice, FaChevronDown, FaChevronUp, FaCheckCircle } from 'react-icons/fa';
 import ApiService from './ApiService';
 
 const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
@@ -7,7 +7,8 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
   const [outlets, setOutlets] = useState([]);
   const [products, setProducts] = useState([]);
   const [rooms, setRooms] = useState([]);
-  const [distributionMode, setDistributionMode] = useState(initialMode); // 'stock' or 'outlet'
+  const [distributionMode, setDistributionMode] = useState(initialMode);
+  const [expandedProducts, setExpandedProducts] = useState({});
   const [loading, setLoading] = useState({
     stores: false,
     outlets: false,
@@ -25,9 +26,17 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
     paidAmount: 0,
     creditAmount: 0,
   });
+  // State for temporary quantity and box name when adding products
+  const [tempQuantities, setTempQuantities] = useState({});
+  const [tempBoxNames, setTempBoxNames] = useState({});
 
   // Get token from localStorage inside component
   const clientToken = localStorage.getItem('token');
+
+  // Helper function to format Rupee
+  const formatRupee = (amount) => {
+    return `₹${parseFloat(amount || 0).toLocaleString('en-IN')}`;
+  };
 
   useEffect(() => {
     loadStores();
@@ -111,8 +120,6 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
       });
       if (response) {
         const inventoryData = response.map(item => {
-          console.log(item);
-
           return {
             id: item.id,
             productId: item.Product.id,
@@ -123,24 +130,10 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
             quantity: item.quantity,
             units: item.Product.units,
             price: item.Product.price,
-            // IGST: item.Product.IGST,
-            // SGST: item.Product.SGST,
-            // CGST: item.Product.CGST,
-            // costPrice: item.Product.costPrice,
-            // thresholdQuantity: item.Product.thresholdQuantity,
-            // image: item.Product.image,
-            // adminId: item.Product.adminId,
-            // createdBy: item.Product.createdBy,
-            // isActive: item.Product.isActive,
-            // createdAt: item.Product.createdAt,
-            // updatedAt: item.Product.updatedAt,
             Category: item.Product.Category,
           };
         });
-
         setProducts(inventoryData);
-
-        console.log("inventoryData::", inventoryData);
       }
     } catch (error) {
       console.error('Error loading products:', error);
@@ -176,6 +169,8 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
       outletId: ''
     }));
     setSelectedProducts([]);
+    setTempQuantities({});
+    setTempBoxNames({});
     loadProducts();
   };
 
@@ -185,6 +180,8 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
       storeId
     }));
     setSelectedProducts([]);
+    setTempQuantities({});
+    setTempBoxNames({});
   };
 
   const handleOutletChange = (outletId) => {
@@ -193,107 +190,95 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
       outletId
     }));
     setSelectedProducts([]);
-    loadInventory()
+    setTempQuantities({});
+    setTempBoxNames({});
+    loadInventory();
   };
 
-  const handleAddProduct = () => {
-    const firstProduct = products.length > 0 ? products[0] : null;
-    if (firstProduct) {
-      const newProduct = {
-        id: Date.now(),
-        productId: firstProduct.id,
-        productName: firstProduct.name,
-        sku: firstProduct.sku,
-        category: firstProduct.Category?.name || 'Uncategorized',
-        roomId: '',
-        rackId: '',
-        freezerId: '',
-        locationType: '',
-        locationId: '',
-        boxName: '',
-        quantity: 0,
-        price: parseFloat(firstProduct.price),
-        total: parseFloat(firstProduct.price),
-        maxQuantity: calculateAvailableQuantity(firstProduct.id, 0)
-      };
-      setSelectedProducts([...selectedProducts, newProduct]);
+  // Toggle product expansion
+  const toggleProductExpand = (productId) => {
+    setExpandedProducts(prev => ({
+      ...prev,
+      [productId]: !prev[productId]
+    }));
+  };
+
+  // Add product to selected list
+  const addToSelected = (product) => {
+    const quantity = tempQuantities[product.id] || 0;
+    const boxName = tempBoxNames[product.id] || '';
+
+    if (quantity <= 0) {
+      alert('Please enter a valid quantity');
+      return;
     }
+
+    if (!boxName.trim()) {
+      alert('Please enter a box name');
+      return;
+    }
+
+    const newProduct = {
+      id: Date.now(),
+      productId: product.id,
+      productName: product.name,
+      sku: product.sku,
+      category: product.Category?.name || 'Uncategorized',
+      roomId: '',
+      rackId: '',
+      freezerId: '',
+      locationType: '',
+      locationId: '',
+      boxName: boxName,
+      quantity: quantity,
+      price: parseFloat(product.price),
+      total: parseFloat(product.price) * quantity,
+      maxQuantity: product.quantity || 0
+    };
+
+    setSelectedProducts([...selectedProducts, newProduct]);
+    
+    // Reset temp values for this product
+    setTempQuantities(prev => ({ ...prev, [product.id]: 0 }));
+    setTempBoxNames(prev => ({ ...prev, [product.id]: '' }));
+    setExpandedProducts(prev => ({ ...prev, [product.id]: false }));
   };
 
-  // Calculate available quantity for a product considering already selected quantities
-  const calculateAvailableQuantity = useCallback((productId, indexToExclude) => {
-    const product = products.find(p => p.id === productId);
-    if (!product) return 0;
+  const handleRemoveProduct = (index) => {
+    const updatedProducts = [...selectedProducts];
+    updatedProducts.splice(index, 1);
+    setSelectedProducts(updatedProducts);
+  };
 
-    // Get total quantity available from inventories
-    const totalAvailable = product.quantity || 0;
-
-    // Subtract quantities already selected in other product blocks
-    let alreadySelected = 0;
-    selectedProducts.forEach((prod, index) => {
-      if (prod.productId === productId && index !== indexToExclude) {
-        alreadySelected += prod.quantity || 0;
-      }
-    });
-
-    return Math.max(0, totalAvailable - alreadySelected);
-  }, [products, selectedProducts]);
-
-  const handleProductChange = (index, field, value) => {
+  const handleSelectedProductChange = (index, field, value) => {
     const updatedProducts = [...selectedProducts];
 
-    if (field === 'productId') {
-      const product = products.find(p => p.id === parseInt(value));
-      if (product) {
-        const maxQuantity = calculateAvailableQuantity(product.id, index);
-        const quantity = Math.min(updatedProducts[index].quantity || 1, maxQuantity || 1);
-
-        updatedProducts[index] = {
-          ...updatedProducts[index],
-          productId: product.id,
-          productName: product.name,
-          sku: product.sku,
-          category: product.Category?.name || 'Uncategorized',
-          price: parseFloat(product.price),
-          quantity: quantity,
-          total: parseFloat(product.price) * quantity,
-          maxQuantity: maxQuantity,
-          // Reset location selections when product changes
-          roomId: '',
-          rackId: '',
-          freezerId: '',
-          locationType: '',
-          locationId: '',
-          boxName: ""
-        };
-      }
-    } else if (field === 'quantity') {
+    if (field === 'quantity') {
       const maxQty = updatedProducts[index].maxQuantity;
       let quantity = parseInt(value) || 0;
-
-      // Auto-adjust if exceeds max
-      if (quantity > maxQty) {
-        quantity = maxQty;
-      }
+      if (quantity > maxQty) quantity = maxQty;
       if (quantity < 1) quantity = 1;
-
+      
       updatedProducts[index] = {
         ...updatedProducts[index],
         quantity: quantity,
         total: updatedProducts[index].price * quantity
       };
+    } else if (field === 'boxName') {
+      updatedProducts[index] = {
+        ...updatedProducts[index],
+        boxName: value
+      };
     } else if (field === 'roomId') {
       const room = rooms.find(r => r.id === parseInt(value));
       const racks = room?.Racks || [];
       const freezers = room?.Freezers || [];
-
+      
       updatedProducts[index] = {
         ...updatedProducts[index],
         roomId: value,
         rackId: '',
         freezerId: '',
-        locationType: '',
-        locationId: '',
         availableRacks: racks,
         availableFreezers: freezers
       };
@@ -313,23 +298,11 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
         locationType: value ? 'freezer' : '',
         locationId: value
       };
-    } else {
-      updatedProducts[index] = {
-        ...updatedProducts[index],
-        [field]: value
-      };
     }
-
+    
     setSelectedProducts(updatedProducts);
   };
 
-  const handleRemoveProduct = (index) => {
-    const updatedProducts = [...selectedProducts];
-    updatedProducts.splice(index, 1);
-    setSelectedProducts(updatedProducts);
-  };
-
-  // Calculate totals - using useMemo to prevent unnecessary recalculations
   const totals = useMemo(() => {
     let subtotal = 0;
     let totalItems = 0;
@@ -367,24 +340,15 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
       return 'Please add at least one product';
     }
 
-    // Check if all products have quantity
     for (const item of selectedProducts) {
-      if (!item.quantity || item.quantity <= 0) {
-        return `Please enter a valid quantity for ${item.productName}`;
-      }
-
-      // For stock distribution, check location
       if (distributionMode === 'stock' && item.roomId && !item.rackId && !item.freezerId) {
         return `Please select either a rack or freezer for ${item.productName}`;
       }
-
-      // Check if location type is consistent
       if (distributionMode === 'stock' && item.rackId && item.freezerId) {
         return `Please select either a rack OR freezer for ${item.productName}, not both`;
       }
     }
 
-    // Validate mixed payment
     if (formData.paymentType === 'mixed') {
       if (formData.paidAmount <= 0) {
         return 'Please enter a paid amount for mixed payment';
@@ -398,7 +362,6 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
     return null;
   };
 
-  // Handle payment type change
   const handlePaymentTypeChange = useCallback((paymentType) => {
     const currentTotal = totals?.total || 0;
 
@@ -417,7 +380,6 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
         creditAmount: currentTotal
       }));
     } else {
-      // For mixed, keep current paid amount or set to 0
       setFormData(prev => ({
         ...prev,
         paymentType,
@@ -426,7 +388,6 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
     }
   }, [totals?.total]);
 
-  // Handle paid amount change for mixed payment
   const handlePaidAmountChange = useCallback((value) => {
     const currentTotal = totals?.total || 0;
     const paidAmount = parseFloat(value) || 0;
@@ -453,7 +414,6 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
     try {
       setLoading(prev => ({ ...prev, submitting: true }));
 
-      // For mixed payment, ensure credit amount is calculated correctly
       let finalPaidAmount = formData.paidAmount;
       let finalCreditAmount = formData.creditAmount;
 
@@ -464,7 +424,6 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
       let response;
 
       if (distributionMode === 'stock') {
-        // Stock distribution
         const requestData = {
           paymentMethod: formData.paymentType,
           paidAmount: finalPaidAmount,
@@ -492,9 +451,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
         );
 
       } else {
-        // Outlet distribution
         const selectedOutlet = outlets.find(o => o.id === parseInt(formData.outletId));
-        console.log("selectedProducts ::", selectedProducts);
         const requestData = {
           paymentMethod: formData.paymentType,
           paidAmount: finalPaidAmount,
@@ -520,13 +477,10 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
             Authorization: `Bearer ${clientToken}`,
             'Content-Type': 'application/json',
           },
-        }
-        );
+        });
       }
 
       if (response) {
-        console.log("response:::", response.invoice.invoiceNumber)
-        // Prepare distribution data for parent component
         const distributionData = {
           mode: distributionMode,
           storeId: formData.storeId,
@@ -558,8 +512,6 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
         };
 
         onSave(distributionData);
-
-        // Show success popup
         showSuccessPopup(distributionData);
       } else {
         alert('Failed to create distribution. Please try again.');
@@ -574,9 +526,6 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
   };
 
   const showSuccessPopup = (distributionData) => {
-    console.log('rrr:::', distributionData);
-
-    // Group products by boxName
     const groupedBoxes = distributionData.products.reduce((acc, product) => {
       if (!acc[product.boxName]) {
         acc[product.boxName] = {
@@ -584,355 +533,90 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
           total: 0
         };
       }
-
       acc[product.boxName].products.push(product);
       acc[product.boxName].total += product.total;
-
       return acc;
     }, {});
 
-    // Create popup
     const popupDiv = document.createElement('div');
-    popupDiv.className =
-      'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]';
+    popupDiv.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]';
 
     popupDiv.innerHTML = `
       <div class="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-        
-        <!-- Header -->
         <div class="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center z-10">
-          <h2 class="text-2xl font-bold text-green-600">
-            ✓ Distribution Created Successfully!
-          </h2>
-  
-          <button class="close-popup text-gray-400 hover:text-gray-600 text-2xl">
-            &times;
-          </button>
+          <h2 class="text-2xl font-bold text-green-600">✓ Distribution Created Successfully!</h2>
+          <button class="close-popup text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
         </div>
-  
         <div class="p-6">
-  
-          <!-- Invoice Summary -->
           <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
             <div class="flex items-center justify-between">
               <div>
                 <p class="text-sm text-gray-600">Invoice Number</p>
-                <p class="text-2xl font-bold text-blue-800">
-                  ${distributionData.invoice}
-                </p>
+                <p class="text-2xl font-bold text-blue-800">${distributionData.invoice}</p>
               </div>
-  
               <div class="text-right">
                 <p class="text-sm text-gray-600">Total Amount</p>
-                <p class="text-2xl font-bold text-green-600">
-                  $${distributionData.totalValue.toFixed(2)}
-                </p>
+                <p class="text-2xl font-bold text-green-600">${formatRupee(distributionData.totalValue)}</p>
               </div>
             </div>
           </div>
-  
-          <!-- Distribution Details -->
           <div class="mb-6">
-            <h3 class="font-semibold text-gray-800 mb-3">
-              Distribution Details
-            </h3>
-  
+            <h3 class="font-semibold text-gray-800 mb-3">Distribution Details</h3>
             <div class="grid grid-cols-2 gap-4 text-sm">
-  
-              <div>
-                <p class="text-gray-600">Type:</p>
-                <p class="font-medium capitalize">
-                  ${distributionData.mode} Distribution
-                </p>
-              </div>
-  
-              <div>
-                <p class="text-gray-600">Payment Type:</p>
-                <p class="font-medium">
-                  ${distributionData.paymentType}
-                </p>
-              </div>
-  
-              <div>
-                <p class="text-gray-600">Paid Amount:</p>
-                <p class="font-medium text-green-600">
-                  $${distributionData.paidAmount.toFixed(2)}
-                </p>
-              </div>
-  
-              ${distributionData.creditAmount > 0
-        ? `
-                  <div>
-                    <p class="text-gray-600">Credit Amount:</p>
-                    <p class="font-medium text-blue-600">
-                      $${distributionData.creditAmount.toFixed(2)}
-                    </p>
-                  </div>
-                `
-        : ''
-      }
-  
-              ${distributionData.discount > 0
-        ? `
-                  <div>
-                    <p class="text-gray-600">Discount:</p>
-                    <p class="font-medium text-orange-600">
-                      ${distributionData.discount}%
-                    </p>
-                  </div>
-                `
-        : ''
-      }
+              <div><p class="text-gray-600">Type:</p><p class="font-medium capitalize">${distributionData.mode} Distribution</p></div>
+              <div><p class="text-gray-600">Payment Type:</p><p class="font-medium">${distributionData.paymentType}</p></div>
+              <div><p class="text-gray-600">Paid Amount:</p><p class="font-medium text-green-600">${formatRupee(distributionData.paidAmount)}</p></div>
+              ${distributionData.creditAmount > 0 ? `<div><p class="text-gray-600">Credit Amount:</p><p class="font-medium text-blue-600">${formatRupee(distributionData.creditAmount)}</p></div>` : ''}
+              ${distributionData.discount > 0 ? `<div><p class="text-gray-600">Discount:</p><p class="font-medium text-orange-600">${distributionData.discount}%</p></div>` : ''}
             </div>
           </div>
-  
-          <!-- All Products Table -->
-          <div class="mb-8">
-            <h3 class="font-semibold text-gray-800 mb-3">
-              Products Distributed
-            </h3>
-  
-            <div class="overflow-x-auto border rounded-lg">
-              <table class="w-full text-sm">
-                
-                <thead class="bg-gray-50">
-                  <tr>
-                    <th class="px-3 py-2 text-left">Product</th>
-                    <th class="px-3 py-2 text-center">Qty</th>
-                    <th class="px-3 py-2 text-right">Price</th>
-                    <th class="px-3 py-2 text-left">Box</th>
-                    <th class="px-3 py-2 text-right">Total</th>
-                  </tr>
-                </thead>
-  
-                <tbody>
-                  ${distributionData.products
-        .map(
-          (product) => `
-                      <tr class="border-t border-gray-200">
-                        <td class="px-3 py-2">
-                          ${product.productName}
-                        </td>
-  
-                        <td class="px-3 py-2 text-center">
-                          ${product.quantity}
-                        </td>
-  
-                        <td class="px-3 py-2 text-right">
-                          $${product.price.toFixed(2)}
-                        </td>
-  
-                        <td class="px-3 py-2">
-                          ${product.boxName}
-                        </td>
-  
-                        <td class="px-3 py-2 text-right">
-                          $${product.total.toFixed(2)}
-                        </td>
-                      </tr>
-                    `
-        )
-        .join('')}
-                </tbody>
-  
-                <tfoot class="bg-gray-50">
-                  <tr>
-                    <td colspan="4" class="px-3 py-2 text-right font-semibold">
-                      Grand Total:
-                    </td>
-  
-                    <td class="px-3 py-2 text-right font-bold text-green-700">
-                      $${distributionData.totalValue.toFixed(2)}
-                    </td>
-                  </tr>
-                </tfoot>
-  
-              </table>
-            </div>
-          </div>
-  
-          <!-- BOXES SECTION -->
-          <div class="mb-6">
-            <h3 class="font-bold text-xl text-gray-800 mb-4">
-              Box Wise Distribution
-            </h3>
-  
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-  
-              ${Object.entries(groupedBoxes)
-        .map(
-          ([boxName, boxData]) => `
-                
-                <div class="border border-gray-300 rounded-xl shadow-sm overflow-hidden">
-  
-                  <!-- Box Header -->
-                  <div class="bg-indigo-600 text-white px-4 py-3">
-                    <div class="flex justify-between items-center">
-                      <h4 class="font-semibold text-lg">
-                        ${boxName}
-                      </h4>
-  
-                      <span class="bg-white text-indigo-700 text-xs px-2 py-1 rounded-full font-bold">
-                        ${boxData.products.length} Item(s)
-                      </span>
-                    </div>
-                  </div>
-  
-                  <!-- Products -->
-                  <div class="p-4">
-  
-                    <table class="w-full text-sm">
-                      
-                      <thead>
-                        <tr class="border-b">
-                          <th class="text-left py-2">Product</th>
-                          <th class="text-center py-2">Qty</th>
-                          <th class="text-right py-2">Price</th>
-                          <th class="text-right py-2">Amount</th>
-                        </tr>
-                      </thead>
-  
-                      <tbody>
-                        ${boxData.products
-              .map(
-                (product) => `
-                            <tr class="border-b border-gray-100">
-                              
-                              <td class="py-2">
-                                ${product.productName}
-                              </td>
-  
-                              <td class="py-2 text-center">
-                                ${product.quantity}
-                              </td>
-  
-                              <td class="py-2 text-right">
-                                $${product.price.toFixed(2)}
-                              </td>
-  
-                              <td class="py-2 text-right font-medium">
-                                $${product.total.toFixed(2)}
-                              </td>
-  
-                            </tr>
-                          `
-              )
-              .join('')}
-                      </tbody>
-  
-                      <tfoot>
-                        <tr>
-                          <td colspan="3" class="pt-3 text-right font-bold text-gray-700">
-                            Box Total:
-                          </td>
-  
-                          <td class="pt-3 text-right font-bold text-green-700">
-                            $${boxData.total.toFixed(2)}
-                          </td>
-                        </tr>
-                      </tfoot>
-  
-                    </table>
-  
-                  </div>
-  
-                </div>
-  
-              `
-        )
-        .join('')}
-  
-            </div>
-          </div>
-  
-          ${distributionData.notes
-        ? `
-              <div class="mb-6">
-                <h3 class="font-semibold text-gray-800 mb-2">
-                  Notes
-                </h3>
-  
-                <p class="text-gray-600 text-sm">
-                  ${distributionData.notes}
-                </p>
-              </div>
-            `
-        : ''
-      }
-  
-          <!-- Footer -->
-          <div class="flex justify-end">
-            <button class="close-popup bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">
-              Close
-            </button>
-          </div>
-  
+          <div class="flex justify-end"><button class="close-popup bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">Close</button></div>
         </div>
       </div>
     `;
 
     document.body.appendChild(popupDiv);
-
-    // Close handlers
     const closeButtons = popupDiv.querySelectorAll('.close-popup');
-
     closeButtons.forEach((btn) => {
-      btn.addEventListener('click', () => {
-        popupDiv.remove();
-      });
+      btn.addEventListener('click', () => popupDiv.remove());
     });
-
-    // Outside click close
     popupDiv.addEventListener('click', (e) => {
-      if (e.target === popupDiv) {
-        popupDiv.remove();
-      }
+      if (e.target === popupDiv) popupDiv.remove();
     });
   };
-  // Initialize form with proper payment amounts when component mounts
+
   useEffect(() => {
     if (formData.paymentType === 'paid') {
-      setFormData(prev => ({
-        ...prev,
-        paidAmount: 0,
-        creditAmount: 0
-      }));
+      setFormData(prev => ({ ...prev, paidAmount: 0, creditAmount: 0 }));
     }
   }, []);
 
-  // Update payment amounts when totals change
   useEffect(() => {
     if (formData.paymentType === 'paid') {
-      setFormData(prev => ({
-        ...prev,
-        paidAmount: totals?.total || 0,
-        creditAmount: 0
-      }));
+      setFormData(prev => ({ ...prev, paidAmount: totals?.total || 0, creditAmount: 0 }));
     } else if (formData.paymentType === 'credit') {
-      setFormData(prev => ({
-        ...prev,
-        paidAmount: 0,
-        creditAmount: totals?.total || 0
-      }));
+      setFormData(prev => ({ ...prev, paidAmount: 0, creditAmount: totals?.total || 0 }));
     }
-    // For mixed payment, don't auto-update - user specifies amounts manually
   }, [totals?.total, formData.paymentType]);
 
-  // Filter outlets by selected store (if store is selected)
   const filteredOutlets = formData.storeId
     ? outlets.filter(outlet => outlet.storeId === parseInt(formData.storeId))
     : outlets;
 
+  // Filter out products that are already selected
+  const availableProducts = products.filter(
+    product => !selectedProducts.some(p => p.productId === product.id)
+  );
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-lg w-full max-w-5xl max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <div className="flex justify-between items-center mb-6">
             <div className="flex items-center space-x-4">
               <h2 className="text-2xl font-bold text-gray-900">
                 {distributionMode === 'stock' ? 'New Stock Distribution' : 'Outlet Distribution'}
               </h2>
-              {/* Toggle Button */}
               <button
                 type="button"
                 onClick={handleToggleMode}
@@ -948,17 +632,14 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                 </span>
               </button>
             </div>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
-            >
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
               <FaTimes size={24} />
             </button>
           </div>
 
           <form onSubmit={handleSubmit}>
             <div className="space-y-6">
-              {/* Store/Outlet Selection based on mode */}
+              {/* Store/Outlet Selection */}
               {distributionMode === 'stock' ? (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -978,9 +659,6 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                       </option>
                     ))}
                   </select>
-                  {loading.stores && (
-                    <p className="mt-1 text-sm text-gray-500">Loading stores...</p>
-                  )}
                 </div>
               ) : (
                 <div>
@@ -1014,34 +692,124 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                     <option value="">{loading.outlets ? 'Loading outlets...' : 'Choose outlet...'}</option>
                     {filteredOutlets.map(outlet => (
                       <option key={outlet.id} value={outlet.id}>
-                        {outlet.name} {outlet.Store?.name ? `(${outlet.Store.name})` : ''} - Credit: ${(outlet.creditLimit || 0).toLocaleString()}
+                        {outlet.name} {outlet.Store?.name ? `(${outlet.Store.name})` : ''} - Credit: {formatRupee(outlet.creditLimit || 0)}
                       </option>
                     ))}
                   </select>
-                  {loading.outlets && (
-                    <p className="mt-1 text-sm text-gray-500">Loading outlets...</p>
-                  )}
                 </div>
               )}
 
-              {/* Products Section */}
+              {/* Selected Products Section */}
+              {selectedProducts.length > 0 && (
+                <div className="border border-green-200 rounded-lg bg-green-50 p-4">
+                  <h3 className="text-md font-semibold text-green-800 mb-3 flex items-center gap-2">
+                    <FaCheckCircle className="text-green-600" />
+                    Selected Products ({selectedProducts.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {selectedProducts.map((product, index) => (
+                      <div key={product.id} className="bg-white border border-green-200 rounded-lg p-3">
+                        <div className="flex justify-between items-center mb-2">
+                          <div>
+                            <span className="font-medium text-gray-900">{product.productName}</span>
+                            <span className="text-xs text-gray-500 ml-2">SKU: {product.sku}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveProduct(index)}
+                            className="text-red-600 hover:text-red-800 p-1 hover:bg-red-50 rounded"
+                          >
+                            <FaMinus />
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                          <div>
+                            <p className="text-xs text-gray-500">Quantity</p>
+                            <input
+                              type="number"
+                              value={product.quantity}
+                              onChange={(e) => handleSelectedProductChange(index, 'quantity', e.target.value)}
+                              className="w-full px-2 py-1 border rounded text-sm"
+                              min="1"
+                              max={product.maxQuantity}
+                            />
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">Box Name</p>
+                            <input
+                              type="text"
+                              value={product.boxName}
+                              onChange={(e) => handleSelectedProductChange(index, 'boxName', e.target.value)}
+                              className="w-full px-2 py-1 border rounded text-sm"
+                              placeholder="Box name"
+                            />
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">Price/Unit</p>
+                            <p className="font-medium">{formatRupee(product.price)}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">Total</p>
+                            <p className="font-medium text-green-600">{formatRupee(product.total)}</p>
+                          </div>
+                        </div>
+                        {distributionMode === 'stock' && formData.storeId && (
+                          <div className="grid grid-cols-3 gap-3 mt-2 pt-2 border-t border-gray-200">
+                            <div>
+                              <p className="text-xs text-gray-500">Room</p>
+                              <select
+                                onChange={(e) => handleSelectedProductChange(index, 'roomId', e.target.value)}
+                                className="w-full px-2 py-1 border rounded text-sm"
+                              >
+                                <option value="">Select room</option>
+                                {rooms.map(room => (
+                                  <option key={room.id} value={room.id}>{room.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                            {product.roomId && (
+                              <div>
+                                <p className="text-xs text-gray-500">Rack</p>
+                                <select
+                                  onChange={(e) => handleSelectedProductChange(index, 'rackId', e.target.value)}
+                                  className="w-full px-2 py-1 border rounded text-sm"
+                                >
+                                  <option value="">Select rack</option>
+                                  {product.availableRacks?.map(rack => (
+                                    <option key={rack.id} value={rack.id}>{rack.name}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
+                            {product.roomId && (
+                              <div>
+                                <p className="text-xs text-gray-500">Freezer</p>
+                                <select
+                                  onChange={(e) => handleSelectedProductChange(index, 'freezerId', e.target.value)}
+                                  className="w-full px-2 py-1 border rounded text-sm"
+                                >
+                                  <option value="">Select freezer</option>
+                                  {product.availableFreezers?.map(freezer => (
+                                    <option key={freezer.id} value={freezer.id}>{freezer.name}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Available Products Section - Initially Shown */}
               <div>
                 <div className="flex justify-between items-center mb-4">
                   <label className="block text-sm font-medium text-gray-700">
-                    Products *
+                    Available Products
                   </label>
-                  <button
-                    type="button"
-                    onClick={handleAddProduct}
-                    disabled={loading.products || products.length === 0}
-                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition ${loading.products || products.length === 0
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                      : 'bg-blue-600 text-white hover:bg-blue-700'
-                      }`}
-                  >
-                    <FaPlus />
-                    <span>Add Product</span>
-                  </button>
+                  <span className="text-sm text-gray-500">{availableProducts.length} products available</span>
                 </div>
 
                 {loading.products ? (
@@ -1049,216 +817,100 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                     <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-600"></div>
                     <p className="mt-4 text-gray-600">Loading products...</p>
                   </div>
-                ) : selectedProducts.length === 0 ? (
+                ) : availableProducts.length === 0 ? (
                   <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
                     <FaBox className="text-4xl text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600 font-medium">No products added yet</p>
-                    <p className="text-gray-500 text-sm mt-1">Add products to create distribution</p>
-                    <button
-                      type="button"
-                      onClick={handleAddProduct}
-                      disabled={products.length === 0}
-                      className={`mt-4 text-sm font-medium ${products.length === 0
-                        ? 'text-gray-400 cursor-not-allowed'
-                        : 'text-blue-600 hover:text-blue-800'
-                        }`}
-                    >
-                      + Click here to add your first product
-                    </button>
+                    <p className="text-gray-600 font-medium">No products available</p>
+                    <p className="text-gray-500 text-sm mt-1">
+                      {distributionMode === 'stock' && !formData.storeId 
+                        ? 'Please select a store first to view inventory' 
+                        : selectedProducts.length > 0 ? 'All products have been added to the distribution' : 'No products found in inventory'}
+                    </p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    {selectedProducts.map((product, index) => (
-                      <div key={product.id || index} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                        <div className="flex justify-between items-start mb-4">
-                          <div className="flex-1">
-                            <div className="flex items-center space-x-2">
-                              <FaBox className="text-gray-400" />
-                              <h4 className="font-medium text-gray-900">Product #{index + 1}</h4>
-                              {product.maxQuantity > 0 && (
-                                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                                  Available: {product.maxQuantity}
-                                </span>
-                              )}
+                  <div className="space-y-3">
+                    {availableProducts.map((product) => (
+                      <div key={product.id} className="border border-gray-200 rounded-lg overflow-hidden">
+                        {/* Accordion Header */}
+                        <div 
+                          className={`flex items-center justify-between p-4 cursor-pointer transition-colors ${
+                            expandedProducts[product.id] ? 'bg-blue-50 border-b border-blue-100' : 'bg-gray-50 hover:bg-gray-100'
+                          }`}
+                          onClick={() => toggleProductExpand(product.id)}
+                        >
+                          <div className="flex items-center space-x-3 flex-1">
+                            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                              <FaBox className="text-blue-600 text-sm" />
                             </div>
-                            {product.productName && (
-                              <p className="text-sm text-gray-600 mt-1">{product.productName}</p>
-                            )}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveProduct(index)}
-                            className="text-red-600 hover:text-red-800 p-2 hover:bg-red-50 rounded-lg"
-                            title="Remove Product"
-                          >
-                            <FaMinus />
-                          </button>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-                          {/* Product Selection */}
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Product *
-                            </label>
-                            <select
-                              value={product.productId || ''}
-                              onChange={(e) => handleProductChange(index, 'productId', e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
-                            >
-                              <option value="">Select product...</option>
-                              {products.map(p => {
-                                const available = calculateAvailableQuantity(p.id, index);
-                                return (
-                                  <option
-                                    key={p.id}
-                                    value={p.id}
-                                    disabled={available <= 0}
-                                  >
-                                    {p.name} - ${parseFloat(p.price).toFixed(2)} (Available: {available})
-                                  </option>
-                                );
-                              })}
-                            </select>
-                            {product.sku && (
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-3 flex-wrap gap-2">
+                                <span className="font-medium text-gray-900">{product.name}</span>
+                                <span className="text-xs text-gray-500">SKU: {product.sku}</span>
+                                <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded">
+                                  Available: {product.quantity || 0}
+                                </span>
+                              </div>
                               <p className="text-xs text-gray-500 mt-1">
-                                SKU: {product.sku}
+                                Category: {product.Category?.name || 'Uncategorized'} | Price: {formatRupee(product.price)}
                               </p>
-                            )}
+                            </div>
                           </div>
-
-                          {/* Quantity */}
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Quantity * (Max: {product.maxQuantity})
-                            </label>
-                            <input
-                              type="number"
-                              min="1"
-                              max={product.maxQuantity}
-                              value={product.quantity || ''}
-                              onChange={(e) => handleProductChange(index, 'quantity', e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
-                              placeholder="Qty"
-                              required
-                            />
+                          <div className="flex items-center space-x-4">
+                            {expandedProducts[product.id] ? (
+                              <FaChevronUp className="text-gray-400" />
+                            ) : (
+                              <FaChevronDown className="text-gray-400" />
+                            )}
                           </div>
                         </div>
 
-                        {/* Location Selection - Only show for stock distribution */}
-                        {distributionMode === 'stock' && formData.storeId && (
-                          <>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-200">
-                              {/* Room Selection */}
+                        {/* Accordion Content - Add Product Form */}
+                        {expandedProducts[product.id] && (
+                          <div className="p-4 bg-white space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div>
                                 <label className="block text-xs font-medium text-gray-700 mb-1">
-                                  Room (Optional)
+                                  Quantity *
                                 </label>
-                                <div className="relative">
-                                  <FaWarehouse className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 text-xs" />
-                                  <select
-                                    value={product.roomId || ''}
-                                    onChange={(e) => handleProductChange(index, 'roomId', e.target.value)}
-                                    className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
-                                  >
-                                    <option value="">Select room...</option>
-                                    {loading.rooms ? (
-                                      <option value="">Loading rooms...</option>
-                                    ) : rooms.map(room => (
-                                      <option key={room.id} value={room.id}>
-                                        {room.name} (Capacity: {room.currentOccupancy}/{room.capacity})
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-                              </div>
-
-                              {/* Rack Selection - Only show if room is selected */}
-                              {product.roomId && (
-                                <div>
-                                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                                    Rack (Choose rack OR freezer)
-                                  </label>
-                                  <div className="relative">
-                                    <FaArchive className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 text-xs" />
-                                    <select
-                                      value={product.rackId || ''}
-                                      onChange={(e) => handleProductChange(index, 'rackId', e.target.value)}
-                                      className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
-                                    >
-                                      <option value="">Select rack...</option>
-                                      {product.availableRacks?.map(rack => (
-                                        <option key={rack.id} value={rack.id}>
-                                          {rack.name} (Capacity: {rack.currentOccupancy}/{rack.capacity})
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* Freezer Selection - Only show if room is selected */}
-                              {product.roomId && (
-                                <div>
-                                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                                    Freezer (Choose rack OR freezer)
-                                  </label>
-                                  <div className="relative">
-                                    <FaSnowflake className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 text-xs" />
-                                    <select
-                                      value={product.freezerId || ''}
-                                      onChange={(e) => handleProductChange(index, 'freezerId', e.target.value)}
-                                      className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
-                                    >
-                                      <option value="">Select freezer...</option>
-                                      {product.availableFreezers?.map(freezer => (
-                                        <option key={freezer.id} value={freezer.id}>
-                                          {freezer.name} (Capacity: {freezer.currentOccupancy}/{freezer.capacity})
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Location Help Text */}
-                            {product.roomId && (!product.rackId && !product.freezerId) && (
-                              <p className="text-xs text-yellow-600 mt-2">
-                                Please select either a rack or freezer for this product
-                              </p>
-                            )}
-                          </>
-                        )}
-
-                        {/* Product Details */}
-                        {product.productName && (
-                          <div className="mt-4 pt-3 border-t border-gray-200">
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <p className="text-xs text-gray-600">Category</p>
-                                <p className="text-sm font-medium text-gray-900">{product.category || 'N/A'}</p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-gray-600">Price per unit</p>
-                                <p className="text-sm font-medium text-gray-900">${product.price?.toFixed(2) || '0.00'}</p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-gray-600">Subtotal</p>
-                                <p className="text-sm font-medium text-gray-900">${product.total?.toFixed(2) || '0.00'}</p>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max={product.quantity || 0}
+                                  value={tempQuantities[product.id] || 0}
+                                  onChange={(e) => setTempQuantities(prev => ({ ...prev, [product.id]: parseInt(e.target.value) || 0 }))}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
+                                  placeholder="Enter quantity"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">Max available: {product.quantity || 0}</p>
                               </div>
                               <div>
                                 <label className="block text-xs font-medium text-gray-700 mb-1">
                                   Box Name *
                                 </label>
                                 <input
-                                  value={product.boxName}
-                                  onChange={(e) => handleProductChange(index, 'boxName', e.target.value)}
+                                  type="text"
+                                  value={tempBoxNames[product.id] || ''}
+                                  onChange={(e) => setTempBoxNames(prev => ({ ...prev, [product.id]: e.target.value }))}
                                   className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
-                                  placeholder="Box Name"
-                                  required
+                                  placeholder="e.g., Box A, Package 1"
                                 />
                               </div>
+                            </div>
+
+                            <div className="flex justify-end pt-2">
+                              <button
+                                type="button"
+                                onClick={() => addToSelected(product)}
+                                disabled={!tempQuantities[product.id] || tempQuantities[product.id] <= 0}
+                                className={`px-4 py-2 rounded-lg transition flex items-center space-x-2 ${
+                                  tempQuantities[product.id] && tempQuantities[product.id] > 0
+                                    ? 'bg-green-600 text-white hover:bg-green-700'
+                                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                }`}
+                              >
+                                <FaPlus />
+                                <span>Add to Distribution</span>
+                              </button>
                             </div>
                           </div>
                         )}
@@ -1325,11 +977,6 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                   />
                   <FaPercent className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                 </div>
-                {formData.discount > 0 && (
-                  <p className="mt-1 text-sm text-green-600">
-                    {formData.discount}% discount will be applied to the total amount
-                  </p>
-                )}
               </div>
 
               {/* Mixed Payment Inputs */}
@@ -1397,7 +1044,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                   <div className="border-t border-blue-200 pt-3 space-y-2">
                     <div className="flex justify-between">
                       <span className="text-gray-600">Subtotal:</span>
-                      <span className="font-medium">${(totals?.subtotal || 0).toFixed(2)}</span>
+                      <span className="font-medium">{formatRupee(totals?.subtotal || 0)}</span>
                     </div>
 
                     {formData.discount > 0 && (
@@ -1406,13 +1053,13 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                           <span className="text-gray-600">Discount:</span>
                           <span className="ml-2 text-sm text-green-600">({formData.discount}%)</span>
                         </div>
-                        <span className="font-medium text-green-600">-${(totals?.discountAmount || 0).toFixed(2)}</span>
+                        <span className="font-medium text-green-600">-{formatRupee(totals?.discountAmount || 0)}</span>
                       </div>
                     )}
 
                     <div className="flex justify-between border-t border-blue-200 pt-3">
                       <span className="text-lg font-semibold text-gray-800">Total Amount:</span>
-                      <span className="text-xl font-bold text-gray-900">${(totals?.total || 0).toFixed(2)}</span>
+                      <span className="text-xl font-bold text-gray-900">{formatRupee(totals?.total || 0)}</span>
                     </div>
 
                     <div className="flex justify-between text-sm">
@@ -1421,22 +1068,13 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-600">Paid Amount:</span>
-                      <span className="font-medium text-green-600">${formData.paidAmount.toFixed(2)}</span>
+                      <span className="font-medium text-green-600">{formatRupee(formData.paidAmount)}</span>
                     </div>
                     {formData.creditAmount > 0 && (
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">Credit Amount:</span>
-                        <span className="font-medium text-blue-600">${formData.creditAmount.toFixed(2)}</span>
+                        <span className="font-medium text-blue-600">{formatRupee(formData.creditAmount)}</span>
                       </div>
-                    )}
-                  </div>
-
-                  <div className="mt-4 text-sm text-gray-500">
-                    {distributionMode === 'stock' && selectedProducts.some(p => p.roomId) && (
-                      <p className="mt-1">Products will be allocated to specific locations as specified.</p>
-                    )}
-                    {distributionMode === 'outlet' && (
-                      <p className="mt-1">Products will be dispatched to the selected outlet.</p>
                     )}
                   </div>
                 </div>
@@ -1473,7 +1111,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                   ) : (
                     <>
                       <FaTruck />
-                      <span>Create Distribution </span>
+                      <span>Create Distribution</span>
                     </>
                   )}
                 </button>

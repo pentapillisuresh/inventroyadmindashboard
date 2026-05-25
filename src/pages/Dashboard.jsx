@@ -13,7 +13,8 @@ import { useAuth } from '../contest/AuthContest';
 
 const API_BASE_URL = 'http://localhost:5001/api';
 const clientToken = localStorage.getItem('token');
-// CreditDues Component (unchanged functionality)
+
+// CreditDues Component
 const CreditDues = ({ dues }) => {
   const [blockedOutlets, setBlockedOutlets] = useState([]);
   const [warningOutlets, setWarningOutlets] = useState([]);
@@ -32,6 +33,10 @@ const CreditDues = ({ dues }) => {
 
   const calculatePercentage = (used, limit) => {
     return Math.round((used / limit) * 100);
+  };
+
+  const formatRupee = (amount) => {
+    return `₹${amount.toLocaleString('en-IN')}`;
   };
 
   const handleUnblockOutlet = (outletId) => {
@@ -82,7 +87,7 @@ const CreditDues = ({ dues }) => {
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600">
-                    Due: ${outlet.creditUsed.toLocaleString()} / ${outlet.creditLimit.toLocaleString()}
+                    Due: {formatRupee(outlet.creditUsed)} / {formatRupee(outlet.creditLimit)}
                   </span>
                   <span className="font-medium text-red-700">
                     {calculatePercentage(outlet.creditUsed, outlet.creditLimit)}%
@@ -132,7 +137,7 @@ const CreditDues = ({ dues }) => {
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600">
-                    ${outlet.creditUsed.toLocaleString()} / ${outlet.creditLimit.toLocaleString()}
+                    {formatRupee(outlet.creditUsed)} / {formatRupee(outlet.creditLimit)}
                   </span>
                   <span className="font-medium text-yellow-700">
                     {calculatePercentage(outlet.creditUsed, outlet.creditLimit)}%
@@ -166,7 +171,7 @@ const CreditDues = ({ dues }) => {
           <div className="text-center">
             <div className="text-gray-600">Credit Used</div>
             <div className="text-2xl font-bold">
-              ${dues?.reduce((sum, o) => sum + (o.creditUsed || 0), 0).toLocaleString()}
+              {formatRupee(dues?.reduce((sum, o) => sum + (o.creditUsed || 0), 0))}
             </div>
           </div>
         </div>
@@ -206,13 +211,15 @@ const Dashboard = ({ onLogout }) => {
   const [statsError, setStatsError] = useState('');
   const [stockAlertsError, setStockAlertsError] = useState('');
   const {}=useAuth;
+  
   useEffect(() => {
     fetchDashboardStats();
-    // fetchLowStockAlerts();
-    
-    // Keep existing local data for other sections
     loadLocalData();
   }, []);
+
+  const formatRupee = (amount) => {
+    return `₹${amount.toLocaleString('en-IN')}`;
+  };
 
   const fetchDashboardStats = async () => {
     setLoadingStats(true);
@@ -220,7 +227,6 @@ const Dashboard = ({ onLogout }) => {
     setLoadingStockAlerts(true);
     setStockAlertsError('');
 
-    
     try {
       const response = await ApiService.get(`/reports/dashboard/stats`,{
         headers: {
@@ -240,8 +246,9 @@ const Dashboard = ({ onLogout }) => {
         activeOutlets: response.outlets || 0,
         totalStockValue: response.inventoryValue || 0
       }));
+      
       if (response.lowStockItems) {
-        const lowStockItems=response.lowStockItems
+        const lowStockItems = response.lowStockItems;
         const transformedAlerts = lowStockItems.map(item => ({
           id: item.id,
           productName: item.Product?.name || 'Unknown Product',
@@ -254,8 +261,8 @@ const Dashboard = ({ onLogout }) => {
         }));
         
         setStockAlertsData(transformedAlerts);
-        } else {
-          setStockAlertsError(`All Stoke are full`);
+      } else {
+        setStockAlertsError(`All Stock are full`);
       }
 
     } catch (err) {
@@ -271,50 +278,6 @@ const Dashboard = ({ onLogout }) => {
     }
   };
 
-  // const fetchLowStockAlerts = async () => {
-  //   setLoadingStockAlerts(true);
-  //   setStockAlertsError('');
-    
-  //   try {
-  //     // Using store ID 1 as per the API endpoint
-  //     const response = await ApiService.get(`/stores/1/inventory/low-stock`,{
-  //       headers: {
-  //         Authorization: `Bearer ${clientToken}`,
-  //         'Content-Type': 'application/json',
-  //       },
-  //     });
-      
-  //     if (!response) {
-  //       throw new Error(`HTTP error! status: ${response.status}`);
-  //     }
-      
-  //     // Transform the API response to match the format expected by StockAlerts component
-  //     const transformedAlerts = response.map(item => ({
-  //       id: item.id,
-  //       productName: item.Product?.name || 'Unknown Product',
-  //       sku: item.Product?.sku || 'N/A',
-  //       storeName: item.Store?.name || 'Unknown Store',
-  //       currentStock: item.quantity,
-  //       reorderLevel: item.reorderLevel,
-  //       status: item.quantity <= item.reorderLevel ? 'Low Stock' : 'Critical',
-  //       location: getLocationString(item)
-  //     }));
-      
-  //     setStockAlertsData(transformedAlerts);
-      
-  //   } catch (err) {
-  //     setStockAlertsError(`Failed to load low stock alerts: ${err.message}`);
-  //     console.error('Error fetching low stock alerts:', err);
-      
-  //     // Fallback to local data if API fails
-  //     setStockAlertsData(storage.getStores().slice(0, 3));
-  //   } finally {
-  //     setLoadingStockAlerts(false);
-  //   }
-  // };
-
-  // Helper function to generate location string from inventory item
- 
   const getLocationString = (item) => {
     const parts = [];
     if (item.Room) parts.push(item.Room.name);
@@ -417,7 +380,7 @@ const Dashboard = ({ onLogout }) => {
     },
     {
       title: 'Total Stock Value',
-      value: loadingStats ? '...' : `$${stats.totalStockValue.toLocaleString()}`,
+      value: loadingStats ? '...' : formatRupee(stats.totalStockValue),
       change: '+12% from last month',
       icon: <FaBoxes className="text-purple-600" />,
       color: 'bg-purple-50'
@@ -460,7 +423,7 @@ const Dashboard = ({ onLogout }) => {
                     ⚠️ {stats.blockedOutlets} outlet(s) are blocked due to exceeding credit limits
                   </p>
                   <p className="text-sm text-red-600 mt-1">
-                    Total blocked credit: ${stats.creditOutstanding.toLocaleString()}
+                    Total blocked credit: {formatRupee(stats.creditOutstanding)}
                   </p>
                 </div>
                 <Link 

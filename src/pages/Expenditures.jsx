@@ -36,6 +36,11 @@ const Expenditures = ({ onLogout }) => {
   // State for categories from API
   const [categories, setCategories] = useState([]);
 
+  // Helper function to format Rupee
+  const formatRupee = (amount) => {
+    return `₹${parseFloat(amount || 0).toLocaleString('en-IN')}`;
+  };
+
   useEffect(() => {
     fetchExpenditures();
     fetchCategories();
@@ -252,11 +257,11 @@ const Expenditures = ({ onLogout }) => {
                         />
                       </div>
 
-                      {/* Amount */}
+                      {/* Amount - Changed to Rupee */}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1.5">Amount *</label>
                         <div className="relative">
-                          <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                          <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₹</span>
                           <input
                             type="number"
                             value={newExpense.amount}
@@ -356,9 +361,10 @@ const Expenditures = ({ onLogout }) => {
                       <p className="text-base font-semibold text-gray-900">{showDetails.description}</p>
                     </div>
                     
+                    {/* Amount - Changed to Rupee */}
                     <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-4">
                       <label className="block text-xs font-medium text-gray-500 mb-1">Amount</label>
-                      <p className="text-2xl font-bold text-blue-700">${showDetails.amount.toFixed(2)}</p>
+                      <p className="text-2xl font-bold text-blue-700">{formatRupee(showDetails.amount)}</p>
                     </div>
                     
                     <div className="bg-gray-50 rounded-lg p-3">
@@ -431,17 +437,17 @@ const Expenditures = ({ onLogout }) => {
               </div>
             </div>
             
-            {/* Stats Cards */}
+            {/* Stats Cards - Updated to Rupee */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
               <div className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-lg p-6">
                 <div className="text-sm text-gray-600 mb-1">Total Expenses</div>
-                <div className="text-3xl font-bold text-gray-800">${stats.totalExpenses.toFixed(2)}</div>
+                <div className="text-3xl font-bold text-gray-800">{formatRupee(stats.totalExpenses)}</div>
                 <div className="text-sm text-gray-500 mt-2">All time total</div>
               </div>
               
               <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 border border-yellow-200 rounded-lg p-6">
                 <div className="text-sm text-gray-600 mb-1">Pending Approval</div>
-                <div className="text-3xl font-bold text-yellow-600">${stats.pendingAmount.toFixed(2)}</div>
+                <div className="text-3xl font-bold text-yellow-600">{formatRupee(stats.pendingAmount)}</div>
                 <div className="text-sm text-gray-500 mt-2">{stats.pendingItems} items</div>
               </div>
               
@@ -499,7 +505,7 @@ const Expenditures = ({ onLogout }) => {
               </div>
             </div>
             
-            {/* Recent Expenses Table */}
+            {/* Recent Expenses Table - Amount column updated to Rupee */}
             <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
@@ -540,24 +546,24 @@ const Expenditures = ({ onLogout }) => {
                         <tr key={expense.id} className="hover:bg-gray-50">
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-900">{expense.date}</div>
-                          </td>
+                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-900">{expense.category}</div>
-                          </td>
+                           </td>
                           <td className="px-6 py-4">
                             <div className="text-sm text-gray-900">{expense.description}</div>
-                          </td>
+                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-semibold text-gray-900">${expense.amount.toFixed(2)}</div>
-                          </td>
+                            <div className="text-sm font-semibold text-gray-900">{formatRupee(expense.amount)}</div>
+                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(expense.status)}`}>
                               {expense.status}
                             </span>
-                          </td>
+                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-900">{expense.adminName || 'N/A'}</div>
-                          </td>
+                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                             <button
                               onClick={() => handleViewDetails(expense)}
@@ -566,8 +572,8 @@ const Expenditures = ({ onLogout }) => {
                               <FaEye className="inline-block mr-1" />
                               View Details
                             </button>
-                          </td>
-                        </tr>
+                           </td>
+                         </tr>
                       ))
                     )}
                   </tbody>

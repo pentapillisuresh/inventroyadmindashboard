@@ -27,35 +27,12 @@ const AddProductModal = ({ product, categories = [], onSave, onClose, onCategori
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [localCategories, setLocalCategories] = useState(categories);
   const [categoryLoading, setCategoryLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState(null);
 
   // Initialize local categories when props change
   useEffect(() => {
     setLocalCategories(categories);
   }, [categories]);
-
-  // Fetch fresh categories from API - this ensures data persistence after refresh
-  const fetchCategories = async () => {
-    try {
-      const response = await ApiService.get('/categories', {
-        headers: {
-          Authorization: `Bearer ${clientToken}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      if (response.success && response.categories) {
-        setLocalCategories(response.categories);
-        // Update parent component with fresh categories
-        if (onCategoriesUpdate) {
-          onCategoriesUpdate(response.categories);
-        }
-        return response.categories;
-      }
-      return [];
-    } catch (error) {
-      console.error('Error fetching categories:', error);
-      return [];
-    }
-  };
 
   // Initialize form data
   useEffect(() => {
@@ -84,12 +61,30 @@ const AddProductModal = ({ product, categories = [], onSave, onClose, onCategori
     }
   }, [product, localCategories]);
 
+  // Auto-hide success message after 3 seconds
+  useEffect(() => {
+    if (successMessage) {
+      const timer = setTimeout(() => {
+        setSuccessMessage(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMessage]);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // Add new category with persistence
+  // Update categories immediately in UI without refresh
+  const updateCategoriesInUI = (updatedCategories) => {
+    setLocalCategories(updatedCategories);
+    if (onCategoriesUpdate) {
+      onCategoriesUpdate(updatedCategories);
+    }
+  };
+
+  // Add new category with immediate UI update
   const handleAddCategory = async () => {
     if (!newCategory.trim()) {
       alert('Please enter a category name');
@@ -111,37 +106,35 @@ const AddProductModal = ({ product, categories = [], onSave, onClose, onCategori
       });
       
       if (response && response.category) {
-        // Fetch fresh categories from API
-        const updatedCategories = await fetchCategories();
+        // Create new category object with the response data
+        const newCategoryObj = {
+          id: response.category.id,
+          name: response.category.name,
+          description: response.category.description || ''
+        };
         
-        if (updatedCategories.length > 0) {
-          // Auto-select the newly added category
-          const newCategoryObj = updatedCategories.find(c => c.name.toLowerCase() === newCategory.trim().toLowerCase());
-          if (newCategoryObj) {
-            setFormData(prev => ({ ...prev, categoryId: newCategoryObj.id.toString() }));
-          }
-        }
+        // Immediately update UI with new category
+        const updatedCategories = [...localCategories, newCategoryObj];
+        updateCategoriesInUI(updatedCategories);
         
+        // Auto-select the newly added category
+        setFormData(prev => ({ ...prev, categoryId: newCategoryObj.id.toString() }));
+        
+        // Reset form and show success
         setNewCategory('');
         setShowNewCategory(false);
-        
-        // Show success message
-        const successMsg = document.createElement('div');
-        successMsg.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50 animate-fade-in';
-        successMsg.textContent = 'Category added successfully!';
-        document.body.appendChild(successMsg);
-        setTimeout(() => successMsg.remove(), 3000);
+        setSuccessMessage({ type: 'success', text: 'Category added successfully!' });
       }
     } catch (error) {
       console.error('Error adding category:', error);
       const errorMsg = error.response?.data?.message || error.message || 'Failed to add category';
-      alert(`Error: ${errorMsg}`);
+      setSuccessMessage({ type: 'error', text: errorMsg });
     } finally {
       setCategoryLoading(false);
     }
   };
 
-  // Edit category with persistence
+  // Edit category with immediate UI update
   const handleEditCategory = async (category) => {
     if (!editCategoryName.trim()) {
       alert('Please enter a category name');
@@ -161,37 +154,33 @@ const AddProductModal = ({ product, categories = [], onSave, onClose, onCategori
       });
 
       if (response) {
-        // Fetch fresh categories from API
-        const updatedCategories = await fetchCategories();
+        // Immediately update UI with edited category
+        const updatedCategories = localCategories.map(cat => 
+          cat.id === category.id 
+            ? { ...cat, name: editCategoryName.trim() }
+            : cat
+        );
+        updateCategoriesInUI(updatedCategories);
         
         // Update form data if the edited category was selected
         if (formData.categoryId === category.id.toString()) {
-          const updatedCategory = updatedCategories.find(c => c.id === category.id);
-          if (updatedCategory) {
-            setFormData(prev => ({ ...prev, categoryId: updatedCategory.id.toString() }));
-          }
+          setFormData(prev => ({ ...prev, categoryId: category.id.toString() }));
         }
         
         setEditingCategory(null);
         setEditCategoryName('');
-        
-        // Show success message
-        const successMsg = document.createElement('div');
-        successMsg.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50 animate-fade-in';
-        successMsg.textContent = 'Category updated successfully!';
-        document.body.appendChild(successMsg);
-        setTimeout(() => successMsg.remove(), 3000);
+        setSuccessMessage({ type: 'success', text: 'Category updated successfully!' });
       }
     } catch (error) {
       console.error('Error editing category:', error);
       const errorMsg = error.response?.data?.message || error.message || 'Failed to update category';
-      alert(`Error: ${errorMsg}`);
+      setSuccessMessage({ type: 'error', text: errorMsg });
     } finally {
       setCategoryLoading(false);
     }
   };
 
-  // Delete category with persistence
+  // Delete category with immediate UI update
   const handleDeleteCategory = async (category) => {
     setCategoryLoading(true);
     try {
@@ -202,8 +191,9 @@ const AddProductModal = ({ product, categories = [], onSave, onClose, onCategori
         },
       });
 
-      // Fetch fresh categories from API
-      const updatedCategories = await fetchCategories();
+      // Immediately remove category from UI
+      const updatedCategories = localCategories.filter(cat => cat.id !== category.id);
+      updateCategoriesInUI(updatedCategories);
       
       // If the deleted category was selected, reset category selection
       if (formData.categoryId === category.id.toString()) {
@@ -214,17 +204,11 @@ const AddProductModal = ({ product, categories = [], onSave, onClose, onCategori
       }
       
       setDeleteConfirm(null);
-      
-      // Show success message
-      const successMsg = document.createElement('div');
-      successMsg.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50 animate-fade-in';
-      successMsg.textContent = 'Category deleted successfully!';
-      document.body.appendChild(successMsg);
-      setTimeout(() => successMsg.remove(), 3000);
+      setSuccessMessage({ type: 'success', text: 'Category deleted successfully!' });
     } catch (error) {
       console.error('Error deleting category:', error);
       const errorMsg = error.response?.data?.message || error.message || 'Failed to delete category. Make sure no products are using this category.';
-      alert(`Error: ${errorMsg}`);
+      setSuccessMessage({ type: 'error', text: errorMsg });
     } finally {
       setCategoryLoading(false);
     }
@@ -258,9 +242,11 @@ const AddProductModal = ({ product, categories = [], onSave, onClose, onCategori
       }
 
       await onSave(productData);
+      setSuccessMessage({ type: 'success', text: product ? 'Product updated successfully!' : 'Product added successfully!' });
       
     } catch (error) {
       console.error('Error in form submission:', error);
+      setSuccessMessage({ type: 'error', text: 'Failed to save product. Please try again.' });
     } finally {
       setLoading(false);
     }
@@ -280,6 +266,10 @@ const AddProductModal = ({ product, categories = [], onSave, onClose, onCategori
     );
   };
 
+  const formatRupee = (amount) => {
+    return `₹${parseFloat(amount).toLocaleString('en-IN')}`;
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-xl w-full max-w-lg max-h-[90vh] overflow-hidden shadow-2xl">
@@ -296,6 +286,28 @@ const AddProductModal = ({ product, categories = [], onSave, onClose, onCategori
             <FaTimes size={20} />
           </button>
         </div>
+
+        {/* Success/Error Message Toast */}
+        {successMessage && (
+          <div className={`mx-6 mt-4 p-3 rounded-lg ${
+            successMessage.type === 'success' 
+              ? 'bg-green-50 border border-green-200 text-green-800' 
+              : 'bg-red-50 border border-red-200 text-red-800'
+          }`}>
+            <div className="flex items-center gap-2">
+              {successMessage.type === 'success' ? (
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              )}
+              <span className="text-sm font-medium">{successMessage.text}</span>
+            </div>
+          </div>
+        )}
 
         {/* Scrollable Form Content */}
         <div className="overflow-y-auto px-6 py-5" style={{ maxHeight: 'calc(90vh - 80px)' }}>
@@ -508,14 +520,14 @@ const AddProductModal = ({ product, categories = [], onSave, onClose, onCategori
               )}
             </div>
 
-            {/* Price, Stock, Cost Price */}
+            {/* Price, Stock, Cost Price - Changed to Rupee symbol */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Selling Price *
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₹</span>
                   <input
                     type="number"
                     name="price"
@@ -536,7 +548,7 @@ const AddProductModal = ({ product, categories = [], onSave, onClose, onCategori
                   Cost Price *
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₹</span>
                   <input
                     type="number"
                     name="costPrice"

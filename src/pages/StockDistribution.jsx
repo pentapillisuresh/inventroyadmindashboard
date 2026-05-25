@@ -26,6 +26,12 @@ const StockDistribution = ({ onLogout }) => {
     totalValue: 0
   });
   const clientToken = localStorage.getItem('token');
+
+  // Helper function to format Rupee
+  const formatRupee = (amount) => {
+    return `₹${parseFloat(amount || 0).toLocaleString('en-IN')}`;
+  };
+
   useEffect(() => {
     loadDistributions();
   }, []);
@@ -175,14 +181,6 @@ const StockDistribution = ({ onLogout }) => {
         }))
       };
 
-      // Here you would make a POST request to create an invoice
-      // const response = await fetch('http://localhost:5001/api/invoice/create', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(apiData)
-      // });
-
-      // For now, we'll just reload the data
       console.log('Saving distribution:', apiData);
       
       loadDistributions();
@@ -199,11 +197,10 @@ const StockDistribution = ({ onLogout }) => {
 
   const handleStatusUpdate = async (invoiceNumber, newStatus) => {
     try {
-      // Map your UI status to API status
       const mapToApiStatus = (uiStatus) => {
         switch (uiStatus) {
           case 'Pending': return 'pending';
-          case 'In Transit': return 'pending'; // API doesn't have this status
+          case 'In Transit': return 'pending';
           case 'Completed': return 'completed';
           case 'Cancelled': return 'cancelled';
           default: return 'pending';
@@ -211,17 +208,8 @@ const StockDistribution = ({ onLogout }) => {
       };
 
       const apiStatus = mapToApiStatus(newStatus);
-      
-      // Find the invoice ID
       const distribution = distributions.find(d => d.id === invoiceNumber);
       
-      // Here you would make a PATCH request to update the status
-      // const response = await fetch(`http://localhost:5001/api/invoice/updateStatus/${distribution.invoiceId}`, {
-      //   method: 'PATCH',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ status: apiStatus })
-      // });
-
       console.log(`Updating status of ${invoiceNumber} to ${apiStatus}`);
       
       loadDistributions();
@@ -233,16 +221,8 @@ const StockDistribution = ({ onLogout }) => {
   const handleDeleteDistribution = async (invoiceNumber) => {
     if (window.confirm('Are you sure you want to delete this distribution?')) {
       try {
-        // Find the invoice ID
         const distribution = distributions.find(d => d.id === invoiceNumber);
-        
-        // Here you would make a DELETE request
-        // const response = await fetch(`http://localhost:5001/api/invoice/delete/${distribution.invoiceId}`, {
-        //   method: 'DELETE'
-        // });
-
         console.log(`Deleting invoice: ${invoiceNumber}`);
-        
         loadDistributions();
       } catch (error) {
         console.error('Error deleting distribution:', error);
@@ -318,7 +298,7 @@ const StockDistribution = ({ onLogout }) => {
               </button>
             </div>
             
-            {/* Stats Cards */}
+            {/* Stats Cards - Updated to Rupee */}
             <div className="grid grid-cols-2 lg:grid-cols-7 gap-4 mb-8">
               <div className="col-span-2 lg:col-span-2 bg-white p-5 rounded-xl border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
                    onClick={() => setStatusFilter('All')}>
@@ -326,7 +306,7 @@ const StockDistribution = ({ onLogout }) => {
                   <div>
                     <div className="text-sm text-gray-500 mb-1">All Distributions</div>
                     <div className="text-2xl font-bold text-gray-800">{stats.all}</div>
-                    <div className="text-xs text-gray-500 mt-1">Total Value: ${stats.totalValue.toLocaleString()}</div>
+                    <div className="text-xs text-gray-500 mt-1">Total Value: {formatRupee(stats.totalValue)}</div>
                   </div>
                   <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
                     <FaTruck className="text-blue-600 text-lg" />
@@ -381,7 +361,7 @@ const StockDistribution = ({ onLogout }) => {
                     <div className="text-2xl font-bold text-green-600">{stats.paid}</div>
                   </div>
                   <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                    <span className="text-green-600 font-bold">$</span>
+                    <span className="text-green-600 font-bold">₹</span>
                   </div>
                 </div>
               </div>
@@ -394,7 +374,7 @@ const StockDistribution = ({ onLogout }) => {
                     <div className="text-2xl font-bold text-blue-600">{stats.credit}</div>
                   </div>
                   <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                    <span className="text-blue-600 font-bold">CR</span>
+                    <span className="text-blue-600 font-bold">₹</span>
                   </div>
                 </div>
               </div>
@@ -419,7 +399,7 @@ const StockDistribution = ({ onLogout }) => {
                 
                 {/* Filters Row */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* Status Filter - Updated according to invoice model */}
+                  {/* Status Filter */}
                   <div className="relative">
                     <div className="flex items-center space-x-2">
                       <FaFilter className="text-gray-400" />
@@ -436,7 +416,7 @@ const StockDistribution = ({ onLogout }) => {
                     </div>
                   </div>
                   
-                  {/* Payment Filter - Updated according to invoice model */}
+                  {/* Payment Filter */}
                   <div className="relative">
                     <select
                       value={paymentFilter}
@@ -542,10 +522,10 @@ const StockDistribution = ({ onLogout }) => {
                           </td>
                           <td className="px-6 py-4">
                             <div className="text-sm font-semibold text-gray-900">
-                              ${distribution.totalValue.toFixed(2)}
+                              {formatRupee(distribution.totalValue)}
                               {distribution.creditAmount > 0 && (
                                 <div className="text-xs text-blue-600">
-                                  Credit: ${distribution.creditAmount.toFixed(2)}
+                                  Credit: {formatRupee(distribution.creditAmount)}
                                 </div>
                               )}
                             </div>
@@ -643,7 +623,7 @@ const StockDistribution = ({ onLogout }) => {
         />
       )}
 
-      {/* Distribution Details Modal */}
+      {/* Distribution Details Modal - Updated to Rupee */}
       {showDetailsModal && selectedDistribution && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
           <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -693,7 +673,7 @@ const StockDistribution = ({ onLogout }) => {
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Total Value</p>
-                    <p className="text-xl font-bold text-gray-900">${selectedDistribution.totalValue.toFixed(2)}</p>
+                    <p className="text-xl font-bold text-gray-900">{formatRupee(selectedDistribution.totalValue)}</p>
                   </div>
                 </div>
               </div>
@@ -715,11 +695,11 @@ const StockDistribution = ({ onLogout }) => {
                             </div>
                             <div>
                               <p className="text-sm text-gray-600">Price</p>
-                              <p className="font-medium">${product.price.toFixed(2)}</p>
+                              <p className="font-medium">{formatRupee(product.price)}</p>
                             </div>
                             <div>
                               <p className="text-sm text-gray-600">Total</p>
-                              <p className="font-medium">${product.total.toFixed(2)}</p>
+                              <p className="font-medium">{formatRupee(product.total)}</p>
                             </div>
                           </div>
                         </div>
@@ -736,16 +716,16 @@ const StockDistribution = ({ onLogout }) => {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <p className="text-sm text-gray-600">Total Amount</p>
-                      <p className="text-lg font-semibold">${selectedDistribution.totalValue.toFixed(2)}</p>
+                      <p className="text-lg font-semibold">{formatRupee(selectedDistribution.totalValue)}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-600">Paid Amount</p>
-                      <p className="text-lg font-semibold text-green-600">${selectedDistribution.paidAmount?.toFixed(2) || '0.00'}</p>
+                      <p className="text-lg font-semibold text-green-600">{formatRupee(selectedDistribution.paidAmount || 0)}</p>
                     </div>
                     {selectedDistribution.creditAmount > 0 && (
                       <div>
                         <p className="text-sm text-gray-600">Credit Amount</p>
-                        <p className="text-lg font-semibold text-blue-600">${selectedDistribution.creditAmount.toFixed(2)}</p>
+                        <p className="text-lg font-semibold text-blue-600">{formatRupee(selectedDistribution.creditAmount)}</p>
                       </div>
                     )}
                   </div>
@@ -765,7 +745,7 @@ const StockDistribution = ({ onLogout }) => {
                   </div>
                   <div className="flex justify-between border-t border-gray-200 pt-2">
                     <span className="text-lg font-semibold">Total Amount</span>
-                    <span className="text-xl font-bold text-gray-900">${selectedDistribution.totalValue.toFixed(2)}</span>
+                    <span className="text-xl font-bold text-gray-900">{formatRupee(selectedDistribution.totalValue)}</span>
                   </div>
                 </div>
               </div>

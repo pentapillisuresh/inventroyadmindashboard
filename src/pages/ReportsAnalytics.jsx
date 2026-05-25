@@ -31,6 +31,11 @@ const ReportsAnalytics = ({ onLogout }) => {
   const [reportData, setReportData] = useState(null);
   const [showReportDetails, setShowReportDetails] = useState(false);
 
+  // Helper function to format Rupee
+  const formatRupee = (amount) => {
+    return `₹${parseFloat(amount || 0).toLocaleString('en-IN')}`;
+  };
+
   useEffect(() => {
     loadReports();
   }, []);
@@ -171,10 +176,11 @@ const ReportsAnalytics = ({ onLogout }) => {
           </button>
         </div>
 
+        {/* Summary Cards - Updated to Rupee */}
         <div className="mb-6 p-4 bg-blue-50 rounded-lg">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="text-center">
-              <div className="text-2xl font-bold text-gray-800">${reportData.TotalRevenue?.toLocaleString() || '0'}</div>
+              <div className="text-2xl font-bold text-gray-800">{formatRupee(reportData.TotalRevenue || 0)}</div>
               <div className="text-sm text-gray-500">Total Revenue</div>
             </div>
             <div className="text-center">
@@ -182,7 +188,7 @@ const ReportsAnalytics = ({ onLogout }) => {
               <div className="text-sm text-gray-500">Total Invoices</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-gray-800">${reportData.TotalCredit?.toLocaleString() || '0'}</div>
+              <div className="text-2xl font-bold text-gray-800">{formatRupee(reportData.TotalCredit || 0)}</div>
               <div className="text-sm text-gray-500">Total Credit</div>
             </div>
           </div>
@@ -202,7 +208,7 @@ const ReportsAnalytics = ({ onLogout }) => {
                 <div className="text-sm text-gray-500">Total Quantity</div>
               </div>
               <div className="bg-gray-50 p-4 rounded-lg">
-                <div className="text-2xl font-bold text-gray-800">${summary.totalValue}</div>
+                <div className="text-2xl font-bold text-gray-800">{formatRupee(summary.totalValue)}</div>
                 <div className="text-sm text-gray-500">Total Value</div>
               </div>
               <div className="bg-gray-50 p-4 rounded-lg">
@@ -262,11 +268,11 @@ const ReportsAnalytics = ({ onLogout }) => {
             <h3 className="text-lg font-semibold text-gray-700 mb-4">Credit Summary</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
               <div className="bg-gray-50 p-4 rounded-lg">
-                <div className="text-2xl font-bold text-gray-800">${summary.totalCreditGiven}</div>
+                <div className="text-2xl font-bold text-gray-800">{formatRupee(summary.totalCreditGiven)}</div>
                 <div className="text-sm text-gray-500">Total Credit Given</div>
               </div>
               <div className="bg-gray-50 p-4 rounded-lg">
-                <div className="text-2xl font-bold text-gray-800">${summary.totalOutstanding}</div>
+                <div className="text-2xl font-bold text-gray-800">{formatRupee(summary.totalOutstanding)}</div>
                 <div className="text-sm text-gray-500">Total Outstanding</div>
               </div>
               <div className="bg-gray-50 p-4 rounded-lg">
@@ -290,15 +296,15 @@ const ReportsAnalytics = ({ onLogout }) => {
                 <div className="text-sm text-gray-500">Total Expenditures</div>
               </div>
               <div className="bg-gray-50 p-4 rounded-lg">
-                <div className="text-2xl font-bold text-gray-800">${summary.totalAmount}</div>
+                <div className="text-2xl font-bold text-gray-800">{formatRupee(summary.totalAmount)}</div>
                 <div className="text-sm text-gray-500">Total Amount</div>
               </div>
               <div className="bg-gray-50 p-4 rounded-lg">
-                <div className="text-2xl font-bold text-gray-800">${summary.verifiedAmount}</div>
+                <div className="text-2xl font-bold text-gray-800">{formatRupee(summary.verifiedAmount)}</div>
                 <div className="text-sm text-gray-500">Verified Amount</div>
               </div>
               <div className="bg-gray-50 p-4 rounded-lg">
-                <div className="text-2xl font-bold text-gray-800">${summary.pendingAmount}</div>
+                <div className="text-2xl font-bold text-gray-800">{formatRupee(summary.pendingAmount)}</div>
                 <div className="text-sm text-gray-500">Pending Amount</div>
               </div>
             </div>
@@ -328,7 +334,7 @@ const ReportsAnalytics = ({ onLogout }) => {
               <p className="text-gray-600 mt-1">Analyze performance and export data for insights</p>
             </div>
 
-            {/* Stats Cards */}
+            {/* Stats Cards - Updated to Rupee */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
               <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
@@ -339,7 +345,7 @@ const ReportsAnalytics = ({ onLogout }) => {
                     {stats.revenueChange >= 0 ? '+' : ''}{stats.revenueChange}%
                   </span>
                 </div>
-                <div className="text-2xl font-bold text-gray-800">${stats.revenue.toLocaleString()}</div>
+                <div className="text-2xl font-bold text-gray-800">{formatRupee(stats.revenue)}</div>
                 <div className="text-sm text-gray-500 mt-1">Total Revenue</div>
               </div>
 
@@ -378,7 +384,7 @@ const ReportsAnalytics = ({ onLogout }) => {
                     {stats.creditChange >= 0 ? '+' : ''}{stats.creditChange}%
                   </span>
                 </div>
-                <div className="text-2xl font-bold text-gray-800">${stats.credit.toLocaleString()}</div>
+                <div className="text-2xl font-bold text-gray-800">{formatRupee(stats.credit)}</div>
                 <div className="text-sm text-gray-500 mt-1">Total Credit</div>
               </div>
             </div>
