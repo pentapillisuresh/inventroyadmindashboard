@@ -7,6 +7,7 @@ import ApiService from '../components/ApiService';
 
 // Create Manager Modal
 const CreateManagerModal = ({ isOpen, onClose, manager, onSubmit, stores }) => {
+  console.log("editstroe:::",stores)
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -27,6 +28,7 @@ const CreateManagerModal = ({ isOpen, onClose, manager, onSubmit, stores }) => {
   });
 
   const [loading, setLoading] = useState(false);
+  console.log()
 
   useEffect(() => {
     if (manager) {
@@ -36,7 +38,7 @@ const CreateManagerModal = ({ isOpen, onClose, manager, onSubmit, stores }) => {
         phoneNumber: manager.phoneNumber || '',
         storeId: manager.storeId || '',
         password: '',
-        permissions: manager.permissions || {
+        permissions: JSON.parse(manager.permissions) || {
           create_store: false,
           create_invoices: false,
           expenditure_management: false,
@@ -189,7 +191,7 @@ const CreateManagerModal = ({ isOpen, onClose, manager, onSubmit, stores }) => {
                   />
                 </div>
               </div>
-
+              {!manager && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Assign Store *
@@ -199,7 +201,7 @@ const CreateManagerModal = ({ isOpen, onClose, manager, onSubmit, stores }) => {
                   value={formData.storeId}
                   onChange={handleChange}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  required
+                  required={manager ? false :true }
                 >
                   <option value="">Select a store</option>
                   {stores.map(store => (
@@ -209,7 +211,8 @@ const CreateManagerModal = ({ isOpen, onClose, manager, onSubmit, stores }) => {
                   ))}
                 </select>
               </div>
-
+              )}
+              
               {!manager && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -541,7 +544,7 @@ const ManagerManagement = ({ onLogout }) => {
       if (!response) {
         throw new Error('No response from server');
       }
-  console.log("rrr:::",response)
+
       if (response) {
         alert(`Manager ${currentManager ? 'updated' : 'created'} successfully!`);
         loadManagers();

@@ -1,18 +1,25 @@
+// storemanagment
+
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
-import { FaEye, FaEdit, FaTrash, FaPlus, FaUser, FaPhone, FaBox, FaChartBar, FaTimes, FaSave } from 'react-icons/fa';
+import { FaEye, FaEdit, FaTrash, FaPlus, FaUser, FaPhone, FaBox, FaChartBar, FaTimes, FaSave, FaUserCheck } from 'react-icons/fa';
 import { storage } from '../data/storage';
 import ApiService from '../components/ApiService';
 
 const StoreManagement = ({ onLogout }) => {
   const [stores, setStores] = useState([]);
   const [managers, setManagers] = useState([]);
+  const [nonAssignedManagers, setNonAssignedManagers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
   const [editingStore, setEditingStore] = useState(null);
+  const [assigningStore, setAssigningStore] = useState(null);
+  const [selectedManager, setSelectedManager] = useState('');
   const [loading, setLoading] = useState(false);
+  const [assignLoading, setAssignLoading] = useState(false);
   const [stats, setStats] = useState({
     totalStores: 0,
     activeStores: 0,
@@ -28,7 +35,11 @@ const StoreManagement = ({ onLogout }) => {
     managerId: '',
     phone: '',
     stockValue: '',
-    status: 'Active'
+    status: 'Active',
+    officeAddress: '',
+    FSSAI_No: '',
+    GST_No: '',
+    CIN_No: ''
   });
 
   // Get admin ID from localStorage
@@ -44,7 +55,26 @@ const StoreManagement = ({ onLogout }) => {
   useEffect(() => {
     // Load data from APIs
     loadData();
+    loadNonAssignedManagers();
   }, []);
+
+  const loadNonAssignedManagers = async () => {
+    try {
+      const response = await ApiService.get('/users/getNonAssignedManagers', {
+        headers: {
+          Authorization: `Bearer ${clientToken}`,
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      if (response.success) {
+        setNonAssignedManagers(response.data);
+      }
+    } catch (error) {
+      console.error('Error loading non-assigned managers:', error);
+      setNonAssignedManagers([]);
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -150,6 +180,7 @@ const StoreManagement = ({ onLogout }) => {
           
           // Reload stats
           await loadData();
+          await loadNonAssignedManagers();
           
           alert('Store deleted successfully!');
         } else {
@@ -175,9 +206,128 @@ const StoreManagement = ({ onLogout }) => {
       managerId: store.managerId || '',
       phone: store.phoneNumber || '',
       stockValue: store.stockValue || '0',
-      status: store.isActive ? 'Active' : 'Inactive'
+      status: store.isActive ? 'Active' : 'Inactive',
+      officeAddress: store.officeAddress || '',
+      FSSAI_No: store.FSSAI_No || '',
+      GST_No: store.GST_No || '',
+      CIN_No: store.CIN_No || ''
     });
     setShowEditModal(true);
+  };
+
+  const handleOpenAssignModal = (store) => {
+    setAssigningStore(store);
+    setSelectedManager('');
+    setShowAssignModal(true);
+    // Refresh non-assigned managers list when opening modal
+    loadNonAssignedManagers();
+  };
+
+  const handleCloseAssignModal = () => {
+    if (window.confirm('Are you sure you want to cancel? Any unsaved changes will be lost.')) {
+      setShowAssignModal(false);
+      setAssigningStore(null);
+      setSelectedManager('');
+    }
+  };
+
+  const handleAssignManager = async () => {
+    if (!selectedManager) {
+      alert('Please select a manager to assign');
+      return;
+    }
+
+    const selectedManagerData = nonAssignedManagers.find(m => m.id === parseInt(selectedManager));
+    
+    if (!selectedManagerData) {
+      alert('Selected manager not found');
+      return;
+    }
+
+    setAssignLoading(true);
+    
+    try {
+      const response = await ApiService.put(
+        `/stores/assignedStores/${assigningStore.id}`,
+        { managerId: selectedManagerData.id },
+        {
+          headers: {
+            Authorization: `Bearer ${clientToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      
+      if (response) {
+        alert(`Manager "${selectedManagerData.name}" assigned to "${assigningStore.name}" successfully!`);
+        
+        // Refresh data
+        await loadData();
+        await loadNonAssignedManagers();
+        
+        // Close modal
+        setShowAssignModal(false);
+        setAssigningStore(null);
+        setSelectedManager('');
+      } else {
+        throw new Error('Failed to assign manager');
+      }
+    } catch (error) {
+      console.error("Assign failed:", error);
+      alert(
+        error?.response?.data?.message ||
+        "Failed to assign manager. Please try again."
+      );
+    } finally {
+      setAssignLoading(false);
+    }
+  };
+
+  const handleUnassignStore = async (store) => {
+    // Check if manager is assigned
+    if (!store?.managerId) {
+      alert(`No manager was assigned to ${store?.name} store`);
+      return;
+    }
+  
+    // Confirmation popup
+    const isConfirmed = window.confirm(
+      `Are you sure you want to unassign the manager from ${store?.name} store?`
+    );
+  
+    // If cancelled
+    if (!isConfirmed) {
+      return;
+    }
+  
+    try {
+      const response = await ApiService.put(
+        `/stores/UnassignedStores/${store.id}`,
+        {}, // request body
+        {
+          headers: {
+            Authorization: `Bearer ${clientToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+  
+      if (response) {
+        alert("Manager unassigned successfully");
+        
+        // Refresh data
+        await loadData();
+        await loadNonAssignedManagers();
+      } else {
+        throw new Error('Failed to unassign manager');
+      }
+    } catch (error) {
+      console.error("Unassign failed:", error);
+      alert(
+        error?.response?.data?.message ||
+        "Failed to unassign manager"
+      );
+    }
   };
 
   const handleSaveEdit = async (e) => {
@@ -197,7 +347,11 @@ const StoreManagement = ({ onLogout }) => {
         email: editingStore.email || '',
         creditLimit: parseFloat(formData.capacity.replace(/[^0-9.-]+/g, '')) || editingStore.creditLimit,
         isActive: formData.status === 'Active',
-        managerId: formData.managerId || null
+        managerId: formData.managerId || null,
+        officeAddress: formData.officeAddress,
+        FSSAI_No: formData.FSSAI_No,
+        GST_No: formData.GST_No,
+        CIN_No: formData.CIN_No
       };
       
       // Call API to update store
@@ -229,7 +383,11 @@ const StoreManagement = ({ onLogout }) => {
           totalValue: `$${response.stockValue || 0}`,
           totalItems: parseInt(response.totalProductQuantity) || 0,
           creditLimit: response.creditLimit,
-          currentCredit: response.currentCredit
+          currentCredit: response.currentCredit,
+          officeAddress: response.officeAddress,
+          FSSAI_No: response.FSSAI_No,
+          GST_No: response.GST_No,
+          CIN_No: response.CIN_No
         };
         storage.updateStore(response.id, localStorageStore);
         
@@ -243,6 +401,7 @@ const StoreManagement = ({ onLogout }) => {
         
         // Reload data to get updated stats
         await loadData();
+        await loadNonAssignedManagers();
         
         // Close modal
         setShowEditModal(false);
@@ -275,7 +434,11 @@ const StoreManagement = ({ onLogout }) => {
       managerId: '',
       phone: '',
       stockValue: '',
-      status: 'Active'
+      status: 'Active',
+      officeAddress: '',
+      FSSAI_No: '',
+      GST_No: '',
+      CIN_No: ''
     });
   };
 
@@ -445,7 +608,7 @@ const StoreManagement = ({ onLogout }) => {
                           </Link>
                           <button
                             onClick={() => handleEditStore(store)}
-                            className="p2 hover:bg-blue-50 rounded-lg transition"
+                            className="p-2 hover:bg-blue-50 rounded-lg transition"
                             title="Edit"
                           >
                             <FaEdit className="text-blue-600" />
@@ -528,12 +691,22 @@ const StoreManagement = ({ onLogout }) => {
                         >
                           View Reports
                         </Link>
-                        <button 
-                          onClick={() => handleEditStore(store)}
-                          className="flex-1 text-sm text-gray-600 hover:text-gray-800 py-1 text-center border border-gray-200 rounded hover:bg-gray-50 transition"
-                        >
-                          Edit Store
-                        </button>
+                        {Boolean(store.managerId) ? (
+                          <button 
+                            onClick={() => handleUnassignStore(store)}
+                            className="flex-1 text-sm text-gray-600 hover:text-gray-800 py-1 text-center border border-gray-200 rounded hover:bg-gray-50 transition"
+                          >
+                            Unassign
+                          </button>
+                        ) : (
+                          <button 
+                            onClick={() => handleOpenAssignModal(store)}
+                            className="flex-1 text-sm text-green-600 hover:text-green-800 py-1 text-center border border-green-200 rounded hover:bg-green-50 transition"
+                          >
+                            <FaUserCheck className="inline mr-1" />
+                            Assign
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -584,8 +757,112 @@ const StoreManagement = ({ onLogout }) => {
               </p>
             </div>
           )}
-        </main>
+        </main> 
       </div>
+
+      {/* Assign Manager Modal */}
+      {showAssignModal && assigningStore && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full">
+            {/* Modal Header */}
+            <div className="border-b border-gray-200 p-6 flex justify-between items-center">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-800">Assign Manager</h2>
+                <p className="text-gray-600 mt-1">
+                  Assign a manager to <strong>{assigningStore.name}</strong>
+                </p>
+              </div>
+              <button
+                onClick={handleCloseAssignModal}
+                className="text-gray-400 hover:text-gray-600 text-xl"
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Manager *
+                  </label>
+                  <select
+                    value={selectedManager}
+                    onChange={(e) => setSelectedManager(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                    required
+                  >
+                    <option value="">Select a manager</option>
+                    {nonAssignedManagers.map((manager) => (
+                      <option key={manager.id} value={manager.id}>
+                        {manager.name} - {manager.email} ({manager.phoneNumber})
+                      </option>
+                    ))}
+                  </select>
+                  {nonAssignedManagers.length === 0 && (
+                    <p className="mt-2 text-sm text-yellow-600">
+                      No unassigned managers available. All managers are already assigned to stores.
+                    </p>
+                  )}
+                </div>
+
+                {/* Store Info Summary */}
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <p className="text-sm font-medium text-gray-700 mb-2">Store Information:</p>
+                  <p className="text-sm text-gray-600">
+                    <strong>Name:</strong> {assigningStore.name}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    <strong>Address:</strong> {assigningStore.address}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    <strong>Phone:</strong> {assigningStore.phoneNumber || 'N/A'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="border-t border-gray-200 p-6 flex space-x-3">
+              <button
+                type="button"
+                onClick={handleCloseAssignModal}
+                className="flex-1 bg-gray-600 text-white py-3 px-4 rounded-lg hover:bg-gray-700 transition font-medium flex items-center justify-center space-x-2"
+                disabled={assignLoading}
+              >
+                <FaTimes />
+                <span>Cancel</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleAssignManager}
+                disabled={assignLoading || !selectedManager || nonAssignedManagers.length === 0}
+                className={`flex-1 py-3 px-4 rounded-lg font-medium flex items-center justify-center space-x-2 transition ${
+                  assignLoading || !selectedManager || nonAssignedManagers.length === 0
+                    ? 'bg-blue-400 cursor-not-allowed'
+                    : 'bg-blue-600 hover:bg-blue-700'
+                } text-white`}
+              >
+                {assignLoading ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Assigning...</span>
+                  </>
+                ) : (
+                  <>
+                    <FaUserCheck />
+                    <span>Assign Manager</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Edit Store Modal */}
       {showEditModal && (
@@ -641,6 +918,66 @@ const StoreManagement = ({ onLogout }) => {
                     />
                   </div>
 
+                  {/* Office Address */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Office Address
+                    </label>
+                    <textarea
+                      name="officeAddress"
+                      value={formData.officeAddress}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                      placeholder="Enter office address"
+                      rows="2"
+                    />
+                  </div>
+
+                  {/* FSSAI Number */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      FSSAI Number
+                    </label>
+                    <input
+                      type="text"
+                      name="FSSAI_No"
+                      value={formData.FSSAI_No}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                      placeholder="Enter FSSAI number"
+                    />
+                  </div>
+
+                  {/* GST Number */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      GST Number
+                    </label>
+                    <input
+                      type="text"
+                      name="GST_No"
+                      value={formData.GST_No}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                      placeholder="Enter GST number"
+                    />
+                  </div>
+
+                  {/* CIN Number */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      CIN Number
+                    </label>
+                    <input
+                      type="text"
+                      name="CIN_No"
+                      value={formData.CIN_No}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                      placeholder="Enter CIN number"
+                    />
+                  </div>
+
                   {/* Capacity (Credit Limit) */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -671,52 +1008,6 @@ const StoreManagement = ({ onLogout }) => {
                       placeholder="e.g., 91105423536"
                     />
                   </div>
-
-                  {/* Assign Manager */}
-                  {/* <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Assign Manager
-                    </label>
-                    <select
-                      name="managerId"
-                      value={formData.managerId}
-                      onChange={handleChange}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-                    >
-                      <option value="">Select a manager</option>
-                      {getAvailableManagers().map((manager) => (
-                        <option key={manager.id} value={manager.id}>
-                          {manager.name} - {manager.email}
-                          {manager.storeId === editingStore?.id && ' (Current)'}
-                          {!manager.storeId && ' (Available)'}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="mt-2 text-sm text-gray-500">
-                      {getAvailableManagers().length === 0 && (
-                        <p className="text-red-600">No available managers. All managers are assigned to other stores.</p>
-                      )}
-                      {formData.managerId && (
-                        <p className="text-green-600">
-                          Selected manager will be assigned to this store.
-                          {getAvailableManagers().find(m => m.id === parseInt(formData.managerId))?.storeId && 
-                           ' Current assignment will be replaced.'}
-                        </p>
-                      )}
-                    </div>
-                  </div> */}
-
-                  {/* Current Manager Info (if any) */}
-                  {/* {editingStore && getStoreManager(editingStore) && !formData.managerId && (
-                    <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
-                      <p className="text-sm text-gray-700">
-                        <span className="font-medium">Current Manager:</span> {getStoreManager(editingStore)?.name}
-                      </p>
-                      <p className="text-xs text-gray-600 mt-1">
-                        Selecting a new manager will replace the current assignment.
-                      </p>
-                    </div>
-                  )} */}
 
                   {/* Status */}
                   <div>

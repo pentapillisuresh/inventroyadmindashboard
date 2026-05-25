@@ -1,196 +1,174 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import Sidebar from './Sidebar';
+import Header from './Header';
 import {
-  FaEye,
-  FaDownload,
-  FaPrint,
-  FaTimesCircle,
-  FaSearch,
-  FaFilter,
-  FaChevronLeft,
-  FaChevronRight,
-  FaFileInvoice,
-  FaCheckCircle,
-  FaClock,
-  FaRupeeSign,
-  FaStore,
-  FaUser,
-  FaCalendarAlt,
-  FaMapMarkerAlt,
-  FaTruck,
-} from "react-icons/fa";
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
-import Header from "./Header";
-import Sidebar from "./Sidebar";
-
-// ================= DYNAMIC DATA =================
-const INITIAL_INVOICES = [
-  {
-    id: "INV-001",
-    customer: "SHANMUKA SAI AGENCIES",
-    city: "VISAKHAPATNAM",
-    date: "29-04-26",
-    dueDate: "29-05-26",
-    amount: "11137.34",
-    status: "Paid",
-    paymentMethod: "Bank Transfer",
-    notes: "Thank you for your business!",
-    items: [
-      {
-        hsn: "21050000",
-        itemNo: "1334371",
-        flavour: "MFFD CHOCO CRUNCH",
-        mrp: "300.00",
-        pack: "30 ML X 30",
-        qty: "27.00",
-        batch: "D-26-16",
-        delvd: "27.00",
-        rate: "212.14",
-        ltr: "24.30",
-        amt: "5727.78",
-        sgst: "143.19",
-        cgst: "143.19",
-        net: "6014.16",
-      },
-      {
-        hsn: "21050000",
-        itemNo: "2322377",
-        flavour: "LFIC JR. CHOCO BAR",
-        mrp: "300.00",
-        pack: "30 ML X 30",
-        qty: "23.00",
-        batch: "D-26-16",
-        delvd: "23.00",
-        rate: "212.14",
-        ltr: "20.70",
-        amt: "4879.22",
-        sgst: "121.98",
-        cgst: "121.98",
-        net: "5123.18",
-      },
-    ],
-  },
-  {
-    id: "INV-002",
-    customer: "SRI DURGA AGENCIES",
-    city: "HYDERABAD",
-    date: "30-04-26",
-    dueDate: "30-05-26",
-    amount: "15300.00",
-    status: "Pending",
-    paymentMethod: "Cheque",
-    notes: "Please make payment within due date.",
-    items: [
-      {
-        hsn: "21050000",
-        itemNo: "111111",
-        flavour: "VANILLA ICE CREAM",
-        mrp: "250.00",
-        pack: "20 ML X 20",
-        qty: "40",
-        batch: "BATCH-01",
-        delvd: "40",
-        rate: "180.00",
-        ltr: "30",
-        amt: "7200",
-        sgst: "180",
-        cgst: "180",
-        net: "7560",
-      },
-    ],
-  },
-  {
-    id: "INV-003",
-    customer: "MAHESH TRADING CO",
-    city: "VIJAYAWADA",
-    date: "01-05-26",
-    dueDate: "01-06-26",
-    amount: "28750.00",
-    status: "Overdue",
-    paymentMethod: "Cash",
-    notes: "Past due amount. Please clear immediately.",
-    items: [
-      {
-        hsn: "21050000",
-        itemNo: "1334371",
-        flavour: "MFFD CHOCO CRUNCH",
-        mrp: "300.00",
-        pack: "30 ML X 30",
-        qty: "50",
-        batch: "D-26-16",
-        delvd: "45",
-        rate: "212.14",
-        ltr: "45",
-        amt: "9546.30",
-        sgst: "238.66",
-        cgst: "238.66",
-        net: "10023.62",
-      },
-      {
-        hsn: "21050000",
-        itemNo: "2322377",
-        flavour: "LFIC JR. CHOCO BAR",
-        mrp: "300.00",
-        pack: "30 ML X 30",
-        qty: "60",
-        batch: "D-26-16",
-        delvd: "60",
-        rate: "212.14",
-        ltr: "54",
-        amt: "12728.40",
-        sgst: "318.21",
-        cgst: "318.21",
-        net: "13364.82",
-      },
-    ],
-  },
-];
+  FaSearch, FaFilter, FaEye, FaCheckCircle, FaTimesCircle,
+  FaFileInvoice, FaExclamationTriangle, FaDownload, FaPrint,
+  FaRupeeSign, FaClock, FaStore, FaUser, FaCalendarAlt,
+  FaMapMarkerAlt, FaTruck, FaBox, FaHashtag, FaDollarSign
+} from 'react-icons/fa';
+import ApiService from '../components/ApiService';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 const InvoiceManagement = ({ onLogout }) => {
+  const navigate = useNavigate();
+  const { id } = useParams();
   const invoiceRef = useRef();
-  const [invoices, setInvoices] = useState(INITIAL_INVOICES);
+  const [invoices, setInvoices] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All');
   const [selectedInvoice, setSelectedInvoice] = useState(null);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All");
-  const [currentPage, setCurrentPage] = useState(1);
+  const [storeCreditStatus, setStoreCreditStatus] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [isDownloading, setIsDownloading] = useState(false);
-  const itemsPerPage = 5;
-
-  // Filter invoices based on search and status
-  const filteredInvoices = invoices.filter((invoice) => {
-    const matchesSearch =
-      invoice.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      invoice.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      invoice.city.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === "All" || invoice.status === statusFilter;
-    return matchesSearch && matchesStatus;
+  const [stats, setStats] = useState({
+    total: 0,
+    outlet_sale: 0,
+    credit: 0,
+    paid: 0,
+    totalValue: 0
   });
 
-  // Pagination
-  const totalPages = Math.ceil(filteredInvoices.length / itemsPerPage);
-  const paginatedInvoices = filteredInvoices.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  const clientToken = localStorage.getItem('token');
 
-  // Reset page when filters change
   useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, statusFilter]);
+    loadInvoices();
+  }, []);
 
-  // ================= PDF GENERATION =================
+  useEffect(() => {
+    if (id) {
+      const invoice = invoices.find(inv => inv.id.toString() === id);
+      setSelectedInvoice(invoice);
+      if (invoice && invoice.type === 'credit' && invoice.Store) {
+        checkStoreCredit(invoice.Store, invoice.totalAmount);
+      }
+    }
+  }, [id, invoices]);
+
+  const loadInvoices = async () => {
+    try {
+      setLoading(true);
+      const response = await ApiService.get('/invoice/allDistributed/Invoices/admin', {
+        headers: {
+          Authorization: `Bearer ${clientToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.invoices) {
+        const transformedInvoices = response.invoices.map(invoice => {
+          const totalItems = invoice.items.reduce((sum, item) => sum + item.quantity, 0);
+
+          const mapStatus = (status) => {
+            switch (status) {
+              case 'pending': return 'pending';
+              case 'completed': return 'completed';
+              case 'cancelled': return 'cancelled';
+              default: return status;
+            }
+          };
+
+          const mapPaymentMethod = (method) => {
+            switch (method) {
+              case 'paid': return 'Paid';
+              case 'credit': return 'Credit';
+              case 'mixed': return 'Mixed';
+              default: return method.charAt(0).toUpperCase() + method.slice(1);
+            }
+          };
+
+          return {
+            id: invoice.invoiceNumber,
+            invoiceId: invoice.id,
+            outletName: invoice.Outlet?.name || 'N/A',
+            storeName: invoice.Store?.name || 'N/A',
+            storeId: invoice.storeId,
+            managerName: invoice.StoreManager?.name || invoice.Admin?.name || 'Unassigned',
+            date: new Date(invoice.invoiceDate).toLocaleDateString(),
+            totalAmount: parseFloat(invoice.totalAmount),
+            creditAmount: parseFloat(invoice.creditAmount),
+            paidAmount: parseFloat(invoice.paidAmount),
+            paymentMethod: invoice.paymentMethod,
+            paymentType: mapPaymentMethod(invoice.paymentMethod),
+            type: invoice.type,
+            status: mapStatus(invoice.status),
+            createdAt: invoice.createdAt,
+            dueDate: invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : '',
+            totalItems: totalItems,
+            products: invoice.items.map(item => ({
+              productId: item.productId,
+              productName: item.Product?.name || 'Unknown Product',
+              sku: item.Product?.sku || 'N/A',
+              quantity: item.quantity,
+              price: parseFloat(item.price),
+              total: parseFloat(item.totalPrice)
+            })),
+            Store: invoice.Store,
+            Admin: invoice.Admin,
+            items: invoice.items,
+            notes: invoice.notes || 'Thank you for your business!'
+          };
+        });
+
+        setInvoices(transformedInvoices);
+
+        const total = transformedInvoices.length;
+        const outlet_sale = transformedInvoices.filter(i => i.type === 'outlet_sale').length;
+        const credit = transformedInvoices.filter(i => i.type === 'credit').length;
+        const paid = transformedInvoices.filter(i => i.type === 'paid' || i.type === 'distribution').length;
+        const totalValue = transformedInvoices.reduce((sum, invoice) => sum + invoice.totalAmount, 0);
+
+        setStats({ total, outlet_sale, credit, paid, totalValue });
+      }
+    } catch (error) {
+      console.error('Error loading invoices:', error);
+      alert('Failed to load invoices. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const checkStoreCredit = (store, invoiceAmount) => {
+    if (!store) {
+      setStoreCreditStatus(null);
+      return;
+    }
+
+    const currentCredit = parseFloat(store.currentCredit) || 0;
+    const creditLimit = parseFloat(store.creditLimit) || 0;
+
+    const newCreditUsed = currentCredit + invoiceAmount;
+    const percentage = Math.round((newCreditUsed / creditLimit) * 100);
+    const isBlocked = newCreditUsed >= creditLimit;
+    const isNearLimit = percentage >= 80 && percentage < 100;
+
+    setStoreCreditStatus({
+      store,
+      currentCredit,
+      newCreditUsed,
+      percentage,
+      isBlocked,
+      isNearLimit,
+      availableCredit: creditLimit - currentCredit
+    });
+  };
+
+  const formatCurrency = (amount) => {
+    return `₹ ${parseFloat(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
   const downloadPDF = async () => {
     if (!invoiceRef.current || !selectedInvoice) {
       console.error("No invoice reference or selected invoice");
       return;
     }
-    
+
     setIsDownloading(true);
-    
+
     try {
       const element = invoiceRef.current;
-      
-      // Wait for any images to load
       const images = element.getElementsByTagName('img');
       await Promise.all(Array.from(images).map(img => {
         if (img.complete) return Promise.resolve();
@@ -199,7 +177,7 @@ const InvoiceManagement = ({ onLogout }) => {
           img.onerror = resolve;
         });
       }));
-      
+
       const canvas = await html2canvas(element, {
         scale: 3,
         backgroundColor: "#ffffff",
@@ -208,7 +186,7 @@ const InvoiceManagement = ({ onLogout }) => {
         windowWidth: element.scrollWidth,
         windowHeight: element.scrollHeight,
       });
-      
+
       const data = canvas.toDataURL("image/png");
       const pdf = new jsPDF("p", "mm", "a4");
       const imgWidth = 210;
@@ -226,7 +204,7 @@ const InvoiceManagement = ({ onLogout }) => {
         pdf.addImage(data, "PNG", 0, position, imgWidth, imgHeight);
         heightLeft -= pageHeight;
       }
-      
+
       pdf.save(`${selectedInvoice.id}.pdf`);
     } catch (error) {
       console.error("Error generating PDF:", error);
@@ -236,518 +214,819 @@ const InvoiceManagement = ({ onLogout }) => {
     }
   };
 
-  // ================= PRINT =================
-  const printInvoice = () => {
-    if (!selectedInvoice) return;
-    
-    const printContent = invoiceRef.current;
-    if (!printContent) return;
-    
-    const originalContents = document.body.innerHTML;
-    const printWindow = window.open("", "_blank");
-    
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>${selectedInvoice.id}</title>
-          <style>
-            * {
-              margin: 0;
-              padding: 0;
-              box-sizing: border-box;
-            }
-            body {
-              font-family: Arial, Helvetica, sans-serif;
-              padding: 20px;
-              background: white;
-            }
-            .invoice-container {
-              max-width: 1200px;
-              margin: 0 auto;
-              background: white;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-            }
-            th, td {
-              padding: 8px;
-              text-align: left;
-              border-bottom: 1px solid #ddd;
-            }
-            th {
-              background-color: #f5f5f5;
-            }
-            .text-right {
-              text-align: right;
-            }
-            .text-center {
-              text-align: center;
-            }
-            .border-b {
-              border-bottom: 1px solid #ddd;
-            }
-            .mt-4 {
-              margin-top: 16px;
-            }
-            .mt-8 {
-              margin-top: 32px;
-            }
-            .mb-4 {
-              margin-bottom: 16px;
-            }
-            .mb-8 {
-              margin-bottom: 32px;
-            }
-            .p-4 {
-              padding: 16px;
-            }
-            .bg-gray-50 {
-              background-color: #f9fafb;
-            }
-            .rounded-lg {
-              border-radius: 8px;
-            }
-            .font-bold {
-              font-weight: bold;
-            }
-            .text-blue-600 {
-              color: #2563eb;
-            }
-            @media print {
-              body {
-                padding: 0;
-                margin: 0;
-              }
-              .no-print {
-                display: none;
-              }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="invoice-container">
-            ${printContent.outerHTML}
-          </div>
-          <script>
-            window.onload = () => {
-              window.print();
-              window.onafterprint = () => window.close();
-            }
-          <\/script>
-        </body>
-      </html>
-    `);
-    
-    printWindow.document.close();
-  };
-
-  // ================= STATUS STYLES =================
-  const getStatusStyles = (status) => {
-    switch (status) {
-      case "Paid":
-        return { bg: "bg-green-100", text: "text-green-700", icon: FaCheckCircle, label: "Paid" };
-      case "Pending":
-        return { bg: "bg-yellow-100", text: "text-yellow-700", icon: FaClock, label: "Pending" };
-      case "Overdue":
-        return { bg: "bg-red-100", text: "text-red-700", icon: FaTimesCircle, label: "Overdue" };
-      default:
-        return { bg: "bg-gray-100", text: "text-gray-700", icon: FaClock, label: status };
+  const handleViewDetails = (invoice) => {
+    setSelectedInvoice(invoice);
+    console.log("rrr::", invoice)
+    if (invoice.type === 'credit' && invoice.Store) {
+      checkStoreCredit(invoice.Store, invoice.totalAmount);
     }
   };
 
-  // Format currency
-  const formatCurrency = (amount) => {
-    return `₹ ${parseFloat(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const handleCloseDetails = () => {
+    setSelectedInvoice(null);
+    setStoreCreditStatus(null);
+    if (id) {
+      navigate('/invoices');
+    }
   };
+
+  const handleApproveInvoice = async (invoiceId) => {
+    try {
+      const invoice = invoices.find(inv => inv.id === invoiceId);
+
+      if (!invoice) {
+        alert('Invoice not found');
+        return;
+      }
+
+      if (invoice.type === 'credit' || invoice.paymentMethod === 'credit') {
+        if (invoice.Store) {
+          const currentCredit = parseFloat(invoice.Store.currentCredit) || 0;
+          const creditLimit = parseFloat(invoice.Store.creditLimit) || 0;
+          const newCreditUsed = currentCredit + invoice.totalAmount;
+          const percentage = Math.round((newCreditUsed / creditLimit) * 100);
+
+          if (percentage >= 100) {
+            alert(`⚠️ Store "${invoice.storeName}" credit limit would be exceeded (${percentage}%) if this invoice is approved.`);
+            return;
+          }
+
+          if (percentage >= 80) {
+            const confirmProceed = window.confirm(
+              `⚠️ Warning: Store "${invoice.storeName}" credit usage would be at ${percentage}% (near limit). Do you want to proceed?`
+            );
+            if (!confirmProceed) return;
+          }
+        }
+      }
+
+      const response = await ApiService.patch(
+        `/invoice/updateStatus/${invoice.invoiceId}`,
+        { status: 'completed' },
+        {
+          headers: {
+            Authorization: `Bearer ${clientToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (response) {
+        alert('Invoice approved successfully!');
+        loadInvoices();
+
+        if (selectedInvoice && selectedInvoice.id === invoiceId) {
+          const updatedInvoice = { ...selectedInvoice, status: 'completed' };
+          setSelectedInvoice(updatedInvoice);
+        }
+      }
+    } catch (error) {
+      console.error('Error approving invoice:', error);
+      alert('Failed to approve invoice. Please try again.');
+    }
+  };
+
+  const handleRejectInvoice = async (invoiceId) => {
+    try {
+      const invoice = invoices.find(inv => inv.id === invoiceId);
+
+      if (!invoice) {
+        alert('Invoice not found');
+        return;
+      }
+
+      const response = await ApiService.patch(
+        `/invoice/updateStatus/${invoice.invoiceId}`,
+        { status: 'cancelled' },
+        {
+          headers: {
+            Authorization: `Bearer ${clientToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (response) {
+        alert('Invoice rejected successfully!');
+        loadInvoices();
+
+        if (selectedInvoice && selectedInvoice.id === invoiceId) {
+          const updatedInvoice = { ...selectedInvoice, status: 'cancelled' };
+          setSelectedInvoice(updatedInvoice);
+        }
+      }
+    } catch (error) {
+      console.error('Error rejecting invoice:', error);
+      alert('Failed to reject invoice. Please try again.');
+    }
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'completed': return { bg: 'bg-green-100', text: 'text-green-800', label: 'Completed' };
+      case 'pending': return { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'Pending' };
+      case 'cancelled': return { bg: 'bg-red-100', text: 'text-red-800', label: 'Cancelled' };
+      default: return { bg: 'bg-gray-100', text: 'text-gray-800', label: status };
+    }
+  };
+
+  const getTypeColor = (type) => {
+    switch (type) {
+      case 'outlet_sale': return 'bg-purple-100 text-purple-800';
+      case 'credit': return 'bg-blue-100 text-blue-800';
+      case 'paid':
+      case 'distribution':
+        return 'bg-green-100 text-green-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getPaymentColor = (paymentType) => {
+    switch (paymentType) {
+      case 'Paid': return 'bg-green-50 text-green-700 border border-green-200';
+      case 'Credit': return 'bg-blue-50 text-blue-700 border border-blue-200';
+      case 'Mixed': return 'bg-purple-50 text-purple-700 border border-purple-200';
+      default: return 'bg-gray-50 text-gray-700 border border-gray-200';
+    }
+  };
+
+  const filteredInvoices = invoices.filter(invoice => {
+    const matchesSearch =
+      invoice.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      invoice.outletName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      invoice.storeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      invoice.managerName.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesStatus = statusFilter === 'All' || invoice.status === statusFilter;
+
+    return matchesSearch && matchesStatus;
+  });
 
   return (
     <div className="flex min-h-screen bg-gray-50">
       <Sidebar onLogout={onLogout} />
-      
-      <div className="flex-1 overflow-x-auto">
-        <Header title="Invoice Management" />
-        
-        <main className="p-6">
+
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Header title="Invoice Management" onLogout={onLogout} />
+
+        <div className="flex-1 overflow-auto p-6">
+          {/* Invoice Modal */}
+          {selectedInvoice && (
+            <div className="fixed inset-0 bg-black/60 overflow-auto z-50 p-6">
+
+              <div className="bg-white max-w-7xl mx-auto rounded-xl shadow-2xl relative">
+
+                {/* HEADER ACTIONS */}
+                <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 rounded-t-xl flex justify-between items-center print:hidden z-10">
+
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-800">
+                      TAX INVOICE
+                    </h2>
+
+                    <p className="text-sm text-gray-500">
+                      {selectedInvoice.id}
+                    </p>
+                  </div>
+
+                  <div className="flex gap-3">
+
+                    <button
+                      onClick={downloadPDF}
+                      className="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+                    >
+                      <FaDownload />
+                      PDF
+                    </button>
+
+
+                    <button
+                      onClick={handleCloseDetails}
+                      className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+                    >
+                      <FaTimesCircle />
+                      Close
+                    </button>
+
+                  </div>
+
+                </div>
+
+                {/* PDF CONTENT */}
+                <div
+                  ref={invoiceRef}
+                  className="bg-white p-8 text-[13px] text-gray-900"
+                >
+
+                  {/* COMPANY HEADER */}
+                  <div className="border-b-2 border-gray-300 pb-4">
+
+                    <h1 className="text-center text-3xl font-bold uppercase">
+                      {selectedInvoice.Store.name}
+                    </h1>
+
+                    <div className="grid grid-cols-3 gap-4 mt-4 text-sm">
+
+                      <div>
+                        <p>
+                          <span className="font-semibold">Regd Office :</span>
+                          {' '}
+                          {selectedInvoice.Store.address}
+                        </p>
+
+                        {/* <p>
+                          <span className="font-semibold">Godown :</span>
+                          {' '}
+                          AUTONAGAR VIZAG
+                        </p>
+
+                        <p>
+                          <span className="font-semibold">Office :</span>
+                          {' '}
+                          VISAKHAPATNAM
+                        </p> */}
+                      </div>
+
+                      <div>
+                        <p>
+                          <span className="font-semibold">FSSAI No :</span>
+                          {' '}
+                          {selectedInvoice.Admin.FSSAI_No}
+                        </p>
+
+                        <p>
+                          <span className="font-semibold">GST No :</span>
+                          {' '}
+                          {selectedInvoice.Admin.GST_No}
+                        </p>
+
+                        <p>
+                          <span className="font-semibold">CIN No :</span>
+                          {' '}
+                          {selectedInvoice.Admin.CIN_No}
+                        </p>
+                      </div>
+
+                      <div className="text-right">
+                        <p>
+                          <span className="font-semibold">Invoice No :</span>
+                          {' '}
+                          {selectedInvoice.id}
+                        </p>
+
+                        {/* <p>
+                          <span className="font-semibold">Batch ID :</span>
+                          {' '}
+                          {selectedInvoice.batchID}
+                        </p> */}
+
+                        <p>
+                          <span className="font-semibold">Invoice Date :</span>
+                          {' '}
+                          {new Date(selectedInvoice.createdAt).toLocaleDateString()}
+                        </p>
+
+                        <p>
+                          <span className="font-semibold">Status :</span>
+                          {' '}
+                          {selectedInvoice.status}
+                        </p>
+                      </div>
+
+                    </div>
+
+                  </div>
+
+                  {/* BILL TO & SHIP TO */}
+                  <div className="grid grid-cols-2 gap-8 py-6 border-b border-gray-300">
+
+                    {/* BILL TO */}
+                    <div>
+
+                      <h3 className="font-bold text-gray-800 mb-3 uppercase">
+                        BILL TO
+                      </h3>
+
+                      <p className="font-semibold">
+                        {selectedInvoice.Store?.name}
+                      </p>
+
+                      <p className="mt-1">
+                        {selectedInvoice.Store?.address}
+                      </p>
+
+                      <p className="mt-1">
+                        PHONE NO :
+                        {' '}
+                        {selectedInvoice.Store?.phoneNumber}
+                      </p>
+
+                      <p className="mt-1">
+                        EMAIL :
+                        {' '}
+                        {selectedInvoice.Store?.email}
+                      </p>
+                      <p className="mt-1">
+                        GST NO :
+                        {' '}
+                        {selectedInvoice.Manager?.GST_No}
+                      </p>
+                    </div>
+
+                    {/* SHIP TO */}
+                    <div>
+
+                      <h3 className="font-bold text-gray-800 mb-3 uppercase">
+                        SHIP TO
+                      </h3>
+
+                      <p className="font-semibold">
+                        {selectedInvoice.Store?.name}
+                      </p>
+
+                      <p className="mt-1">
+                        {selectedInvoice.Store?.address}
+                      </p>
+
+                      <p className="mt-1">
+                        PHONE NO :
+                        {' '}
+                        {selectedInvoice.Store?.phoneNumber}
+                      </p>
+                      <p className="mt-1">
+                        EMAIL :
+                        {' '}
+                        {selectedInvoice.Store?.email}
+                      </p>
+                      <p className="mt-1">
+                        GST NO :
+                        {' '}
+                        {selectedInvoice.Manager?.GST_No}
+                      </p>
+
+                    </div>
+
+                  </div>
+
+                  {/* ITEMS TABLE */}
+                  <div className="mt-6 overflow-x-auto">
+
+                    <table className="w-full border border-gray-300 text-sm">
+
+                      <thead>
+
+                        <tr className="bg-gray-100 border-b border-gray-300">
+                          <th className="border border-gray-300 px-2 py-2 text-left">
+                            HSN_No
+                          </th>
+                          <th className="border border-gray-300 px-2 py-2 text-left">
+                            SKU
+                          </th>
+
+                          <th className="border border-gray-300 px-2 py-2 text-left">
+                            Product
+                          </th>
+                          <th className="border border-gray-300 px-2 py-2 text-left">
+                            MRP
+                          </th>
+                          
+                          <th className="border border-gray-300 px-2 py-2 text-right">
+                            Order Qty
+                          </th>
+                          <th className="border border-gray-300 px-2 py-2 text-right">
+                            Batch
+                          </th>
+                          <th className="border border-gray-300 px-2 py-2 text-right">
+                            Delvd Qty
+                          </th>
+                          <th className="border border-gray-300 px-2 py-2 text-right">
+                            Rate
+                          </th>
+                          <th className="border border-gray-300 px-2 py-2 text-right">
+                            Ltr/Kg
+                          </th>
+                          <th className="border border-gray-300 px-2 py-2 text-right">
+                            Amt
+                          </th>
+                          <th className="border border-gray-300 px-2 py-2 text-right">
+                            Net Amt
+                          </th>
+                          <th className="border border-gray-300 px-2 py-2 text-right">
+                            IGST
+                          </th>
+                          <th className="border border-gray-300 px-2 py-2 text-right">
+                            SGST
+                          </th>
+                          <th className="border border-gray-300 px-2 py-2 text-right">
+                            CGST
+                          </th>
+                          <th className="border border-gray-300 px-2 py-2 text-right">
+                            Net Value
+                          </th>
+                        </tr>
+
+                      </thead>
+
+                      <tbody>
+
+                        {selectedInvoice.items?.map((item, idx) => (
+
+                          <tr
+                            key={idx}
+                            className="border-b border-gray-200"
+                          >
+
+
+                            <td className="border border-gray-300 px-2 py-2">
+                              {item.Product?.HSN_No}
+                            </td>
+                            <td className="border border-gray-300 px-2 py-2">
+                              {item.Product?.sku}
+                            </td>
+
+                            <td className="border border-gray-300 px-2 py-2">
+                              {item.Product?.name}
+                            </td>
+
+                            <td className="border border-gray-300 px-2 py-2">
+                              {item.Product?.costPrice}
+                            </td>
+
+                            <td className="border border-gray-300 px-2 py-2 text-right">
+                              {item.quantity}
+                            </td>
+                            <td className="border border-gray-300 px-2 py-2 text-right">
+                              {item.batchId}
+                            </td>
+                            <td className="border border-gray-300 px-2 py-2 text-right">
+                              {item.quantity}
+                            </td>
+                            <td className="border border-gray-300 px-2 py-2 text-right">
+                              ₹{parseFloat(item.price || 0).toFixed(2)}
+                            </td>
+                            <td className="border border-gray-300 px-2 py-2 text-right">
+                              {item.Product?.units}
+                            </td>
+                            <td className="border border-gray-300 px-2 py-2 text-right font-medium">
+                              ₹{parseFloat(item.price || 0).toFixed(2) * parseFloat(item.quantity || 0)}
+                            </td>
+                            <td className="border border-gray-300 px-2 py-2 text-right font-medium">
+                              ₹{parseFloat(item.price || 0).toFixed(2) * parseFloat(item.quantity || 0)}
+                            </td>
+                            <td className="border border-gray-300 px-2 py-2 text-right font-medium">
+                              ₹{parseFloat(item.IGSTAmount || 0).toFixed(2)}
+                            </td>
+                            <td className="border border-gray-300 px-2 py-2 text-right font-medium">
+                              ₹{parseFloat(item.SGSTAmount || 0).toFixed(2)}
+                            </td>
+                            <td className="border border-gray-300 px-2 py-2 text-right font-medium">
+                              ₹{parseFloat(item.CGSTAmount || 0).toFixed(2)}
+                            </td>
+                            <td className="border border-gray-300 px-2 py-2 text-right font-medium">
+                              ₹
+                              {(
+                                parseFloat(item.totalPrice || 0) +
+                                parseFloat(item.CGSTAmount || 0) +
+                                parseFloat(item.SGSTAmount || 0) +
+                                parseFloat(item.IGSTAmount || 0)
+                              ).toFixed(2)}
+                            </td>
+                          </tr>
+
+                        ))}
+
+                      </tbody>
+
+                    </table>
+
+                  </div>
+
+                  {/* TOTALS */}
+                  <div className="flex justify-end mt-8">
+
+                    <div className="w-[350px] border border-gray-300">
+
+                      <div className="flex justify-between border-b border-gray-300 px-4 py-2">
+                        <span>Total Gross Amount</span>
+
+                        <span>
+                          ₹{parseFloat(selectedInvoice.totalAmount || 0).toFixed(2)}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between border-b border-gray-300 px-4 py-2">
+                        <span>Add OUTPUT CGST 9%</span>
+
+                        <span>
+                          ₹{(
+                            parseFloat(selectedInvoice.totalAmount || 0) * 0.09
+                          ).toFixed(2)}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between border-b border-gray-300 px-4 py-2">
+                        <span>Add OUTPUT SGST 9%</span>
+
+                        <span>
+                          ₹{(
+                            parseFloat(selectedInvoice.totalAmount || 0) * 0.09
+                          ).toFixed(2)}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between px-4 py-3 font-bold text-lg bg-gray-50">
+                        <span>Total</span>
+
+                        <span>
+                          ₹{(
+                            parseFloat(selectedInvoice.totalAmount || 0) * 1.18
+                          ).toFixed(2)}
+                        </span>
+                      </div>
+
+                    </div>
+
+                  </div>
+
+                  {/* NOTES */}
+                  <div className="mt-8 text-sm">
+
+                    <p>
+                      <span className="font-semibold">
+                        Payment Method :
+                      </span>
+                      {' '}
+                      {selectedInvoice.paymentMethod}
+                    </p>
+
+                    <p className="mt-1">
+                      <span className="font-semibold">
+                        Paid Amount :
+                      </span>
+                      {' '}
+                      ₹{parseFloat(selectedInvoice.paidAmount || 0).toFixed(2)}
+                    </p>
+
+                    <p className="mt-1">
+                      <span className="font-semibold">
+                        Credit Amount :
+                      </span>
+                      {' '}
+                      ₹{parseFloat(selectedInvoice.creditAmount || 0).toFixed(2)}
+                    </p>
+
+                  </div>
+
+                  {/* SIGNATURES */}
+                  <div className="grid grid-cols-3 gap-8 mt-20">
+
+                    <div>
+                      <p className="font-medium">
+                        Customer Signature
+                      </p>
+
+                      <div className="mt-12 border-b border-gray-400"></div>
+                    </div>
+
+                    <div className="text-center">
+
+                      <p className="text-sm text-gray-500">
+                        Received Goods In Good Condition
+                      </p>
+
+                    </div>
+
+                    <div className="text-right">
+
+                      <p className="font-medium">
+                        Authorised Signature
+                      </p>
+
+                      <div className="mt-12 border-b border-gray-400"></div>
+
+                    </div>
+
+                  </div>
+
+                  {/* FOOTER */}
+                  <div className="mt-10 border-t border-gray-300 pt-4 text-center text-xs text-gray-500">
+
+                    This is a computer generated invoice.
+
+                  </div>
+
+                </div>
+
+                {/* APPROVE/REJECT */}
+                {selectedInvoice.status === 'pending' && (
+
+                  <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4 rounded-b-xl flex justify-end gap-3 print:hidden">
+
+                    <button
+                      onClick={() => handleRejectInvoice(selectedInvoice.id)}
+                      className="flex items-center gap-2 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                    >
+                      <FaTimesCircle />
+                      Reject Invoice
+                    </button>
+
+                    <button
+                      onClick={() => handleApproveInvoice(selectedInvoice.id)}
+                      className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                    >
+                      <FaCheckCircle />
+                      Approve Invoice
+                    </button>
+
+                  </div>
+
+                )}
+
+              </div>
+
+            </div>
+          )}
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white rounded-xl shadow-sm p-5 border-l-4 border-blue-500">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+            <div className="bg-white p-4 rounded-lg border-l-4 border-gray-500 shadow-sm">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-gray-500 text-sm">Total Invoices</p>
-                  <p className="text-2xl font-bold text-gray-800">{invoices.length}</p>
+                  <p className="text-sm text-gray-500 mb-1">Total Invoices</p>
+                  <p className="text-2xl font-bold text-gray-800">{stats.total}</p>
                 </div>
-                <FaFileInvoice className="text-blue-500 text-3xl opacity-75" />
+                <FaFileInvoice className="text-gray-400 text-3xl" />
               </div>
             </div>
-            <div className="bg-white rounded-xl shadow-sm p-5 border-l-4 border-green-500">
+            <div className="bg-white p-4 rounded-lg border-l-4 border-purple-500 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => setStatusFilter('outlet_sale')}>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-gray-500 text-sm">Paid Amount</p>
-                  <p className="text-2xl font-bold text-gray-800">
-                    {formatCurrency(invoices.filter(i => i.status === "Paid").reduce((sum, i) => sum + parseFloat(i.amount), 0))}
-                  </p>
+                  <p className="text-sm text-gray-500 mb-1">Outlet Sales</p>
+                  <p className="text-2xl font-bold text-purple-600">{stats.outlet_sale}</p>
                 </div>
-                <FaRupeeSign className="text-green-500 text-3xl opacity-75" />
+                <FaStore className="text-purple-400 text-3xl" />
               </div>
             </div>
-            <div className="bg-white rounded-xl shadow-sm p-5 border-l-4 border-yellow-500">
+            <div className="bg-white p-4 rounded-lg border-l-4 border-blue-500 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => setStatusFilter('credit')}>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-gray-500 text-sm">Pending Amount</p>
-                  <p className="text-2xl font-bold text-gray-800">
-                    {formatCurrency(invoices.filter(i => i.status === "Pending").reduce((sum, i) => sum + parseFloat(i.amount), 0))}
-                  </p>
+                  <p className="text-sm text-gray-500 mb-1">Credit</p>
+                  <p className="text-2xl font-bold text-blue-600">{stats.credit}</p>
                 </div>
-                <FaClock className="text-yellow-500 text-3xl opacity-75" />
+                <FaRupeeSign className="text-blue-400 text-3xl" />
               </div>
             </div>
-            <div className="bg-white rounded-xl shadow-sm p-5 border-l-4 border-red-500">
+            <div className="bg-white p-4 rounded-lg border-l-4 border-green-500 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => setStatusFilter('paid')}>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-gray-500 text-sm">Overdue Amount</p>
-                  <p className="text-2xl font-bold text-gray-800">
-                    {formatCurrency(invoices.filter(i => i.status === "Overdue").reduce((sum, i) => sum + parseFloat(i.amount), 0))}
-                  </p>
+                  <p className="text-sm text-gray-500 mb-1">Paid/Distribution</p>
+                  <p className="text-2xl font-bold text-green-600">{stats.paid}</p>
                 </div>
-                <FaTimesCircle className="text-red-500 text-3xl opacity-75" />
+                <FaCheckCircle className="text-green-400 text-3xl" />
+              </div>
+            </div>
+            <div className="bg-white p-4 rounded-lg border-l-4 border-amber-500 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">Total Value</p>
+                  <p className="text-2xl font-bold text-amber-600">{formatCurrency(stats.totalValue)}</p>
+                </div>
+                <FaDollarSign className="text-amber-400 text-3xl" />
               </div>
             </div>
           </div>
 
           {/* Filters */}
-          <div className="bg-white rounded-xl shadow-sm p-5 mb-6">
-            <div className="flex flex-wrap gap-4 items-center justify-between">
-              <div className="flex gap-4 flex-wrap">
+          <div className="bg-white p-4 rounded-lg border border-gray-200 mb-6">
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1">
                 <div className="relative">
                   <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                   <input
                     type="text"
-                    placeholder="Search by ID, Customer or City..."
+                    placeholder="Search invoices by ID, store, outlet, or manager..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg w-80 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
-                <div className="relative">
-                  <FaFilter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    className="pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none"
-                  >
-                    <option value="All">All Status</option>
-                    <option value="Paid">Paid</option>
-                    <option value="Pending">Pending</option>
-                    <option value="Overdue">Overdue</option>
-                  </select>
-                </div>
               </div>
-              <div className="text-sm text-gray-500">
-                Showing {paginatedInvoices.length} of {filteredInvoices.length} invoices
+              <div className="flex items-center space-x-2">
+                <FaFilter className="text-gray-400" />
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="All">All Status</option>
+                  <option value="pending">Pending</option>
+                  <option value="completed">Completed</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
               </div>
             </div>
           </div>
 
           {/* Invoices Table */}
-          <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Invoice ID</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Customer</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">City</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Amount</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {paginatedInvoices.length === 0 ? (
+          {loading ? (
+            <div className="text-center py-12">
+              <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
+              <p className="mt-4 text-gray-600">Loading invoices...</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
                     <tr>
-                      <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
-                        No invoices found
-                       </td>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">INVOICE</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">STORE / OUTLET</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">DATE</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ITEMS</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">AMOUNT</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">TYPE</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PAYMENT</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">STATUS</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ACTIONS</th>
                     </tr>
-                  ) : (
-                    paginatedInvoices.map((invoice) => {
-                      const StatusIcon = getStatusStyles(invoice.status).icon;
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {filteredInvoices.map((invoice) => {
+                      const statusStyle = getStatusColor(invoice.status);
                       return (
                         <tr key={invoice.id} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-6 py-4 font-medium text-gray-900">{invoice.id}</td>
                           <td className="px-6 py-4">
-                            <div className="flex items-center">
-                              <FaUser className="text-gray-400 mr-2" />
-                              <span>{invoice.customer}</span>
-                            </div>
+                            <div className="font-medium text-gray-900">{invoice.id}</div>
+                            <div className="text-xs text-gray-500">Mgr: {invoice.managerName}</div>
                           </td>
                           <td className="px-6 py-4">
-                            <div className="flex items-center">
-                              <FaMapMarkerAlt className="text-gray-400 mr-2" />
-                              <span>{invoice.city}</span>
-                            </div>
+                            <div className="font-medium text-gray-900">{invoice.storeName}</div>
+                            {invoice.outletName !== 'N/A' && (
+                              <div className="text-xs text-gray-500">Outlet: {invoice.outletName}</div>
+                            )}
                           </td>
                           <td className="px-6 py-4">
-                            <div className="flex items-center">
-                              <FaCalendarAlt className="text-gray-400 mr-2" />
-                              <span>{invoice.date}</span>
-                            </div>
+                            <div className="text-sm text-gray-500">{invoice.date}</div>
                           </td>
-                          <td className="px-6 py-4 font-semibold">{formatCurrency(invoice.amount)}</td>
                           <td className="px-6 py-4">
-                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getStatusStyles(invoice.status).bg} ${getStatusStyles(invoice.status).text}`}>
-                              <StatusIcon className="mr-1 text-xs" />
-                              {invoice.status}
+                            <div className="text-sm text-gray-900">{invoice.totalItems} items</div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm font-semibold text-gray-900">{formatCurrency(invoice.totalAmount)}</div>
+                            {invoice.creditAmount > 0 && (
+                              <div className="text-xs text-blue-600">Credit: {formatCurrency(invoice.creditAmount)}</div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`px-2 py-1 text-xs font-medium rounded ${getTypeColor(invoice.type)}`}>
+                              {invoice.type}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`px-2 py-1 text-xs font-medium rounded ${getPaymentColor(invoice.paymentType)}`}>
+                              {invoice.paymentType}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusStyle.bg} ${statusStyle.text}`}>
+                              {invoice.status === 'completed' && <FaCheckCircle className="mr-1 text-xs" />}
+                              {invoice.status === 'pending' && <FaClock className="mr-1 text-xs" />}
+                              {invoice.status === 'cancelled' && <FaTimesCircle className="mr-1 text-xs" />}
+                              {statusStyle.label}
                             </span>
                           </td>
                           <td className="px-6 py-4">
                             <button
-                              onClick={() => setSelectedInvoice(invoice)}
-                              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-sm"
+                              onClick={() => handleViewDetails(invoice)}
+                              className="text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors"
                             >
                               <FaEye size={14} />
-                              View Invoice
+                              View
                             </button>
                           </td>
                         </tr>
                       );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
+                    })}
+                  </tbody>
+                </table>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200">
-                <button
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <FaChevronLeft size={12} />
-                  Previous
-                </button>
-                <div className="flex gap-2">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                    <button
-                      key={page}
-                      onClick={() => setCurrentPage(page)}
-                      className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
-                        currentPage === page
-                          ? "bg-blue-600 text-white"
-                          : "text-gray-700 hover:bg-gray-100"
-                      }`}
-                    >
-                      {page}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Next
-                  <FaChevronRight size={12} />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Invoice Modal */}
-          {selectedInvoice && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 overflow-auto p-6 z-50">
-              <div className="bg-white max-w-6xl mx-auto rounded-xl shadow-2xl relative my-8">
-                {/* Modal Header with Actions */}
-                <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 rounded-t-xl flex justify-between items-center print:hidden z-10">
-                  <div>
-                    <h2 className="text-xl font-bold text-gray-800">Invoice Details</h2>
-                    <p className="text-sm text-gray-500">{selectedInvoice.id}</p>
-                  </div>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={downloadPDF}
-                      disabled={isDownloading}
-                      className="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50"
-                    >
-                      {isDownloading ? (
-                        <>
-                          <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          Generating...
-                        </>
-                      ) : (
-                        <>
-                          <FaDownload />
-                          PDF
-                        </>
-                      )}
-                    </button>
-                    <button
-                      onClick={printInvoice}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
-                    >
-                      <FaPrint />
-                      Print
-                    </button>
-                    <button
-                      onClick={() => setSelectedInvoice(null)}
-                      className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
-                    >
-                      <FaTimesCircle />
-                      Close
-                    </button>
-                  </div>
-                </div>
-
-                {/* Invoice Content for PDF/Print */}
-                <div ref={invoiceRef} className="p-8 bg-white">
-                  {/* Company Header */}
-                  <div className="border-b-2 border-gray-300 pb-6 mb-6">
-                    <div className="text-center">
-                      <h1 className="text-3xl font-bold text-gray-800 uppercase tracking-wide">
-                        DINSHAWS DAIRY FOODS P. LTD
-                      </h1>
-                      <p className="text-gray-500 mt-1">VIZAG DIVISION</p>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 text-sm">
-                      <div>
-                        <p className="text-gray-600"><span className="font-semibold">Regd Office:</span> PLOT NO-7 BLOCK-F AUTONAGAR</p>
-                        <p className="text-gray-600 mt-1"><span className="font-semibold">Godown:</span> AUTONAGAR VIZAG</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-600"><span className="font-semibold">FSSAI No:</span> 10121003000078</p>
-                        <p className="text-gray-600 mt-1"><span className="font-semibold">GST No:</span> 37AAACD6125G1ZW</p>
-                        <p className="text-gray-600 mt-1"><span className="font-semibold">CIN No:</span> U15200MH1998PTC116277</p>
-                      </div>
-                      <div className="md:text-right">
-                        <p className="text-gray-600"><span className="font-semibold">Invoice No:</span> {selectedInvoice.id}</p>
-                        <p className="text-gray-600 mt-1"><span className="font-semibold">Date:</span> {selectedInvoice.date}</p>
-                        <p className="text-gray-600 mt-1"><span className="font-semibold">Due Date:</span> {selectedInvoice.dueDate}</p>
-                      </div>
+                {filteredInvoices.length === 0 && (
+                  <div className="text-center py-12">
+                    <FaFileInvoice className="text-4xl text-gray-300 mx-auto mb-3" />
+                    <div className="text-gray-400 mb-2">No invoices found</div>
+                    <div className="text-gray-500 text-sm">
+                      {searchTerm || statusFilter !== 'All'
+                        ? 'Try adjusting your search or filters'
+                        : 'No invoices available'}
                     </div>
                   </div>
-
-                  {/* Bill To & Ship To */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <h3 className="font-bold text-gray-800 border-b border-gray-200 pb-2 mb-3 flex items-center">
-                        <FaStore className="mr-2 text-blue-600" /> BILL TO
-                      </h3>
-                      <p className="font-semibold">{selectedInvoice.customer}</p>
-                      <p>{selectedInvoice.city}</p>
-                    </div>
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <h3 className="font-bold text-gray-800 border-b border-gray-200 pb-2 mb-3 flex items-center">
-                        <FaTruck className="mr-2 text-blue-600" /> SHIP TO
-                      </h3>
-                      <p className="font-semibold">{selectedInvoice.customer}</p>
-                      <p>{selectedInvoice.city}</p>
-                    </div>
-                  </div>
-
-                  {/* Items Table */}
-                  <div className="overflow-x-auto mb-8">
-                    <table className="w-full text-sm border-collapse">
-                      <thead>
-                        <tr className="bg-gray-100 border-y-2 border-gray-300">
-                          <th className="p-3 text-left font-semibold">#</th>
-                          <th className="p-3 text-left font-semibold">Item Code</th>
-                          <th className="p-3 text-left font-semibold">Flavour / Product</th>
-                          <th className="p-3 text-left font-semibold">HSN</th>
-                          <th className="p-3 text-right font-semibold">Qty</th>
-                          <th className="p-3 text-right font-semibold">Rate</th>
-                          <th className="p-3 text-right font-semibold">Amount</th>
-                          <th className="p-3 text-right font-semibold">SGST</th>
-                          <th className="p-3 text-right font-semibold">CGST</th>
-                          <th className="p-3 text-right font-semibold">Net</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedInvoice.items.map((item, idx) => (
-                          <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50">
-                            <td className="p-3">{idx + 1}</td>
-                            <td className="p-3">{item.itemNo}</td>
-                            <td className="p-3 font-medium">{item.flavour}</td>
-                            <td className="p-3">{item.hsn}</td>
-                            <td className="p-3 text-right">{item.qty}</td>
-                            <td className="p-3 text-right">{formatCurrency(item.rate)}</td>
-                            <td className="p-3 text-right">{formatCurrency(item.amt)}</td>
-                            <td className="p-3 text-right">{formatCurrency(item.sgst)}</td>
-                            <td className="p-3 text-right">{formatCurrency(item.cgst)}</td>
-                            <td className="p-3 text-right font-bold">{formatCurrency(item.net)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Summary and Totals */}
-                  <div className="flex flex-col md:flex-row justify-between items-start gap-8 mb-8">
-                    <div className="flex-1">
-                      <div className="bg-gray-50 p-4 rounded-lg">
-                        <h3 className="font-bold text-gray-800 mb-2">Notes / Terms</h3>
-                        <p className="text-sm text-gray-600">{selectedInvoice.notes || "Thank you for your business!"}</p>
-                        <p className="text-sm text-gray-600 mt-2">Payment Method: {selectedInvoice.paymentMethod}</p>
-                      </div>
-                    </div>
-                    <div className="w-80">
-                      <div className="bg-gray-50 p-4 rounded-lg">
-                        <div className="flex justify-between py-2">
-                          <span className="text-gray-600">Subtotal</span>
-                          <span className="font-medium">{formatCurrency(selectedInvoice.amount)}</span>
-                        </div>
-                        <div className="flex justify-between py-2">
-                          <span className="text-gray-600">CGST (9%)</span>
-                          <span>{formatCurrency(parseFloat(selectedInvoice.amount) * 0.09)}</span>
-                        </div>
-                        <div className="flex justify-between py-2 border-b border-gray-200">
-                          <span className="text-gray-600">SGST (9%)</span>
-                          <span>{formatCurrency(parseFloat(selectedInvoice.amount) * 0.09)}</span>
-                        </div>
-                        <div className="flex justify-between py-3">
-                          <span className="font-bold text-lg">Total</span>
-                          <span className="font-bold text-lg text-blue-600">
-                            {formatCurrency(parseFloat(selectedInvoice.amount) * 1.18)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Signatures and Status */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-12 pt-4 border-t border-gray-200">
-                    <div>
-                      <p className="text-sm text-gray-500">Customer Signature</p>
-                      <div className="mt-8 border-b border-gray-300 w-40"></div>
-                    </div>
-                    <div className="text-center">
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusStyles(selectedInvoice.status).bg} ${getStatusStyles(selectedInvoice.status).text}`}>
-                        {React.createElement(getStatusStyles(selectedInvoice.status).icon, { className: "mr-1" })}
-                        {selectedInvoice.status}
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm text-gray-500">Authorised Signature</p>
-                      <div className="mt-8 border-b border-gray-300 w-40 ml-auto"></div>
-                    </div>
-                  </div>
-
-                  {/* Footer */}
-                  <div className="text-center mt-8 pt-4 text-xs text-gray-400 border-t border-gray-200">
-                    This is a computer generated invoice and does not require physical signature.
-                  </div>
-                </div>
+                )}
               </div>
             </div>
           )}
-        </main>
+        </div>
       </div>
     </div>
   );

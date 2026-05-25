@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
-import { FaArrowLeft, FaStore, FaMapMarkerAlt, FaCubes, FaExclamationCircle } from 'react-icons/fa';
+import { FaArrowLeft, FaStore, FaMapMarkerAlt, FaCubes, FaExclamationCircle, FaBuilding, FaIdCard, FaRegBuilding } from 'react-icons/fa';
 import { storage } from '../data/storage';
 import ApiService from '../components/ApiService';
 
@@ -11,12 +11,16 @@ const CreateStore = ({ onLogout }) => {
   const [formData, setFormData] = useState({
     name: '',
     address: '',
+    officeAddress: '',
     city: '',
     state: '',
     zipCode: '',
     phoneNumber: '',
     email: '',
-    creditLimit: ''
+    creditLimit: '',
+    FSSAI_No: '',
+    GST_No: '',
+    CIN_No: ''
   });
   const clientToken = localStorage.getItem('token');
   const [errors, setErrors] = useState({});
@@ -145,6 +149,21 @@ const CreateStore = ({ onLogout }) => {
       newErrors.creditLimit = 'Credit limit must be a positive number';
     }
     
+    // // Validate FSSAI number format (optional, add pattern if needed)
+    // if (formData.FSSAI_No && !/^[0-9]{14}$/.test(formData.FSSAI_No.replace(/\s/g, ''))) {
+    //   newErrors.FSSAI_No = 'FSSAI number should be 14 digits';
+    // }
+    
+    // // Validate GST number format (optional)
+    // if (formData.GST_No && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(formData.GST_No)) {
+    //   newErrors.GST_No = 'Invalid GST number format';
+    // }
+    
+    // // Validate CIN number format (optional)
+    // if (formData.CIN_No && !/^[A-Z0-9]{21}$/.test(formData.CIN_No)) {
+    //   newErrors.CIN_No = 'CIN should be 21 alphanumeric characters';
+    // }
+    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -167,22 +186,25 @@ const CreateStore = ({ onLogout }) => {
       const storeData = {
         name: formData.name.trim(),
         address: fullAddress,
+        officeAddress: formData.officeAddress.trim(),
         phoneNumber: formData.phoneNumber.replace(/\D/g, ''),
         email: formData.email.trim(),
         creditLimit: parseFloat(formData.creditLimit),
         currentCredit: 0,
         adminId: adminId,
-        isActive: true
+        isActive: true,
+        FSSAI_No: formData.FSSAI_No.trim(),
+        GST_No: formData.GST_No.trim(),
+        CIN_No: formData.CIN_No.trim()
       };
       
       // Call API to create store
-      const response = await ApiService.post('/stores',storeData, {
+      const response = await ApiService.post('/stores', storeData, {
         headers: {
           Authorization: `Bearer ${clientToken}`,
           'Content-Type': 'application/json',
         }
       });
-      
       
       if (response) {
         // Add store to localStorage for fallback/offline support
@@ -190,6 +212,7 @@ const CreateStore = ({ onLogout }) => {
           id: response.id,
           name: response.name,
           address: response.address,
+          officeAddress: response.officeAddress,
           phone: response.phoneNumber,
           email: response.email,
           creditLimit: response.creditLimit,
@@ -204,7 +227,10 @@ const CreateStore = ({ onLogout }) => {
           racks: [],
           freezers: [],
           createdAt: response.createdAt,
-          updatedAt: response.updatedAt
+          updatedAt: response.updatedAt,
+          FSSAI_No: response.FSSAI_No,
+          GST_No: response.GST_No,
+          CIN_No: response.CIN_No
         };
         
         storage.addStore(localStorageStore);
@@ -421,6 +447,98 @@ const CreateStore = ({ onLogout }) => {
                       </div>
                     </div>
 
+                    {/* Office Address */}
+                    <div>
+                      <div className="flex items-center mb-2">
+                        <FaBuilding className="text-gray-400 mr-2" />
+                        <label className="block text-sm font-medium text-gray-700">
+                          Office Address
+                        </label>
+                      </div>
+                      <textarea
+                        name="officeAddress"
+                        value={formData.officeAddress}
+                        onChange={handleChange}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                        placeholder="Enter office address (if different from store address)"
+                        rows="2"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">Optional: Corporate or registered office address</p>
+                    </div>
+
+                    {/* Legal Information Section */}
+                    <div className="border-t border-gray-200 pt-4">
+                      <h3 className="text-md font-semibold text-gray-800 mb-4 flex items-center">
+                        <FaIdCard className="mr-2 text-gray-500" />
+                        Legal & Registration Information
+                      </h3>
+                      
+                      <div className="grid grid-cols-1 gap-4">
+                        {/* FSSAI Number */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            FSSAI Number
+                          </label>
+                          <input
+                            type="text"
+                            name="FSSAI_No"
+                            value={formData.FSSAI_No}
+                            onChange={handleChange}
+                            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition ${
+                              errors.FSSAI_No ? 'border-red-500' : 'border-gray-300'
+                            }`}
+                            placeholder="14-digit FSSAI license number"
+                          />
+                          {errors.FSSAI_No && (
+                            <p className="mt-1 text-sm text-red-600">{errors.FSSAI_No}</p>
+                          )}
+                          <p className="mt-1 text-xs text-gray-500">Optional: Food Safety and Standards Authority of India license number</p>
+                        </div>
+
+                        {/* GST Number */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            GST Number
+                          </label>
+                          <input
+                            type="text"
+                            name="GST_No"
+                            value={formData.GST_No}
+                            onChange={handleChange}
+                            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition ${
+                              errors.GST_No ? 'border-red-500' : 'border-gray-300'
+                            }`}
+                            placeholder="e.g., 22AAAAA0000A1Z"
+                          />
+                          {errors.GST_No && (
+                            <p className="mt-1 text-sm text-red-600">{errors.GST_No}</p>
+                          )}
+                          <p className="mt-1 text-xs text-gray-500">Optional: Goods and Services Tax identification number</p>
+                        </div>
+
+                        {/* CIN Number */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            CIN Number
+                          </label>
+                          <input
+                            type="text"
+                            name="CIN_No"
+                            value={formData.CIN_No}
+                            onChange={handleChange}
+                            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition ${
+                              errors.CIN_No ? 'border-red-500' : 'border-gray-300'
+                            }`}
+                            placeholder="21-character CIN"
+                          />
+                          {errors.CIN_No && (
+                            <p className="mt-1 text-sm text-red-600">{errors.CIN_No}</p>
+                          )}
+                          <p className="mt-1 text-xs text-gray-500">Optional: Company Identification Number</p>
+                        </div>
+                      </div>
+                    </div>
+
                     {/* Contact Information */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
@@ -453,7 +571,7 @@ const CreateStore = ({ onLogout }) => {
                           onChange={handleChange}
                           className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition ${
                             errors.email ? 'border-red-500' : 'border-gray-300'
-                        }`}
+                          }`}
                           placeholder="store@example.com"
                         />
                         {errors.email && (
@@ -565,6 +683,11 @@ const CreateStore = ({ onLogout }) => {
                             {store.totalProductQuantity} items • ${parseFloat(store.stockValue).toLocaleString()} value
                           </div>
                         )}
+                        {(store.FSSAI_No || store.GST_No) && (
+                          <div className="mt-1 text-xs text-gray-400">
+                            {store.FSSAI_No && '✓ FSSAI'} {store.GST_No && '✓ GST'}
+                          </div>
+                        )}
                       </div>
                     ))}
                     {apiStores.length === 0 && (
@@ -598,6 +721,10 @@ const CreateStore = ({ onLogout }) => {
                     <li className="flex items-start">
                       <span className="inline-block w-2 h-2 bg-yellow-400 rounded-full mt-1 mr-2"></span>
                       You can assign managers later in store management
+                    </li>
+                    <li className="flex items-start">
+                      <span className="inline-block w-2 h-2 bg-yellow-400 rounded-full mt-1 mr-2"></span>
+                      Legal registration numbers (FSSAI, GST, CIN) are optional but recommended
                     </li>
                   </ul>
                 </div>

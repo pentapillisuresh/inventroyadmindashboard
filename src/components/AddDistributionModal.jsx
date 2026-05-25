@@ -33,7 +33,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
     loadStores();
     loadProducts();
     loadOutlets();
-  }, []);
+  }, [distributionMode]);
 
   useEffect(() => {
     if (distributionMode === 'stock' && formData.storeId) {
@@ -100,6 +100,56 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
     }
   };
 
+  const loadInventory = async () => {
+    try {
+      setLoading(prev => ({ ...prev, products: true }));
+      const response = await ApiService.get(`/inventory/store/${formData.storeId}`, {
+        headers: {
+          Authorization: `Bearer ${clientToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (response) {
+        const inventoryData = response.map(item => {
+          console.log(item);
+
+          return {
+            id: item.id,
+            productId: item.Product.id,
+            name: item.Product.name,
+            sku: item.Product.sku,
+            HSN_No: item.Product.HSN_No,
+            categoryId: item.Product.categoryId,
+            quantity: item.quantity,
+            units: item.Product.units,
+            price: item.Product.price,
+            // IGST: item.Product.IGST,
+            // SGST: item.Product.SGST,
+            // CGST: item.Product.CGST,
+            // costPrice: item.Product.costPrice,
+            // thresholdQuantity: item.Product.thresholdQuantity,
+            // image: item.Product.image,
+            // adminId: item.Product.adminId,
+            // createdBy: item.Product.createdBy,
+            // isActive: item.Product.isActive,
+            // createdAt: item.Product.createdAt,
+            // updatedAt: item.Product.updatedAt,
+            Category: item.Product.Category,
+          };
+        });
+
+        setProducts(inventoryData);
+
+        console.log("inventoryData::", inventoryData);
+      }
+    } catch (error) {
+      console.error('Error loading products:', error);
+      alert('Failed to load products. Please try again.');
+    } finally {
+      setLoading(prev => ({ ...prev, products: false }));
+    }
+  };
+
   const loadRooms = async (storeId) => {
     try {
       setLoading(prev => ({ ...prev, rooms: true }));
@@ -126,22 +176,24 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
       outletId: ''
     }));
     setSelectedProducts([]);
+    loadProducts();
   };
 
   const handleStoreChange = (storeId) => {
-    setFormData(prev => ({ 
-      ...prev, 
+    setFormData(prev => ({
+      ...prev,
       storeId
     }));
     setSelectedProducts([]);
   };
 
   const handleOutletChange = (outletId) => {
-    setFormData(prev => ({ 
-      ...prev, 
+    setFormData(prev => ({
+      ...prev,
       outletId
     }));
     setSelectedProducts([]);
+    loadInventory()
   };
 
   const handleAddProduct = () => {
@@ -172,10 +224,10 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
   const calculateAvailableQuantity = useCallback((productId, indexToExclude) => {
     const product = products.find(p => p.id === productId);
     if (!product) return 0;
-    
+
     // Get total quantity available from inventories
     const totalAvailable = product.quantity || 0;
-    
+
     // Subtract quantities already selected in other product blocks
     let alreadySelected = 0;
     selectedProducts.forEach((prod, index) => {
@@ -183,19 +235,19 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
         alreadySelected += prod.quantity || 0;
       }
     });
-    
+
     return Math.max(0, totalAvailable - alreadySelected);
   }, [products, selectedProducts]);
 
   const handleProductChange = (index, field, value) => {
     const updatedProducts = [...selectedProducts];
-    
+
     if (field === 'productId') {
       const product = products.find(p => p.id === parseInt(value));
       if (product) {
         const maxQuantity = calculateAvailableQuantity(product.id, index);
         const quantity = Math.min(updatedProducts[index].quantity || 1, maxQuantity || 1);
-        
+
         updatedProducts[index] = {
           ...updatedProducts[index],
           productId: product.id,
@@ -212,19 +264,19 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
           freezerId: '',
           locationType: '',
           locationId: '',
-          boxName:""
+          boxName: ""
         };
       }
     } else if (field === 'quantity') {
       const maxQty = updatedProducts[index].maxQuantity;
       let quantity = parseInt(value) || 0;
-      
+
       // Auto-adjust if exceeds max
       if (quantity > maxQty) {
         quantity = maxQty;
       }
       if (quantity < 1) quantity = 1;
-      
+
       updatedProducts[index] = {
         ...updatedProducts[index],
         quantity: quantity,
@@ -234,7 +286,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
       const room = rooms.find(r => r.id === parseInt(value));
       const racks = room?.Racks || [];
       const freezers = room?.Freezers || [];
-      
+
       updatedProducts[index] = {
         ...updatedProducts[index],
         roomId: value,
@@ -267,7 +319,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
         [field]: value
       };
     }
-    
+
     setSelectedProducts(updatedProducts);
   };
 
@@ -281,19 +333,19 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
   const totals = useMemo(() => {
     let subtotal = 0;
     let totalItems = 0;
-    
+
     selectedProducts.forEach(product => {
       subtotal += product.total;
       totalItems += product.quantity;
     });
-    
+
     let discountAmount = 0;
     if (formData.discount > 0) {
       discountAmount = subtotal * (formData.discount / 100);
     }
-    
+
     const total = subtotal - discountAmount;
-    
+
     return {
       subtotal,
       discountAmount,
@@ -306,32 +358,32 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
     if (distributionMode === 'stock' && !formData.storeId) {
       return 'Please select a store';
     }
-    
+
     if (distributionMode === 'outlet' && !formData.outletId) {
       return 'Please select an outlet';
     }
-    
+
     if (selectedProducts.length === 0) {
       return 'Please add at least one product';
     }
-    
+
     // Check if all products have quantity
     for (const item of selectedProducts) {
       if (!item.quantity || item.quantity <= 0) {
         return `Please enter a valid quantity for ${item.productName}`;
       }
-      
+
       // For stock distribution, check location
       if (distributionMode === 'stock' && item.roomId && !item.rackId && !item.freezerId) {
         return `Please select either a rack or freezer for ${item.productName}`;
       }
-      
+
       // Check if location type is consistent
       if (distributionMode === 'stock' && item.rackId && item.freezerId) {
         return `Please select either a rack OR freezer for ${item.productName}, not both`;
       }
     }
-    
+
     // Validate mixed payment
     if (formData.paymentType === 'mixed') {
       if (formData.paidAmount <= 0) {
@@ -342,14 +394,14 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
         return 'Paid amount cannot exceed total amount';
       }
     }
-    
+
     return null;
   };
 
   // Handle payment type change
   const handlePaymentTypeChange = useCallback((paymentType) => {
     const currentTotal = totals?.total || 0;
-    
+
     if (paymentType === 'paid') {
       setFormData(prev => ({
         ...prev,
@@ -379,7 +431,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
     const currentTotal = totals?.total || 0;
     const paidAmount = parseFloat(value) || 0;
     const creditAmount = Math.max(0, currentTotal - paidAmount);
-    
+
     setFormData(prev => ({
       ...prev,
       paidAmount,
@@ -389,28 +441,28 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (loading.submitting) return;
-    
+
     const validationError = validateForm();
     if (validationError) {
       alert(validationError);
       return;
     }
-    
+
     try {
       setLoading(prev => ({ ...prev, submitting: true }));
-            
+
       // For mixed payment, ensure credit amount is calculated correctly
       let finalPaidAmount = formData.paidAmount;
       let finalCreditAmount = formData.creditAmount;
-      
+
       if (formData.paymentType === 'mixed') {
         finalCreditAmount = totals.total - formData.paidAmount;
       }
-      
+
       let response;
-      
+
       if (distributionMode === 'stock') {
         // Stock distribution
         const requestData = {
@@ -424,10 +476,10 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
             roomId: item.roomId,
             locationType: item.locationType,
             locationId: item.locationId,
-            boxName:item.boxName
+            boxName: item.boxName
           }))
         };
-        
+
         response = await ApiService.post(
           `/products/distribute/${formData.storeId}`,
           requestData,
@@ -442,44 +494,43 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
       } else {
         // Outlet distribution
         const selectedOutlet = outlets.find(o => o.id === parseInt(formData.outletId));
-        
+        console.log("selectedProducts ::", selectedProducts);
         const requestData = {
           paymentMethod: formData.paymentType,
           paidAmount: finalPaidAmount,
           creditAmount: finalCreditAmount,
           outletName: selectedOutlet?.name,
+          notes: formData.notes,
           outletAddress: selectedOutlet?.address,
           contactPerson: selectedOutlet?.contactPerson,
           phoneNumber: selectedOutlet?.phoneNumber,
           items: selectedProducts.map(item => ({
             productId: item.productId,
+            id: item.id,
             quantity: item.quantity,
             price: item.price,
             productName: item.productName,
             sku: item.sku,
-            boxName:item.boxName
+            boxName: item.boxName
           }))
         };
-        
-        response = await ApiService.post(
-          `/outlets/${formData.outletId}/distribute`,
-          requestData,
-          {
-            headers: {
-              Authorization: `Bearer ${clientToken}`,
-              'Content-Type': 'application/json',
-            },
-          }
+
+        response = await ApiService.post(`/stores/${formData.storeId}/outlets/${formData.outletId}/invoices/byAdmin`, requestData, {
+          headers: {
+            Authorization: `Bearer ${clientToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
         );
       }
 
       if (response) {
-        console.log("response:::",response.invoice.invoiceNumber)
+        console.log("response:::", response.invoice.invoiceNumber)
         // Prepare distribution data for parent component
         const distributionData = {
           mode: distributionMode,
           storeId: formData.storeId,
-          invoice:response.invoice.invoiceNumber,
+          invoice: response.invoice.invoiceNumber,
           outletId: formData.outletId,
           paymentType: formData.paymentType === 'paid' ? 'Paid' : formData.paymentType === 'credit' ? 'Credit' : 'Mixed',
           discount: formData.discount,
@@ -493,7 +544,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
             quantity: item.quantity,
             price: item.price,
             total: item.total,
-            boxName:item.boxName,
+            boxName: item.boxName,
             sku: item.sku,
             room: distributionMode === 'stock' && item.roomId ? rooms.find(r => r.id === parseInt(item.roomId))?.name || '' : '',
             rack: distributionMode === 'stock' && item.rackId ? rooms
@@ -505,9 +556,9 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
             locationType: item.locationType
           }))
         };
-        
+
         onSave(distributionData);
-        
+
         // Show success popup
         showSuccessPopup(distributionData);
       } else {
@@ -524,7 +575,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
 
   const showSuccessPopup = (distributionData) => {
     console.log('rrr:::', distributionData);
-  
+
     // Group products by boxName
     const groupedBoxes = distributionData.products.reduce((acc, product) => {
       if (!acc[product.boxName]) {
@@ -533,18 +584,18 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
           total: 0
         };
       }
-  
+
       acc[product.boxName].products.push(product);
       acc[product.boxName].total += product.total;
-  
+
       return acc;
     }, {});
-  
+
     // Create popup
     const popupDiv = document.createElement('div');
     popupDiv.className =
       'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]';
-  
+
     popupDiv.innerHTML = `
       <div class="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         
@@ -609,9 +660,8 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                 </p>
               </div>
   
-              ${
-                distributionData.creditAmount > 0
-                  ? `
+              ${distributionData.creditAmount > 0
+        ? `
                   <div>
                     <p class="text-gray-600">Credit Amount:</p>
                     <p class="font-medium text-blue-600">
@@ -619,12 +669,11 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                     </p>
                   </div>
                 `
-                  : ''
-              }
+        : ''
+      }
   
-              ${
-                distributionData.discount > 0
-                  ? `
+              ${distributionData.discount > 0
+        ? `
                   <div>
                     <p class="text-gray-600">Discount:</p>
                     <p class="font-medium text-orange-600">
@@ -632,8 +681,8 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                     </p>
                   </div>
                 `
-                  : ''
-              }
+        : ''
+      }
             </div>
           </div>
   
@@ -658,8 +707,8 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
   
                 <tbody>
                   ${distributionData.products
-                    .map(
-                      (product) => `
+        .map(
+          (product) => `
                       <tr class="border-t border-gray-200">
                         <td class="px-3 py-2">
                           ${product.productName}
@@ -682,8 +731,8 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                         </td>
                       </tr>
                     `
-                    )
-                    .join('')}
+        )
+        .join('')}
                 </tbody>
   
                 <tfoot class="bg-gray-50">
@@ -711,8 +760,8 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
   
               ${Object.entries(groupedBoxes)
-                .map(
-                  ([boxName, boxData]) => `
+        .map(
+          ([boxName, boxData]) => `
                 
                 <div class="border border-gray-300 rounded-xl shadow-sm overflow-hidden">
   
@@ -745,8 +794,8 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
   
                       <tbody>
                         ${boxData.products
-                          .map(
-                            (product) => `
+              .map(
+                (product) => `
                             <tr class="border-b border-gray-100">
                               
                               <td class="py-2">
@@ -767,8 +816,8 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
   
                             </tr>
                           `
-                          )
-                          .join('')}
+              )
+              .join('')}
                       </tbody>
   
                       <tfoot>
@@ -790,15 +839,14 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                 </div>
   
               `
-                )
-                .join('')}
+        )
+        .join('')}
   
             </div>
           </div>
   
-          ${
-            distributionData.notes
-              ? `
+          ${distributionData.notes
+        ? `
               <div class="mb-6">
                 <h3 class="font-semibold text-gray-800 mb-2">
                   Notes
@@ -809,8 +857,8 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                 </p>
               </div>
             `
-              : ''
-          }
+        : ''
+      }
   
           <!-- Footer -->
           <div class="flex justify-end">
@@ -822,18 +870,18 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
         </div>
       </div>
     `;
-  
+
     document.body.appendChild(popupDiv);
-  
+
     // Close handlers
     const closeButtons = popupDiv.querySelectorAll('.close-popup');
-  
+
     closeButtons.forEach((btn) => {
       btn.addEventListener('click', () => {
         popupDiv.remove();
       });
     });
-  
+
     // Outside click close
     popupDiv.addEventListener('click', (e) => {
       if (e.target === popupDiv) {
@@ -871,7 +919,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
   }, [totals?.total, formData.paymentType]);
 
   // Filter outlets by selected store (if store is selected)
-  const filteredOutlets = formData.storeId 
+  const filteredOutlets = formData.storeId
     ? outlets.filter(outlet => outlet.storeId === parseInt(formData.storeId))
     : outlets;
 
@@ -952,7 +1000,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                       </option>
                     ))}
                   </select>
-                  
+
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Select Outlet *
                   </label>
@@ -966,7 +1014,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                     <option value="">{loading.outlets ? 'Loading outlets...' : 'Choose outlet...'}</option>
                     {filteredOutlets.map(outlet => (
                       <option key={outlet.id} value={outlet.id}>
-                                        {outlet.name} {outlet.Store?.name ? `(${outlet.Store.name})` : ''} - Credit: ${(outlet.creditLimit || 0).toLocaleString()}
+                        {outlet.name} {outlet.Store?.name ? `(${outlet.Store.name})` : ''} - Credit: ${(outlet.creditLimit || 0).toLocaleString()}
                       </option>
                     ))}
                   </select>
@@ -986,11 +1034,10 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                     type="button"
                     onClick={handleAddProduct}
                     disabled={loading.products || products.length === 0}
-                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition ${
-                      loading.products || products.length === 0
-                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                        : 'bg-blue-600 text-white hover:bg-blue-700'
-                    }`}
+                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition ${loading.products || products.length === 0
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                      }`}
                   >
                     <FaPlus />
                     <span>Add Product</span>
@@ -1011,11 +1058,10 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                       type="button"
                       onClick={handleAddProduct}
                       disabled={products.length === 0}
-                      className={`mt-4 text-sm font-medium ${
-                        products.length === 0
-                          ? 'text-gray-400 cursor-not-allowed'
-                          : 'text-blue-600 hover:text-blue-800'
-                      }`}
+                      className={`mt-4 text-sm font-medium ${products.length === 0
+                        ? 'text-gray-400 cursor-not-allowed'
+                        : 'text-blue-600 hover:text-blue-800'
+                        }`}
                     >
                       + Click here to add your first product
                     </button>
@@ -1048,7 +1094,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                             <FaMinus />
                           </button>
                         </div>
-                        
+
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                           {/* Product Selection */}
                           <div>
@@ -1064,8 +1110,8 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                               {products.map(p => {
                                 const available = calculateAvailableQuantity(p.id, index);
                                 return (
-                                  <option 
-                                    key={p.id} 
+                                  <option
+                                    key={p.id}
                                     value={p.id}
                                     disabled={available <= 0}
                                   >
@@ -1202,17 +1248,17 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                                 <p className="text-sm font-medium text-gray-900">${product.total?.toFixed(2) || '0.00'}</p>
                               </div>
                               <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Box Name * 
-                            </label>
-                            <input
-                              value={product.boxName}
-                              onChange={(e) => handleProductChange(index, 'boxName', e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
-                              placeholder="Box Name"
-                              required
-                            />
-                          </div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">
+                                  Box Name *
+                                </label>
+                                <input
+                                  value={product.boxName}
+                                  onChange={(e) => handleProductChange(index, 'boxName', e.target.value)}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
+                                  placeholder="Box Name"
+                                  required
+                                />
+                              </div>
                             </div>
                           </div>
                         )}
@@ -1347,13 +1393,13 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                       <p className="text-sm text-gray-500">{totals?.totalItems || 0} units</p>
                     </div>
                   </div>
-                  
+
                   <div className="border-t border-blue-200 pt-3 space-y-2">
                     <div className="flex justify-between">
                       <span className="text-gray-600">Subtotal:</span>
                       <span className="font-medium">${(totals?.subtotal || 0).toFixed(2)}</span>
                     </div>
-                    
+
                     {formData.discount > 0 && (
                       <div className="flex justify-between">
                         <div>
@@ -1363,12 +1409,12 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                         <span className="font-medium text-green-600">-${(totals?.discountAmount || 0).toFixed(2)}</span>
                       </div>
                     )}
-                    
+
                     <div className="flex justify-between border-t border-blue-200 pt-3">
                       <span className="text-lg font-semibold text-gray-800">Total Amount:</span>
                       <span className="text-xl font-bold text-gray-900">${(totals?.total || 0).toFixed(2)}</span>
                     </div>
-                    
+
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-600">Payment Type:</span>
                       <span className="font-medium capitalize">{formData.paymentType}</span>
@@ -1384,7 +1430,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                       </div>
                     )}
                   </div>
-                  
+
                   <div className="mt-4 text-sm text-gray-500">
                     {distributionMode === 'stock' && selectedProducts.some(p => p.roomId) && (
                       <p className="mt-1">Products will be allocated to specific locations as specified.</p>
@@ -1407,18 +1453,17 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                 </button>
                 <button
                   type="submit"
-                  disabled={(distributionMode === 'stock' && !formData.storeId) || 
-                           (distributionMode === 'outlet' && !formData.outletId) || 
-                           selectedProducts.length === 0 || 
-                           loading.submitting}
-                  className={`px-8 py-3 rounded-lg font-medium transition flex items-center space-x-2 ${
-                    ((distributionMode === 'stock' && !formData.storeId) || 
-                     (distributionMode === 'outlet' && !formData.outletId) || 
-                     selectedProducts.length === 0 || 
-                     loading.submitting)
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                      : 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm'
-                  }`}
+                  disabled={(distributionMode === 'stock' && !formData.storeId) ||
+                    (distributionMode === 'outlet' && !formData.outletId) ||
+                    selectedProducts.length === 0 ||
+                    loading.submitting}
+                  className={`px-8 py-3 rounded-lg font-medium transition flex items-center space-x-2 ${((distributionMode === 'stock' && !formData.storeId) ||
+                    (distributionMode === 'outlet' && !formData.outletId) ||
+                    selectedProducts.length === 0 ||
+                    loading.submitting)
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm'
+                    }`}
                 >
                   {loading.submitting ? (
                     <>

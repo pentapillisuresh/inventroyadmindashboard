@@ -1461,20 +1461,8 @@ const StoreDetails = ({ onLogout }) => {
 
           {/* Quick Action Buttons - Modern Design */}
           <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-8 gap-3">
-            <Link
-              to={`/stores/edit/${store.id}`}
-              className="bg-gradient-to-r from-blue-600 to-blue-700 text-white py-2.5 px-3 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 text-center font-medium flex items-center justify-center gap-2 shadow-sm text-sm"
-            >
-              <FaEdit size={14} />
-              <span>Edit Store</span>
-            </Link>
-            <Link
-              to={`/stores/${id}/distribute`}
-              className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white py-2.5 px-3 rounded-lg hover:from-emerald-700 hover:to-emerald-800 transition-all duration-200 text-center font-medium flex items-center justify-center gap-2 shadow-sm text-sm"
-            >
-              <FaTruck size={14} />
-              <span>Stock Dist.</span>
-            </Link>
+          
+           
             <Link
               to="/invoices"
               className="bg-gradient-to-r from-purple-600 to-purple-700 text-white py-2.5 px-3 rounded-lg hover:from-purple-700 hover:to-purple-800 transition-all duration-200 text-center font-medium flex items-center justify-center gap-2 shadow-sm text-sm"
