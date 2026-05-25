@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { FaTimes } from 'react-icons/fa';
+import { FaTimes, FaEdit, FaTrash, FaPlus, FaSave, FaTimesCircle } from 'react-icons/fa';
 import ApiService from './ApiService';
 
-const AddProductModal = ({ product, categories = [], onSave, onClose }) => {
+const AddProductModal = ({ product, categories = [], onSave, onClose, onCategoriesUpdate }) => {
   const [formData, setFormData] = useState({
     name: '',
     sku: '',
@@ -12,7 +12,6 @@ const AddProductModal = ({ product, categories = [], onSave, onClose }) => {
     costPrice: '',
     minStock: '10',
     description: '',
-    // New fields
     HSN_No: '',
     units: '',
     IGST: '',
@@ -23,9 +22,43 @@ const AddProductModal = ({ product, categories = [], onSave, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [newCategory, setNewCategory] = useState('');
+  const [editingCategory, setEditingCategory] = useState(null);
+  const [editCategoryName, setEditCategoryName] = useState('');
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [localCategories, setLocalCategories] = useState(categories);
+  const [categoryLoading, setCategoryLoading] = useState(false);
 
+  // Initialize local categories when props change
   useEffect(() => {
-    // If editing, populate form with product data
+    setLocalCategories(categories);
+  }, [categories]);
+
+  // Fetch fresh categories from API - this ensures data persistence after refresh
+  const fetchCategories = async () => {
+    try {
+      const response = await ApiService.get('/categories', {
+        headers: {
+          Authorization: `Bearer ${clientToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (response.success && response.categories) {
+        setLocalCategories(response.categories);
+        // Update parent component with fresh categories
+        if (onCategoriesUpdate) {
+          onCategoriesUpdate(response.categories);
+        }
+        return response.categories;
+      }
+      return [];
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      return [];
+    }
+  };
+
+  // Initialize form data
+  useEffect(() => {
     if (product) {
       setFormData({
         name: product.name || '',
@@ -43,71 +76,168 @@ const AddProductModal = ({ product, categories = [], onSave, onClose }) => {
         CGST: product.CGST?.toString() || ''
       });
     } else {
-      // Set default values for new product
-      setFormData({
-        name: '',
-        sku: '',
-        categoryId: categories.length > 0 ? categories[0].id?.toString() : '',
-        price: '',
-        stock: '',
-        costPrice: '',
-        minStock: '10',
-        description: '',
-        HSN_No: '',
-        units: '',
-        IGST: '',
-        SGST: '',
-        CGST: ''
-      });
+      // Set default category if available
+      setFormData(prev => ({
+        ...prev,
+        categoryId: localCategories.length > 0 ? localCategories[0]?.id?.toString() : ''
+      }));
     }
-  }, [product, categories]);
+  }, [product, localCategories]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  // Add new category with persistence
   const handleAddCategory = async () => {
-    if (newCategory.trim()) {
-      try {
-        setLoading(true);
-        const categoryProduct = {
-          name: newCategory.trim(),
-          description: ''
-        };
-        const response = await ApiService.post('/categories', categoryProduct, {
-          headers: {
-            Authorization: `Bearer ${clientToken}`,
-            'Content-Type': 'application/json',
-          },
-        });
-        if (response) {
-          alert('Category added successfully! Please refresh the page to see it.');
-          setNewCategory('');
-          setShowNewCategory(false);
-          categories.push(response.category);
-        } else {
-          throw new Error(data.message || 'Failed to add category');
+    if (!newCategory.trim()) {
+      alert('Please enter a category name');
+      return;
+    }
+
+    setCategoryLoading(true);
+    try {
+      const categoryData = {
+        name: newCategory.trim(),
+        description: ''
+      };
+      
+      const response = await ApiService.post('/categories', categoryData, {
+        headers: {
+          Authorization: `Bearer ${clientToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (response && response.category) {
+        // Fetch fresh categories from API
+        const updatedCategories = await fetchCategories();
+        
+        if (updatedCategories.length > 0) {
+          // Auto-select the newly added category
+          const newCategoryObj = updatedCategories.find(c => c.name.toLowerCase() === newCategory.trim().toLowerCase());
+          if (newCategoryObj) {
+            setFormData(prev => ({ ...prev, categoryId: newCategoryObj.id.toString() }));
+          }
         }
-      } catch (error) {
-        console.error('Error adding category:', error);
-        alert(`Error: ${error.message}`);
-      } finally {
-        setLoading(false);
+        
+        setNewCategory('');
+        setShowNewCategory(false);
+        
+        // Show success message
+        const successMsg = document.createElement('div');
+        successMsg.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50 animate-fade-in';
+        successMsg.textContent = 'Category added successfully!';
+        document.body.appendChild(successMsg);
+        setTimeout(() => successMsg.remove(), 3000);
       }
+    } catch (error) {
+      console.error('Error adding category:', error);
+      const errorMsg = error.response?.data?.message || error.message || 'Failed to add category';
+      alert(`Error: ${errorMsg}`);
+    } finally {
+      setCategoryLoading(false);
+    }
+  };
+
+  // Edit category with persistence
+  const handleEditCategory = async (category) => {
+    if (!editCategoryName.trim()) {
+      alert('Please enter a category name');
+      return;
+    }
+
+    setCategoryLoading(true);
+    try {
+      const response = await ApiService.put(`/categories/${category.id}`, {
+        name: editCategoryName.trim(),
+        description: category.description || ''
+      }, {
+        headers: {
+          Authorization: `Bearer ${clientToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response) {
+        // Fetch fresh categories from API
+        const updatedCategories = await fetchCategories();
+        
+        // Update form data if the edited category was selected
+        if (formData.categoryId === category.id.toString()) {
+          const updatedCategory = updatedCategories.find(c => c.id === category.id);
+          if (updatedCategory) {
+            setFormData(prev => ({ ...prev, categoryId: updatedCategory.id.toString() }));
+          }
+        }
+        
+        setEditingCategory(null);
+        setEditCategoryName('');
+        
+        // Show success message
+        const successMsg = document.createElement('div');
+        successMsg.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50 animate-fade-in';
+        successMsg.textContent = 'Category updated successfully!';
+        document.body.appendChild(successMsg);
+        setTimeout(() => successMsg.remove(), 3000);
+      }
+    } catch (error) {
+      console.error('Error editing category:', error);
+      const errorMsg = error.response?.data?.message || error.message || 'Failed to update category';
+      alert(`Error: ${errorMsg}`);
+    } finally {
+      setCategoryLoading(false);
+    }
+  };
+
+  // Delete category with persistence
+  const handleDeleteCategory = async (category) => {
+    setCategoryLoading(true);
+    try {
+      await ApiService.delete(`/categories/${category.id}`, {
+        headers: {
+          Authorization: `Bearer ${clientToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      // Fetch fresh categories from API
+      const updatedCategories = await fetchCategories();
+      
+      // If the deleted category was selected, reset category selection
+      if (formData.categoryId === category.id.toString()) {
+        setFormData(prev => ({ 
+          ...prev, 
+          categoryId: updatedCategories.length > 0 ? updatedCategories[0]?.id?.toString() || '' : '' 
+        }));
+      }
+      
+      setDeleteConfirm(null);
+      
+      // Show success message
+      const successMsg = document.createElement('div');
+      successMsg.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50 animate-fade-in';
+      successMsg.textContent = 'Category deleted successfully!';
+      document.body.appendChild(successMsg);
+      setTimeout(() => successMsg.remove(), 3000);
+    } catch (error) {
+      console.error('Error deleting category:', error);
+      const errorMsg = error.response?.data?.message || error.message || 'Failed to delete category. Make sure no products are using this category.';
+      alert(`Error: ${errorMsg}`);
+    } finally {
+      setCategoryLoading(false);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Validate form
     if (!isFormValid()) return;
 
     try {
       setLoading(true);
       
-      // Prepare the product data for API
       const productData = {
         name: formData.name.trim(),
         sku: formData.sku.trim(),
@@ -116,7 +246,6 @@ const AddProductModal = ({ product, categories = [], onSave, onClose }) => {
         price: parseFloat(formData.price),
         costPrice: parseFloat(formData.costPrice || 0),
         thresholdQuantity: parseInt(formData.minStock),
-        // New fields
         HSN_No: formData.HSN_No.trim() || null,
         units: formData.units.trim() || null,
         IGST: formData.IGST ? parseFloat(formData.IGST) : null,
@@ -124,12 +253,10 @@ const AddProductModal = ({ product, categories = [], onSave, onClose }) => {
         CGST: formData.CGST ? parseFloat(formData.CGST) : null
       };
 
-      // Add description if provided
       if (formData.description.trim()) {
         productData.description = formData.description.trim();
       }
-console.log("productData:::",productData)
-      // Call parent's onSave function with the data
+
       await onSave(productData);
       
     } catch (error) {
@@ -156,7 +283,7 @@ console.log("productData:::",productData)
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-xl w-full max-w-lg max-h-[90vh] overflow-hidden shadow-2xl">
-        {/* Header - Fixed at top */}
+        {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
           <h2 className="text-xl font-bold text-gray-900">
             {product ? 'Edit Product' : 'Add New Product'}
@@ -207,71 +334,168 @@ console.log("productData:::",productData)
               />
             </div>
 
-            {/* Category */}
+            {/* Category Section with Edit/Delete */}
             <div>
               <div className="flex justify-between items-center mb-1.5">
                 <label className="block text-sm font-medium text-gray-700">
                   Category *
                 </label>
-                {!showNewCategory && categories.length > 0 && (
+                {!showNewCategory && !editingCategory && (
                   <button
                     type="button"
                     onClick={() => setShowNewCategory(true)}
-                    className="text-xs text-blue-600 hover:text-blue-800 font-medium disabled:opacity-50"
-                    disabled={loading}
+                    className="text-xs text-blue-600 hover:text-blue-800 font-medium disabled:opacity-50 flex items-center gap-1"
+                    disabled={loading || categoryLoading}
                   >
-                    + Add New Category
+                    <FaPlus size={10} /> Add Category
                   </button>
                 )}
               </div>
               
-              {showNewCategory ? (
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newCategory}
-                    onChange={(e) => setNewCategory(e.target.value)}
-                    placeholder="Enter new category name"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                    disabled={loading}
-                    autoFocus
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddCategory}
-                    className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm font-medium transition"
-                    disabled={loading || !newCategory.trim()}
-                  >
-                    {loading ? 'Adding...' : 'Add'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowNewCategory(false)}
-                    className="px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 text-sm font-medium transition"
-                    disabled={loading}
-                  >
-                    Cancel
-                  </button>
+              {/* Add New Category Form */}
+              {showNewCategory && (
+                <div className="mb-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newCategory}
+                      onChange={(e) => setNewCategory(e.target.value)}
+                      placeholder="Enter new category name"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                      disabled={loading || categoryLoading}
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddCategory}
+                      className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm font-medium transition flex items-center gap-1"
+                      disabled={categoryLoading || !newCategory.trim()}
+                    >
+                      {categoryLoading ? (
+                        <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                      ) : (
+                        <FaSave size={12} />
+                      )}
+                      Add
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowNewCategory(false);
+                        setNewCategory('');
+                      }}
+                      className="px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium transition"
+                      disabled={categoryLoading}
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 </div>
-              ) : (
-                <select
-                  name="categoryId"
-                  value={formData.categoryId}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition bg-white"
-                  required
-                  disabled={loading || categories.length === 0}
-                >
-                  <option value="">Select category</option>
-                  {categories.map(category => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
+              )}
+
+              {/* Category Selection with Edit/Delete Buttons */}
+              {!showNewCategory && localCategories.length > 0 && (
+                <div className="space-y-2">
+                  <select
+                    name="categoryId"
+                    value={formData.categoryId}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    required
+                    disabled={loading || categoryLoading}
+                  >
+                    <option value="">Select category</option>
+                    {localCategories.map(category => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* Edit/Delete Controls for Selected Category */}
+                  {formData.categoryId && !editingCategory && (
+                    <div className="flex justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const category = localCategories.find(c => c.id.toString() === formData.categoryId);
+                          if (category) {
+                            setEditingCategory(category);
+                            setEditCategoryName(category.name);
+                          }
+                        }}
+                        className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 transition"
+                        disabled={loading || categoryLoading}
+                      >
+                        <FaEdit size={10} /> Edit Category
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const category = localCategories.find(c => c.id.toString() === formData.categoryId);
+                          if (category) {
+                            setDeleteConfirm(category);
+                          }
+                        }}
+                        className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1 transition"
+                        disabled={loading || categoryLoading}
+                      >
+                        <FaTrash size={10} /> Delete Category
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Edit Category Form */}
+              {editingCategory && (
+                <div className="mt-3 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={editCategoryName}
+                      onChange={(e) => setEditCategoryName(e.target.value)}
+                      placeholder="Edit category name"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 text-sm"
+                      disabled={loading || categoryLoading}
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleEditCategory(editingCategory)}
+                      className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium transition flex items-center gap-1"
+                      disabled={categoryLoading || !editCategoryName.trim()}
+                    >
+                      {categoryLoading ? (
+                        <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                      ) : (
+                        <FaSave size={12} />
+                      )}
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingCategory(null);
+                        setEditCategoryName('');
+                      }}
+                      className="px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium transition flex items-center gap-1"
+                      disabled={categoryLoading}
+                    >
+                      <FaTimesCircle size={12} />
+                      Cancel
+                    </button>
+                  </div>
+                </div>
               )}
               
-              {categories.length === 0 && !showNewCategory && (
+              {localCategories.length === 0 && !showNewCategory && !editingCategory && (
                 <div className="mt-2">
                   <button
                     type="button"
@@ -284,7 +508,7 @@ console.log("productData:::",productData)
               )}
             </div>
 
-            {/* Price, Stock, and Cost Price - Responsive Grid */}
+            {/* Price, Stock, Cost Price */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -300,7 +524,7 @@ console.log("productData:::",productData)
                     min="0"
                     step="0.01"
                     placeholder="0.00"
-                    className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                    className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
                     required
                     disabled={loading}
                   />
@@ -321,7 +545,7 @@ console.log("productData:::",productData)
                     min="0"
                     step="0.01"
                     placeholder="0.00"
-                    className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                    className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
                     required
                     disabled={loading}
                   />
@@ -339,7 +563,7 @@ console.log("productData:::",productData)
                   onChange={handleChange}
                   min="0"
                   placeholder="Current stock"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
                   required
                   disabled={loading}
                 />
@@ -358,7 +582,7 @@ console.log("productData:::",productData)
                 onChange={handleChange}
                 min="1"
                 placeholder="10"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
                 required
                 disabled={loading}
               />
@@ -367,7 +591,7 @@ console.log("productData:::",productData)
               </p>
             </div>
 
-            {/* HSN, GST, CIN, Units */}
+            {/* HSN, Units */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -379,7 +603,7 @@ console.log("productData:::",productData)
                   value={formData.HSN_No}
                   onChange={handleChange}
                   placeholder="e.g., 330499"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
                   disabled={loading}
                 />
               </div>
@@ -393,13 +617,13 @@ console.log("productData:::",productData)
                   value={formData.units}
                   onChange={handleChange}
                   placeholder="e.g., pcs, kg, liters"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
                   disabled={loading}
                 />
               </div>
             </div>
 
-            {/* Tax Rates: IGST, SGST, CGST */}
+            {/* Tax Rates */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Tax Rates (Optional)
@@ -415,7 +639,7 @@ console.log("productData:::",productData)
                     min="0"
                     step="0.01"
                     placeholder="0.00"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
                     disabled={loading}
                   />
                 </div>
@@ -429,7 +653,7 @@ console.log("productData:::",productData)
                     min="0"
                     step="0.01"
                     placeholder="0.00"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
                     disabled={loading}
                   />
                 </div>
@@ -443,7 +667,7 @@ console.log("productData:::",productData)
                     min="0"
                     step="0.01"
                     placeholder="0.00"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
                     disabled={loading}
                   />
                 </div>
@@ -464,7 +688,7 @@ console.log("productData:::",productData)
                 onChange={handleChange}
                 rows="3"
                 placeholder="Enter product description..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition resize-none"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none"
                 disabled={loading}
               />
             </div>
@@ -477,7 +701,7 @@ console.log("productData:::",productData)
               </p>
             </div>
 
-            {/* Form Actions - Sticky at bottom */}
+            {/* Form Actions */}
             <div className="sticky bottom-0 bg-white pt-4 pb-2 border-t border-gray-200 -mx-6 px-6 mt-2">
               <div className="flex justify-end space-x-3">
                 <button
@@ -501,7 +725,7 @@ console.log("productData:::",productData)
                     <span className="flex items-center gap-2">
                       <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                       </svg>
                       {product ? 'Updating...' : 'Adding...'}
                     </span>
@@ -514,6 +738,49 @@ console.log("productData:::",productData)
           </form>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <div className="text-center">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                <FaTrash className="h-6 w-6 text-red-600" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Delete Category</h3>
+              <p className="text-sm text-gray-500 mb-4">
+                Are you sure you want to delete category "<strong>{deleteConfirm.name}</strong>"?
+                <br />
+                <span className="text-red-500 text-xs">Note: Categories with products cannot be deleted.</span>
+              </p>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setDeleteConfirm(null)}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+                  disabled={categoryLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleDeleteCategory(deleteConfirm)}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition flex items-center gap-2"
+                  disabled={categoryLoading}
+                >
+                  {categoryLoading ? (
+                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  ) : (
+                    <FaTrash size={12} />
+                  )}
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

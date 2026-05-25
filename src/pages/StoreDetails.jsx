@@ -8,9 +8,12 @@ import {
   FaSave, FaSearch, FaHistory, FaSpinner, FaCheckCircle, FaExclamationTriangle,
   FaBuilding, FaThermometerHalf, FaClipboardList, FaDollarSign, FaFilePdf,
   FaDownload, FaShare, FaPrint, FaChevronRight
-} from 'react-icons/fa'; import { storage } from '../data/storage';
+} from 'react-icons/fa';
+import { storage } from '../data/storage';
 import axios from 'axios';
 import ApiService from '../components/ApiService';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 const API_BASE_URL = 'http://localhost:5001/api';
 
@@ -67,12 +70,12 @@ const StoreDetails = ({ onLogout }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedWaybill, setSelectedWaybill] = useState(null);
   const [showWaybillModal, setShowWaybillModal] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   // add this state at top of component
   const [openBatch, setOpenBatch] = useState(null);
 
   // group waybills by batchId
-  // Add this after your useState declarations (around line 96)
   const batchArray = Object.entries(
     waybills.reduce((acc, item) => {
       if (!acc[item.batchId]) {
@@ -85,7 +88,9 @@ const StoreDetails = ({ onLogout }) => {
     batchId,
     items,
     totalAmount: items.reduce((sum, item) => sum + Number(item.totalPrice || 0), 0)
-  })); useEffect(() => {
+  }));
+
+  useEffect(() => {
     loadStoreData();
     loadCategories();
     loadWaybills();
@@ -540,30 +545,189 @@ const StoreDetails = ({ onLogout }) => {
     setShowWaybillModal(true);
   };
 
-  // const handleDownloadWaybill = async (waybill) => {
-  //   try {
-  //     const response = await ApiService.get(`/waybills/${waybill.id}/pdf`, {
-  //       headers: {
-  //         Authorization: `Bearer ${clientToken}`,
-  //         'Content-Type': 'application/json',
-  //       },
-  //       responseType: 'blob'
-  //     });
+  // NEW: Download Waybill as PDF function
+ // Updated: Download Waybill as PDF function with Invoice Format
+const downloadWaybillPDF = async (batchId, batchItems, batchTotal) => {
+  setIsDownloading(true);
+  
+  // Create a temporary div for PDF rendering
+  const pdfContent = document.createElement('div');
+  pdfContent.style.padding = '40px';
+  pdfContent.style.backgroundColor = '#ffffff';
+  pdfContent.style.fontFamily = 'Arial, sans-serif';
+  pdfContent.style.maxWidth = '1000px';
+  pdfContent.style.margin = '0 auto';
+  
+  // Calculate box groupings
+  const boxesInBatch = batchItems.reduce((acc, item) => {
+    if (!acc[item.boxName]) {
+      acc[item.boxName] = {
+        items: [],
+        total: 0
+      };
+    }
+    acc[item.boxName].items.push(item);
+    acc[item.boxName].total += Number(item.totalPrice || 0);
+    return acc;
+  }, {});
+  
+  // Build HTML content with exact invoice format
+  pdfContent.innerHTML = `
+    <div style="border-bottom: 2px solid #2563eb; padding-bottom: 20px; margin-bottom: 20px;">
+      <h1 style="text-align: center; color: #1e40af; margin: 0; font-size: 32px; font-weight: bold; text-transform: uppercase;">
+        DISTRIBUTION WAYBILL
+      </h1>
+      <p style="text-align: center; color: #6b7280; margin-top: 8px; font-size: 14px;">
+        ${store?.name || 'Store Name'} - ${store?.address || ''}
+      </p>
+    </div>
 
-  //     const url = window.URL.createObjectURL(new Blob([response]));
-  //     const link = document.createElement('a');
-  //     link.href = url;
-  //     link.setAttribute('download', `waybill_${waybill.waybillNumber}.pdf`);
-  //     document.body.appendChild(link);
-  //     link.click();
-  //     link.remove();
-  //     window.URL.revokeObjectURL(url);
-  //   } catch (error) {
-  //     console.error('Error downloading waybill:', error);
-  //     alert('Failed to download waybill. Please try again.');
-  //   }
-  // };
+    <!-- Batch Information -->
+    <div style="margin-bottom: 25px; background: #f3f4f6; padding: 15px; border-radius: 8px;">
+      <table style="width: 100%; border-collapse: collapse;">
+        <tr>
+          <td style="padding: 5px; width: 33%;"><strong>Batch ID:</strong> ${batchId}</td>
+          <td style="padding: 5px; width: 33%;"><strong>Date:</strong> ${new Date().toLocaleString()}</td>
+          <td style="padding: 5px; width: 33%;"><strong>Total Amount:</strong> ₹${batchTotal.toLocaleString()}</td>
+        </tr>
+      </table>
+    </div>
 
+    ${Object.entries(boxesInBatch).map(([boxName, boxData], boxIndex) => `
+      <!-- Box ${boxIndex + 1} -->
+      <div style="margin-bottom: 30px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+        <div style="background: #f8fafc; padding: 12px 15px; border-bottom: 2px solid #e2e8f0;">
+          <h3 style="margin: 0; font-size: 16px; font-weight: bold; color: #1e293b;">📦 BOX: ${boxName}</h3>
+        </div>
+        
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+          <thead>
+            <tr style="background: #f1f5f9;">
+              <th style="padding: 10px; text-align: left; border: 1px solid #e2e8f0; font-weight: 600;">SL NO</th>
+              <th style="padding: 10px; text-align: left; border: 1px solid #e2e8f0; font-weight: 600;">PRODUCT NAME</th>
+              <th style="padding: 10px; text-align: left; border: 1px solid #e2e8f0; font-weight: 600;">HSN CODE</th>
+              <th style="padding: 10px; text-align: center; border: 1px solid #e2e8f0; font-weight: 600;">QTY</th>
+              <th style="padding: 10px; text-align: right; border: 1px solid #e2e8f0; font-weight: 600;">RATE (₹)</th>
+              <th style="padding: 10px; text-align: right; border: 1px solid #e2e8f0; font-weight: 600;">AMOUNT (₹)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${boxData.items.map((item, idx) => `
+              <tr>
+                <td style="padding: 8px 10px; border: 1px solid #e2e8f0;">${idx + 1}</td>
+                <td style="padding: 8px 10px; border: 1px solid #e2e8f0;">${item.Product?.name || 'N/A'}</td>
+                <td style="padding: 8px 10px; border: 1px solid #e2e8f0;">${item.Product?.HSN_No || 'N/A'}</td>
+                <td style="padding: 8px 10px; border: 1px solid #e2e8f0; text-align: center;">${item.quantity}</td>
+                <td style="padding: 8px 10px; border: 1px solid #e2e8f0; text-align: right;">${parseFloat(item.price || 0).toLocaleString('en-IN')}</td>
+                <td style="padding: 8px 10px; border: 1px solid #e2e8f0; text-align: right; font-weight: 500;">${parseFloat(item.totalPrice || 0).toLocaleString('en-IN')}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+          <tfoot>
+            <tr style="background: #f8fafc;">
+              <td colspan="5" style="padding: 10px; text-align: right; font-weight: bold; border: 1px solid #e2e8f0;">BOX TOTAL:</td>
+              <td style="padding: 10px; text-align: right; font-weight: bold; border: 1px solid #e2e8f0;">₹${boxData.total.toLocaleString('en-IN')}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    `).join('')}
+
+    <!-- Summary Section -->
+    <div style="margin-top: 20px; display: flex; justify-content: flex-end;">
+      <div style="width: 350px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+        <div style="display: flex; justify-content: space-between; padding: 10px 15px; border-bottom: 1px solid #e5e7eb; background: #f9fafb;">
+          <span style="font-weight: 600;">Total Gross Amount</span>
+          <span>₹${batchTotal.toLocaleString('en-IN')}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; padding: 10px 15px; border-bottom: 1px solid #e5e7eb;">
+          <span style="font-weight: 600;">Add CGST (9%)</span>
+          <span>₹${(batchTotal * 0.09).toLocaleString('en-IN')}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; padding: 10px 15px; border-bottom: 1px solid #e5e7eb;">
+          <span style="font-weight: 600;">Add SGST (9%)</span>
+          <span>₹${(batchTotal * 0.09).toLocaleString('en-IN')}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; padding: 15px; background: #f0fdf4; font-weight: bold; font-size: 16px;">
+          <span>GRAND TOTAL</span>
+          <span>₹${(batchTotal * 1.18).toLocaleString('en-IN')}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Payment Details -->
+    <div style="margin-top: 25px; padding: 15px; background: #f8fafc; border-radius: 8px;">
+      <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: bold;">PAYMENT DETAILS</h4>
+      <table style="width: 100%; font-size: 13px;">
+        <tr>
+          <td style="padding: 5px; width: 33%;"><strong>Payment Method:</strong> ${batchItems[0]?.paymentMethod || 'Paid'}</td>
+          <td style="padding: 5px; width: 33%;"><strong>Paid Amount:</strong> ₹${(batchTotal * 0.5).toLocaleString('en-IN')}</td>
+          <td style="padding: 5px; width: 33%;"><strong>Credit Amount:</strong> ₹${(batchTotal * 0.5).toLocaleString('en-IN')}</td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- Signature Section -->
+    <div style="margin-top: 40px; display: flex; justify-content: space-between;">
+      <div style="width: 45%;">
+        <p style="font-weight: 600; margin-bottom: 40px;">Receiver's Signature</p>
+        <div style="border-bottom: 1px solid #000; width: 80%;"></div>
+        <p style="margin-top: 5px; font-size: 11px; color: #6b7280;">Name: ___________________</p>
+        <p style="margin-top: 5px; font-size: 11px; color: #6b7280;">Date: ${new Date().toLocaleDateString()}</p>
+      </div>
+      <div style="width: 45%; text-align: right;">
+        <p style="font-weight: 600; margin-bottom: 40px;">Authorized Signature</p>
+        <div style="border-bottom: 1px solid #000; width: 80%; margin-left: auto;"></div>
+        <p style="margin-top: 5px; font-size: 11px; color: #6b7280;">Name: ___________________</p>
+        <p style="margin-top: 5px; font-size: 11px; color: #6b7280;">Date: ${new Date().toLocaleDateString()}</p>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div style="margin-top: 40px; text-align: center; border-top: 1px solid #e5e7eb; padding-top: 15px; font-size: 10px; color: #9ca3af;">
+      <p>This is a computer-generated waybill. Valid without signature.</p>
+      <p>${store?.name || ''} - ${store?.address || ''} | Phone: ${store?.phoneNumber || 'N/A'}</p>
+      <p>Generated on: ${new Date().toLocaleString()}</p>
+    </div>
+  `;
+  
+  document.body.appendChild(pdfContent);
+  
+  try {
+    const canvas = await html2canvas(pdfContent, {
+      scale: 2,
+      backgroundColor: '#ffffff',
+      logging: false,
+      useCORS: true,
+    });
+    
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const imgWidth = 210;
+    const pageHeight = 297;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    let heightLeft = imgHeight;
+    let position = 0;
+    
+    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+    heightLeft -= pageHeight;
+    
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+    }
+    
+    pdf.save(`Waybill_${batchId}.pdf`);
+  } catch (error) {
+    console.error('Error generating PDF:', error);
+    alert('Failed to generate PDF. Please try again.');
+  } finally {
+    document.body.removeChild(pdfContent);
+    setIsDownloading(false);
+  }
+};
   const handlePrintWaybill = (waybill) => {
     const printWindow = window.open('', '_blank');
     printWindow.document.write(`
@@ -1260,9 +1424,7 @@ const StoreDetails = ({ onLogout }) => {
                 </div>
               )}
 
-              {/* Waybills Tab - NEW */}
-              {/* Waybills Tab - NEW with Collapsible Batches */}
-              {/* Waybills Tab - Fixed Version */}
+              {/* Waybills Tab - with Download PDF Button */}
               {activeTab === 'waybills' && (
                 <div className="p-6">
                   {/* Header */}
@@ -1354,6 +1516,18 @@ const StoreDetails = ({ onLogout }) => {
                             {/* Expandable Content */}
                             {isOpen && (
                               <div className="p-5 bg-white">
+                                {/* Download Button for this batch */}
+                                <div className="flex justify-end mb-4">
+                                  <button
+                                    onClick={() => downloadWaybillPDF(batchId, batchItems, batchTotal)}
+                                    disabled={isDownloading}
+                                    className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-5 py-2.5 rounded-lg hover:from-emerald-700 hover:to-teal-700 transition-all duration-200 flex items-center gap-2 shadow-sm"
+                                  >
+                                    {isDownloading ? <FaSpinner className="animate-spin" size={14} /> : <FaDownload size={14} />}
+                                    <span>Download Waybill PDF</span>
+                                  </button>
+                                </div>
+                                
                                 <div className="space-y-4">
                                   {Object.entries(boxesInBatch).map(([boxName, boxData], boxIndex) => {
                                     const boxItems = boxData.items;
@@ -1456,13 +1630,12 @@ const StoreDetails = ({ onLogout }) => {
                     )}
                   </div>
                 </div>
-              )}            </div>
+              )}
+            </div>
           )}
 
           {/* Quick Action Buttons - Modern Design */}
           <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-8 gap-3">
-          
-           
             <Link
               to="/invoices"
               className="bg-gradient-to-r from-purple-600 to-purple-700 text-white py-2.5 px-3 rounded-lg hover:from-purple-700 hover:to-purple-800 transition-all duration-200 text-center font-medium flex items-center justify-center gap-2 shadow-sm text-sm"
@@ -2158,13 +2331,6 @@ const StoreDetails = ({ onLogout }) => {
 
               {/* Action Buttons */}
               <div className="flex gap-3 pt-4 border-t border-gray-100">
-                {/* <button
-                  onClick={() => handleDownloadWaybill(selectedWaybill)}
-                  className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white py-2.5 px-4 rounded-lg hover:from-emerald-700 hover:to-emerald-800 transition-all duration-200 flex items-center justify-center gap-2"
-                >
-                  <FaDownload size={14} />
-                  <span>Download PDF</span>
-                </button> */}
                 <button
                   onClick={() => handlePrintWaybill(selectedWaybill)}
                   className="flex-1 bg-gradient-to-r from-purple-600 to-purple-700 text-white py-2.5 px-4 rounded-lg hover:from-purple-700 hover:to-purple-800 transition-all duration-200 flex items-center justify-center gap-2"
