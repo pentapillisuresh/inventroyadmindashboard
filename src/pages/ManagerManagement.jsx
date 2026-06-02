@@ -1,13 +1,237 @@
 import React, { useState, useEffect } from 'react';
-import {FaPhone,FaEnvelope,FaStore,FaUserTie,FaPlus,FaEdit,FaTrash,FaRedo,FaSearch,FaCheckCircle,FaTimesCircle,FaEye,FaUserCircle,FaBell,FaCog,FaSignOutAlt,FaTachometerAlt,FaShoppingBag,FaBox,FaTruck,FaFileInvoice,FaMoneyBill,FaChartBar, FaLock} from 'react-icons/fa';
+import {FaPhone,FaEnvelope,FaStore,FaUserTie,FaPlus,FaEdit,FaTrash,FaRedo,FaSearch,FaCheckCircle,FaTimesCircle,FaEye,FaUserCircle,FaBell,FaCog,FaSignOutAlt,FaTachometerAlt,FaShoppingBag,FaBox,FaTruck,FaFileInvoice,FaMoneyBill,FaChartBar, FaLock, FaBuilding, FaIdCard, FaCalendarAlt, FaUserClock} from 'react-icons/fa';
 import Header from './Header';
 import { storage } from '../data/storage';
 import Sidebar from './Sidebar';
 import ApiService from '../components/ApiService';
 
+// View Manager Details Modal
+const ViewManagerModal = ({ isOpen, onClose, manager }) => {
+  if (!isOpen || !manager) return null;
+
+  const getStatusColor = (status) => {
+    return status === 'Active' ? 'text-green-600 bg-green-100' : 'text-gray-600 bg-gray-100';
+  };
+
+  const getPermissionLabel = (permission) => {
+    return permission.split('_').map(word => 
+      word.charAt(0).toUpperCase() + word.slice(1)
+    ).join(' ');
+  };
+
+  // Parse permissions if it's a string
+  const permissions = typeof manager.permissions === 'string' 
+    ? JSON.parse(manager.permissions) 
+    : manager.permissions;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+          <div className="flex items-center">
+            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+              <FaUserTie className="text-blue-600 text-xl" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-800">Manager Details</h2>
+              <p className="text-sm text-gray-500">Complete information about the manager</p>
+            </div>
+          </div>
+          <button 
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <FaTimesCircle className="text-2xl" />
+          </button>
+        </div>
+
+        <div className="p-6">
+          {/* Basic Information Section */}
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-gray-800 border-b border-gray-200 pb-2 mb-4 flex items-center">
+              <FaUserCircle className="mr-2 text-blue-600" />
+              Basic Information
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <label className="text-xs font-medium text-gray-500 uppercase block">Full Name</label>
+                <p className="text-gray-900 font-medium mt-1">{manager.name || 'N/A'}</p>
+              </div>
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <label className="text-xs font-medium text-gray-500 uppercase block">Status</label>
+                <div className="mt-1">
+                  <span className={`px-3 py-1 rounded-full text-sm font-medium inline-block ${getStatusColor(manager.status)}`}>
+                    {manager.isActive ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+              </div>
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <label className="text-xs font-medium text-gray-500 uppercase block">Email Address</label>
+                <div className="flex items-center mt-1">
+                  <FaEnvelope className="text-gray-400 mr-2 text-sm" />
+                  <p className="text-gray-900">{manager.email || 'N/A'}</p>
+                </div>
+              </div>
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <label className="text-xs font-medium text-gray-500 uppercase block">Phone Number</label>
+                <div className="flex items-center mt-1">
+                  <FaPhone className="text-gray-400 mr-2 text-sm" />
+                  <p className="text-gray-900">{manager.phone || manager.phoneNumber || 'N/A'}</p>
+                </div>
+              </div>
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <label className="text-xs font-medium text-gray-500 uppercase block">Last Login</label>
+                <div className="flex items-center mt-1">
+                  <FaUserClock className="text-gray-400 mr-2 text-sm" />
+                  <p className="text-gray-900">{manager.lastLogin || 'Never'}</p>
+                </div>
+              </div>
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <label className="text-xs font-medium text-gray-500 uppercase block">Total Invoices</label>
+                <p className="text-gray-900 mt-1 font-semibold">{manager.invoices || 0}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Store Information */}
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-gray-800 border-b border-gray-200 pb-2 mb-4 flex items-center">
+              <FaStore className="mr-2 text-blue-600" />
+              Store Information
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <label className="text-xs font-medium text-gray-500 uppercase block">Assigned Store</label>
+                <div className="flex items-center mt-1">
+                  <FaStore className="text-gray-400 mr-2 text-sm" />
+                  <p className="text-gray-900 font-medium">{manager.storeName || 'No Store Assigned'}</p>
+                </div>
+              </div>
+              {manager.storeId && (
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <label className="text-xs font-medium text-gray-500 uppercase block">Store ID</label>
+                  <p className="text-gray-900 mt-1">{manager.storeId}</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Permissions Section */}
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-gray-800 border-b border-gray-200 pb-2 mb-4 flex items-center">
+              <FaLock className="mr-2 text-blue-600" />
+              Permissions & Access
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {permissions && Object.keys(permissions).map(permission => (
+                <div key={permission} className="flex items-center p-3 bg-gray-50 rounded-lg">
+                  {permissions[permission] ? (
+                    <FaCheckCircle className="text-green-500 mr-3 text-lg" />
+                  ) : (
+                    <FaTimesCircle className="text-gray-400 mr-3 text-lg" />
+                  )}
+                  <span className={`text-sm ${permissions[permission] ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>
+                    {getPermissionLabel(permission)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Business Registration Details - Show even if null, but indicate no data */}
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-gray-800 border-b border-gray-200 pb-2 mb-4 flex items-center">
+              <FaBuilding className="mr-2 text-blue-600" />
+              Business Registration Details
+            </h3>
+            {(manager.officeAddress || manager.FSSAI_No || manager.GST_No || manager.CIN_No) ? (
+              <div className="grid grid-cols-1 gap-4">
+                {manager.officeAddress && (
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <label className="text-xs font-medium text-gray-500 uppercase block">Office Address</label>
+                    <p className="text-gray-900 mt-1">{manager.officeAddress}</p>
+                  </div>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {manager.FSSAI_No && (
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <label className="text-xs font-medium text-gray-500 uppercase block">FSSAI Number</label>
+                      <div className="flex items-center mt-1">
+                        <FaIdCard className="text-gray-400 mr-2 text-sm" />
+                        <p className="text-gray-900 font-mono text-sm">{manager.FSSAI_No}</p>
+                      </div>
+                    </div>
+                  )}
+                  {manager.GST_No && (
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <label className="text-xs font-medium text-gray-500 uppercase block">GST Number</label>
+                      <div className="flex items-center mt-1">
+                        <FaIdCard className="text-gray-400 mr-2 text-sm" />
+                        <p className="text-gray-900 font-mono text-sm">{manager.GST_No}</p>
+                      </div>
+                    </div>
+                  )}
+                  {manager.CIN_No && (
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <label className="text-xs font-medium text-gray-500 uppercase block">CIN Number</label>
+                      <div className="flex items-center mt-1">
+                        <FaIdCard className="text-gray-400 mr-2 text-sm" />
+                        <p className="text-gray-900 font-mono text-sm">{manager.CIN_No}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="bg-gray-50 p-4 rounded-lg text-center text-gray-500">
+                <p>No business registration details available</p>
+                <p className="text-sm mt-1">Office address, FSSAI, GST, and CIN numbers are not provided</p>
+              </div>
+            )}
+          </div>
+
+          {/* Additional Information */}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-800 border-b border-gray-200 pb-2 mb-4 flex items-center">
+              <FaCalendarAlt className="mr-2 text-blue-600" />
+              Additional Information
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {manager.expiryDate && (
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <label className="text-xs font-medium text-gray-500 uppercase block">Account Expiry Date</label>
+                  <p className="text-gray-900 mt-1">{new Date(manager.expiryDate).toLocaleDateString()}</p>
+                </div>
+              )}
+              {manager.createdBy && (
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <label className="text-xs font-medium text-gray-500 uppercase block">Created By</label>
+                  <p className="text-gray-900 mt-1">{manager.createdBy}</p>
+                </div>
+              )}
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <label className="text-xs font-medium text-gray-500 uppercase block">Manager ID</label>
+                <p className="text-gray-900 mt-1 font-mono text-sm">{manager.id}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Create Manager Modal
 const CreateManagerModal = ({ isOpen, onClose, manager, onSubmit, stores }) => {
-  console.log("editstroe:::",stores)
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -28,22 +252,31 @@ const CreateManagerModal = ({ isOpen, onClose, manager, onSubmit, stores }) => {
   });
 
   const [loading, setLoading] = useState(false);
-  console.log()
 
   useEffect(() => {
     if (manager) {
+      // Parse permissions if it's a string
+      let parsedPermissions = manager.permissions;
+      if (typeof manager.permissions === 'string') {
+        try {
+          parsedPermissions = JSON.parse(manager.permissions);
+        } catch (e) {
+          parsedPermissions = {
+            create_store: false,
+            create_invoices: false,
+            expenditure_management: false,
+            create_outlets: false
+          };
+        }
+      }
+      
       setFormData({
         name: manager.name || '',
         email: manager.email || '',
         phoneNumber: manager.phoneNumber || '',
-        storeId: manager.storeId || '',
-        password: '',
-        permissions: JSON.parse(manager.permissions) || {
-          create_store: false,
-          create_invoices: false,
-          expenditure_management: false,
-          create_outlets: false
-        },
+        storeId: manager.storeId || '', // Important: Keep the store ID for editing
+        password: '', // Don't populate password for security
+        permissions: parsedPermissions,
         expiryDate: manager.expiryDate || '',
         officeAddress: manager.officeAddress || '',
         FSSAI_No: manager.FSSAI_No || '',
@@ -102,14 +335,18 @@ const CreateManagerModal = ({ isOpen, onClose, manager, onSubmit, stores }) => {
       email: formData.email,
       phoneNumber: formData.phoneNumber,
       storeId: parseInt(formData.storeId),
-      password: formData.password,
       permissions: formData.permissions,
       expiryDate: formData.expiryDate || null,
-      officeAddress: formData.officeAddress,
-      FSSAI_No: formData.FSSAI_No,
-      GST_No: formData.GST_No,
-      CIN_No: formData.CIN_No
+      officeAddress: formData.officeAddress || null,
+      FSSAI_No: formData.FSSAI_No || null,
+      GST_No: formData.GST_No || null,
+      CIN_No: formData.CIN_No || null
     };
+    
+    // Only include password if it's provided (for create it's required, for edit it's optional)
+    if (formData.password) {
+      submitData.password = formData.password;
+    }
     
     try {
       await onSubmit(submitData);
@@ -191,47 +428,56 @@ const CreateManagerModal = ({ isOpen, onClose, manager, onSubmit, stores }) => {
                   />
                 </div>
               </div>
-              {!manager && (
+              
+              {/* Store Assignment - Always show for both create and edit */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Assign Store *
+                  Assign Store {!manager && '*'}
                 </label>
                 <select
                   name="storeId"
                   value={formData.storeId}
                   onChange={handleChange}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  required={manager ? false :true }
+                  required={!manager}
                 >
-                  <option value="">Select a store</option>
+                  <option value="">{manager ? 'Select new store (optional)' : 'Select a store'}</option>
                   {stores.map(store => (
                     <option key={store.id} value={store.id}>
                       {store.name}
                     </option>
                   ))}
                 </select>
+                {manager && formData.storeId && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Current store: {stores.find(s => s.id === parseInt(formData.storeId))?.name || formData.storeId}
+                  </p>
+                )}
               </div>
-              )}
               
-              {!manager && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Password *
-                  </label>
-                  <div className="relative">
-                    <FaLock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                    <input
-                      type="password"
-                      name="password"
-                      value={formData.password}
-                      onChange={handleChange}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Enter password"
-                      required={!manager}
-                    />
-                  </div>
+              {/* Password - Show for create, optional for edit */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {manager ? 'New Password (optional)' : 'Password *'}
+                </label>
+                <div className="relative">
+                  <FaLock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="password"
+                    name="password"
+                    value={formData.password}
+                    onChange={handleChange}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder={manager ? "Leave blank to keep current password" : "Enter password"}
+                    required={!manager}
+                  />
                 </div>
-              )}
+                {manager && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Only enter if you want to change the password
+                  </p>
+                )}
+              </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -240,13 +486,13 @@ const CreateManagerModal = ({ isOpen, onClose, manager, onSubmit, stores }) => {
                 <input
                   type="date"
                   name="expiryDate"
-                  value={formData.expiryDate}
+                  value={formData.expiryDate || ''}
                   onChange={handleChange}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
 
-              {/* New Business Registration Fields */}
+              {/* Business Registration Fields */}
               <div className="pt-2">
                 <h3 className="text-md font-medium text-gray-700 mb-2">Business Registration Details</h3>
                 <div className="space-y-3">
@@ -257,7 +503,7 @@ const CreateManagerModal = ({ isOpen, onClose, manager, onSubmit, stores }) => {
                     <input
                       type="text"
                       name="officeAddress"
-                      value={formData.officeAddress}
+                      value={formData.officeAddress || ''}
                       onChange={handleChange}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Full office address"
@@ -270,7 +516,7 @@ const CreateManagerModal = ({ isOpen, onClose, manager, onSubmit, stores }) => {
                     <input
                       type="text"
                       name="FSSAI_No"
-                      value={formData.FSSAI_No}
+                      value={formData.FSSAI_No || ''}
                       onChange={handleChange}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="FSSAI registration number"
@@ -283,7 +529,7 @@ const CreateManagerModal = ({ isOpen, onClose, manager, onSubmit, stores }) => {
                     <input
                       type="text"
                       name="GST_No"
-                      value={formData.GST_No}
+                      value={formData.GST_No || ''}
                       onChange={handleChange}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="GST identification number"
@@ -296,7 +542,7 @@ const CreateManagerModal = ({ isOpen, onClose, manager, onSubmit, stores }) => {
                     <input
                       type="text"
                       name="CIN_No"
-                      value={formData.CIN_No}
+                      value={formData.CIN_No || ''}
                       onChange={handleChange}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Company Identification Number"
@@ -363,53 +609,48 @@ const ManagerManagement = ({ onLogout }) => {
   const [managers, setManagers] = useState([]);
   const [stores, setStores] = useState([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
   const [currentManager, setCurrentManager] = useState(null);
+  const [selectedManager, setSelectedManager] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const clientToken = localStorage.getItem('token');
+  
   useEffect(() => {
     loadManagers();
     loadStores();
   }, []);
 
   const loadStores = async () => {
-      // You might need to fetch stores from an API here
-      try {      
-        const response = await ApiService.get('users/UnassignedStores', {
-          headers: {
-            Authorization: `Bearer ${clientToken}`,
-            'Content-Type': 'application/json',
-          }
-        });
+    try {      
+      const response = await ApiService.get('users/UnassignedStores', {
+        headers: {
+          Authorization: `Bearer ${clientToken}`,
+          'Content-Type': 'application/json',
+        }
+      });
   
-        if (!response) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        if (response.success) {
-          // Transform API data to match UI format
-          const transformedStore = response.data.map(store => ({
-            id: store.id,
-            name: store.name,
-            email: store.email,
-            phone: store.phoneNumber,
-            phoneNumber: store.phoneNumber,
-            address: store.address,
-            status: store.isActive ? 'Active' : 'Inactive',
-            isActive: store.isActive
-          }));
-          setStores(transformedStore);
-        } else {
-          console.error('API returned unsuccessful:', result);
-          setStores([]);
-        }
-      } catch (error) {
-        console.error('Error loading managers:', error);
-        // Fallback to local storage if API fails
-      } finally {
-        setLoading(false);
+      if (response && response.success) {
+        const transformedStore = response.data.map(store => ({
+          id: store.id,
+          name: store.name,
+          email: store.email,
+          phone: store.phoneNumber,
+          phoneNumber: store.phoneNumber,
+          address: store.address,
+          status: store.isActive ? 'Active' : 'Inactive',
+          isActive: store.isActive
+        }));
+        setStores(transformedStore);
+      } else {
+        console.error('API returned unsuccessful:', response);
+        setStores([]);
       }
-    };
+    } catch (error) {
+      console.error('Error loading stores:', error);
+      setStores([]);
+    }
+  };
 
   const loadManagers = async () => {
     setLoading(true);
@@ -421,12 +662,7 @@ const ManagerManagement = ({ onLogout }) => {
         }
       });
 
-      if (!response) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      console.log("manager:::",response)
-      if (response.success) {
-        // Transform API data to match UI format
+      if (response && response.success) {
         const transformedManagers = response.data.map(manager => ({
           id: manager.id,
           name: manager.name,
@@ -447,15 +683,13 @@ const ManagerManagement = ({ onLogout }) => {
           GST_No: manager.GST_No || '',
           CIN_No: manager.CIN_No || ''
         }));
-        
         setManagers(transformedManagers);
       } else {
-        console.error('API returned unsuccessful:', result);
+        console.error('API returned unsuccessful:', response);
         setManagers([]);
       }
     } catch (error) {
       console.error('Error loading managers:', error);
-      // Fallback to local storage if API fails
       const loadedManagers = storage.getManagers();
       setManagers(loadedManagers);
     } finally {
@@ -473,25 +707,26 @@ const ManagerManagement = ({ onLogout }) => {
     setShowCreateModal(true);
   };
 
+  const handleViewManager = (manager) => {
+    setSelectedManager(manager);
+    setShowViewModal(true);
+  };
+
   const handleDeleteManager = async (manager) => {
     if (window.confirm(`Are you sure you want to delete "${manager.name}"?`)) {
       try {        
-        const response = await ApiService.delete(`/users/store-managers/${manager.id}`, {
+        const response = await ApiService.delete(`users/store-managers/${manager.id}`, {
           headers: {
             Authorization: `Bearer ${clientToken}`,
             'Content-Type': 'application/json',
           }
-          });
+        });
 
-        if (!response) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        if (response.success) {
+        if (response && response.success) {
           alert(`Manager "${manager.name}" deleted successfully`);
           loadManagers();
         } else {
-          alert(`Failed to delete manager: ${response.message}`);
+          alert(`Failed to delete manager: ${response?.message || 'Unknown error'}`);
         }
       } catch (error) {
         console.error('Error deleting manager:', error);
@@ -503,21 +738,17 @@ const ManagerManagement = ({ onLogout }) => {
   const handleResendCredentials = async (manager) => {
     if (window.confirm(`Resend credentials to ${manager.email}?`)) {
       try {        
-        const response = await ApiService.post(`/users/resend-credentials/${manager.id}`, {
+        const response = await ApiService.post(`users/resend-credentials/${manager.id}`, {}, {
           headers: {
             Authorization: `Bearer ${clientToken}`,
             'Content-Type': 'application/json',
           }
         });
 
-        if (!response) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        if (response.success) {
+        if (response && response.success) {
           alert(`Credentials resent to ${manager.email}`);
         } else {
-          alert(`Failed to resend credentials: ${response.message}`);
+          alert(`Failed to resend credentials: ${response?.message || 'Unknown error'}`);
         }
       } catch (error) {
         console.error('Error resending credentials:', error);
@@ -529,8 +760,8 @@ const ManagerManagement = ({ onLogout }) => {
   const handleModalSubmit = async (formData) => {
     try {
       const url = currentManager
-        ? `/users/store-managers/${currentManager.id}`
-        : '/users/store-managers';
+        ? `users/store-managers/${currentManager.id}`
+        : 'users/store-managers';
   
       const method = currentManager ? 'put' : 'post';
   
@@ -541,15 +772,11 @@ const ManagerManagement = ({ onLogout }) => {
         }
       });
   
-      if (!response) {
-        throw new Error('No response from server');
-      }
-
-      if (response) {
+      if (response && response.success) {
         alert(`Manager ${currentManager ? 'updated' : 'created'} successfully!`);
         loadManagers();
       } else {
-        throw new Error(response.message || 'Failed to save manager');
+        throw new Error(response?.message || 'Failed to save manager');
       }
   
     } catch (error) {
@@ -596,7 +823,7 @@ const ManagerManagement = ({ onLogout }) => {
               <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
-                placeholder="Type here to search"
+                placeholder="Search by name, email or store..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -658,7 +885,7 @@ const ManagerManagement = ({ onLogout }) => {
                                 <div className="font-medium text-gray-900">{manager.name}</div>
                               </div>
                             </div>
-                          </td>
+                           </td>
                           <td className="px-6 py-4">
                             <div className="space-y-1">
                               <div className="flex items-center text-sm text-gray-600">
@@ -670,13 +897,13 @@ const ManagerManagement = ({ onLogout }) => {
                                 {manager.phone || manager.phoneNumber}
                               </div>
                             </div>
-                          </td>
+                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center">
                               <FaStore className="mr-2 text-gray-400" />
                               <span className="text-gray-900">{manager.storeName}</span>
                             </div>
-                          </td>
+                           </td>
                           <td className="px-6 py-4">
                             <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                               manager.isActive
@@ -685,41 +912,50 @@ const ManagerManagement = ({ onLogout }) => {
                             }`}>
                               {manager.isActive ? 'Active' : 'Inactive'}
                             </span>
-                          </td>
+                           </td>
                           <td className="px-6 py-4 text-sm text-gray-900">
                             {manager.lastLogin}
-                          </td>
+                           </td>
                           <td className="px-6 py-4 text-sm font-medium text-gray-900">
                             {manager.invoices}
-                          </td>
+                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center space-x-2">
                               <button
+                                onClick={() => handleViewManager(manager)}
+                                className="text-green-600 hover:text-green-900 text-sm font-medium flex items-center"
+                                title="View Details"
+                              >
+                                <FaEye className="mr-1" />
+                                View
+                              </button>
+                              <button
                                 onClick={() => handleEditManager(manager)}
                                 className="text-blue-600 hover:text-blue-900 text-sm font-medium flex items-center"
+                                title="Edit Manager"
                               >
                                 <FaEdit className="mr-1" />
                                 Edit
                               </button>
-                              {manager.status === 'Not Logged In' && (
-                                <button
-                                  onClick={() => handleResendCredentials(manager)}
-                                  className="text-green-600 hover:text-green-900 text-sm font-medium flex items-center"
-                                >
-                                  <FaRedo className="mr-1" />
-                                  Resend
-                                </button>
-                              )}
+                              <button
+                                onClick={() => handleResendCredentials(manager)}
+                                className="text-purple-600 hover:text-purple-900 text-sm font-medium flex items-center"
+                                title="Resend Credentials"
+                              >
+                                <FaRedo className="mr-1" />
+                                Resend
+                              </button>
                               <button
                                 onClick={() => handleDeleteManager(manager)}
                                 className="text-red-600 hover:text-red-900 text-sm font-medium flex items-center"
+                                title="Delete Manager"
                               >
                                 <FaTrash className="mr-1" />
                                 Delete
                               </button>
                             </div>
-                          </td>
-                        </tr>
+                           </td>
+                          </tr>
                       ))
                     )}
                   </tbody>
@@ -740,6 +976,16 @@ const ManagerManagement = ({ onLogout }) => {
         manager={currentManager}
         onSubmit={handleModalSubmit}
         stores={stores}
+      />
+
+      {/* View Manager Modal */}
+      <ViewManagerModal
+        isOpen={showViewModal}
+        onClose={() => {
+          setShowViewModal(false);
+          setSelectedManager(null);
+        }}
+        manager={selectedManager}
       />
     </div>
   );

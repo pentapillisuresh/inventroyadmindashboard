@@ -422,7 +422,7 @@ const InvoiceManagement = ({ onLogout }) => {
                   <div className="border-b-2 border-gray-300 pb-4">
 
                     <h1 className="text-center text-3xl font-bold uppercase">
-                      {selectedInvoice.Store.name}
+                      {selectedInvoice.Admin.name}
                     </h1>
 
                     <div className="grid grid-cols-3 gap-4 mt-4 text-sm">
@@ -817,31 +817,7 @@ const InvoiceManagement = ({ onLogout }) => {
 
                 </div>
 
-                {/* APPROVE/REJECT */}
-                {selectedInvoice.status === 'pending' && (
-
-                  <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4 rounded-b-xl flex justify-end gap-3 print:hidden">
-
-                    <button
-                      onClick={() => handleRejectInvoice(selectedInvoice.id)}
-                      className="flex items-center gap-2 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                    >
-                      <FaTimesCircle />
-                      Reject Invoice
-                    </button>
-
-                    <button
-                      onClick={() => handleApproveInvoice(selectedInvoice.id)}
-                      className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                    >
-                      <FaCheckCircle />
-                      Approve Invoice
-                    </button>
-
-                  </div>
-
-                )}
-
+               
               </div>
 
             </div>
