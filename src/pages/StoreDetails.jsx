@@ -87,9 +87,12 @@ const StoreDetails = ({ onLogout }) => {
   ).map(([batchId, items]) => ({
     batchId,
     items,
-    totalAmount: items.reduce((sum, item) => sum + Number(item.totalPrice || 0), 0)
+    totalAmount: items.reduce((sum, item) => sum + Number(item.totalPrice || 0), 0),
+    invoice: items[0]?.invoice || null, // Add invoice data from the first item in the batch
+    invoiceId: items[0]?.invoiceId, // Add invoice ID
+    invoiceNumber: items[0]?.invoice?.invoiceNumber, // Add invoice number
+    invoiceType: items[0]?.invoice?.type // Add invoice type (distribution/outlet_sale)
   }));
-
   useEffect(() => {
     loadStoreData();
     loadCategories();
@@ -194,6 +197,7 @@ const StoreDetails = ({ onLogout }) => {
 
       });
       if (response.waybills) {
+        console.log("response:::",response);
         setWaybills(response.waybills);
       }
     } catch (error) {
@@ -547,7 +551,7 @@ const StoreDetails = ({ onLogout }) => {
 
   // NEW: Download Waybill as PDF function
  // Updated: Download Waybill as PDF function with Invoice Format
-const downloadWaybillPDF = async (batchId, batchItems, batchTotal) => {
+ const downloadWaybillPDF = async (batchId, batchItems, batchTotal, batchInvoice) => {
   setIsDownloading(true);
   
   // Create a temporary div for PDF rendering
@@ -557,6 +561,33 @@ const downloadWaybillPDF = async (batchId, batchItems, batchTotal) => {
   pdfContent.style.fontFamily = 'Arial, sans-serif';
   pdfContent.style.maxWidth = '1000px';
   pdfContent.style.margin = '0 auto';
+  
+  // Determine From and To addresses based on invoice type
+  const isDistribution = batchInvoice?.type === 'distribution';
+  
+  // From address (createdBy data - from batchInvoice.createdUser)
+  const fromAddress = {
+    name: batchInvoice?.createdUser?.name || 'N/A',
+    address: batchInvoice?.createdUser?.officeAddress || 'N/A',
+    phone: batchInvoice?.createdUser?.phoneNumber || 'N/A',
+    email: batchInvoice?.createdUser?.email || 'N/A'
+  };
+  
+  // To address (Store for distribution, Outlet for outlet_sale)
+  let toAddress = {};
+  if (isDistribution) {
+    toAddress = {
+      name: batchInvoice?.Store?.name || 'N/A',
+      address: batchInvoice?.Store?.address || 'N/A',
+      phone: batchInvoice?.Store?.phoneNumber || 'N/A'
+    };
+  } else {
+    toAddress = {
+      name: batchInvoice?.Outlet?.name || 'N/A',
+      address: batchInvoice?.Outlet?.address || 'N/A',
+      phone: batchInvoice?.Outlet?.phoneNumber || 'N/A'
+    };
+  }
   
   // Calculate box groupings
   const boxesInBatch = batchItems.reduce((acc, item) => {
@@ -575,11 +606,31 @@ const downloadWaybillPDF = async (batchId, batchItems, batchTotal) => {
   pdfContent.innerHTML = `
     <div style="border-bottom: 2px solid #2563eb; padding-bottom: 20px; margin-bottom: 20px;">
       <h1 style="text-align: center; color: #1e40af; margin: 0; font-size: 32px; font-weight: bold; text-transform: uppercase;">
-        DISTRIBUTION WAYBILL
+        ${isDistribution ? 'DISTRIBUTION' : 'OUTLET SALE'} WAYBILL
       </h1>
       <p style="text-align: center; color: #6b7280; margin-top: 8px; font-size: 14px;">
-        ${store?.name || 'Store Name'} - ${store?.address || ''}
+        ${batchInvoice?.invoiceNumber || 'Invoice Number'} | ${new Date(batchInvoice?.createdAt).toLocaleDateString() || ''}
       </p>
+    </div>
+
+    <!-- From and To Address Section -->
+    <div style="margin-bottom: 25px; display: flex; justify-content: space-between; gap: 20px;">
+      <!-- From Address -->
+      <div style="flex: 1; border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px; background: #f9fafb;">
+        <h3 style="margin: 0 0 10px 0; font-size: 14px; font-weight: bold; color: #1e40af;">📤 FROM</h3>
+        <p style="margin: 5px 0; font-weight: 600;">${fromAddress.name}</p>
+        <p style="margin: 5px 0; font-size: 12px; color: #4b5563;">${fromAddress.address}</p>
+        <p style="margin: 5px 0; font-size: 12px; color: #4b5563;">Phone: ${fromAddress.phone}</p>
+        <p style="margin: 5px 0; font-size: 12px; color: #4b5563;">Email: ${fromAddress.email}</p>
+      </div>
+      
+      <!-- To Address -->
+      <div style="flex: 1; border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px; background: #f9fafb;">
+        <h3 style="margin: 0 0 10px 0; font-size: 14px; font-weight: bold; color: #1e40af;">📥 TO</h3>
+        <p style="margin: 5px 0; font-weight: 600;">${toAddress.name}</p>
+        <p style="margin: 5px 0; font-size: 12px; color: #4b5563;">${toAddress.address}</p>
+        <p style="margin: 5px 0; font-size: 12px; color: #4b5563;">Phone: ${toAddress.phone}</p>
+      </div>
     </div>
 
     <!-- Batch Information -->
@@ -587,8 +638,13 @@ const downloadWaybillPDF = async (batchId, batchItems, batchTotal) => {
       <table style="width: 100%; border-collapse: collapse;">
         <tr>
           <td style="padding: 5px; width: 33%;"><strong>Batch ID:</strong> ${batchId}</td>
-          <td style="padding: 5px; width: 33%;"><strong>Date:</strong> ${new Date().toLocaleString()}</td>
-          <td style="padding: 5px; width: 33%;"><strong>Total Amount:</strong> ₹${batchTotal.toLocaleString()}</td>
+          <td style="padding: 5px; width: 33%;"><strong>Invoice No:</strong> ${batchInvoice?.invoiceNumber || 'N/A'}</td>
+          <td style="padding: 5px; width: 33%;"><strong>Total Amount:</strong> ₹${batchTotal.toLocaleString('en-IN')}</td>
+        </tr>
+        <tr>
+          <td style="padding: 5px;"><strong>Date:</strong> ${new Date(batchInvoice?.createdAt || new Date()).toLocaleString()}</td>
+          <td style="padding: 5px;"><strong>Type:</strong> ${isDistribution ? 'Distribution' : 'Outlet Sale'}</td>
+          <td style="padding: 5px;"></td>
         </tr>
       </table>
     </div>
@@ -609,7 +665,7 @@ const downloadWaybillPDF = async (batchId, batchItems, batchTotal) => {
               <th style="padding: 10px; text-align: center; border: 1px solid #e2e8f0; font-weight: 600;">QTY</th>
               <th style="padding: 10px; text-align: right; border: 1px solid #e2e8f0; font-weight: 600;">RATE (₹)</th>
               <th style="padding: 10px; text-align: right; border: 1px solid #e2e8f0; font-weight: 600;">AMOUNT (₹)</th>
-            </tr>
+             </tr>
           </thead>
           <tbody>
             ${boxData.items.map((item, idx) => `
@@ -672,13 +728,13 @@ const downloadWaybillPDF = async (batchId, batchItems, batchTotal) => {
       <div style="width: 45%;">
         <p style="font-weight: 600; margin-bottom: 40px;">Receiver's Signature</p>
         <div style="border-bottom: 1px solid #000; width: 80%;"></div>
-        <p style="margin-top: 5px; font-size: 11px; color: #6b7280;">Name: ___________________</p>
+        <p style="margin-top: 5px; font-size: 11px; color: #6b7280;">Name: ${toAddress.name || '___________________'}</p>
         <p style="margin-top: 5px; font-size: 11px; color: #6b7280;">Date: ${new Date().toLocaleDateString()}</p>
       </div>
       <div style="width: 45%; text-align: right;">
         <p style="font-weight: 600; margin-bottom: 40px;">Authorized Signature</p>
         <div style="border-bottom: 1px solid #000; width: 80%; margin-left: auto;"></div>
-        <p style="margin-top: 5px; font-size: 11px; color: #6b7280;">Name: ___________________</p>
+        <p style="margin-top: 5px; font-size: 11px; color: #6b7280;">Name: ${fromAddress.name || '___________________'}</p>
         <p style="margin-top: 5px; font-size: 11px; color: #6b7280;">Date: ${new Date().toLocaleDateString()}</p>
       </div>
     </div>
@@ -686,7 +742,7 @@ const downloadWaybillPDF = async (batchId, batchItems, batchTotal) => {
     <!-- Footer -->
     <div style="margin-top: 40px; text-align: center; border-top: 1px solid #e5e7eb; padding-top: 15px; font-size: 10px; color: #9ca3af;">
       <p>This is a computer-generated waybill. Valid without signature.</p>
-      <p>${store?.name || ''} - ${store?.address || ''} | Phone: ${store?.phoneNumber || 'N/A'}</p>
+      <p>${fromAddress.name} - ${fromAddress.address} | Phone: ${fromAddress.phone}</p>
       <p>Generated on: ${new Date().toLocaleString()}</p>
     </div>
   `;
@@ -728,7 +784,9 @@ const downloadWaybillPDF = async (batchId, batchItems, batchTotal) => {
     setIsDownloading(false);
   }
 };
-  const handlePrintWaybill = (waybill) => {
+
+
+const handlePrintWaybill = (waybill) => {
     const printWindow = window.open('', '_blank');
     printWindow.document.write(`
       <html>
@@ -1466,6 +1524,7 @@ const downloadWaybillPDF = async (batchId, batchItems, batchTotal) => {
                         const batchId = batch.batchId;
                         const batchItems = batch.items;
                         const batchTotal = batch.totalAmount;
+                        const batchInvoice = batch.invoice;
 
                         // Group boxes within this batch
                         const boxesInBatch = batchItems.reduce((acc, item) => {
@@ -1527,7 +1586,7 @@ const downloadWaybillPDF = async (batchId, batchItems, batchTotal) => {
                                 {/* Download Button for this batch */}
                                 <div className="flex justify-end mb-4">
                                   <button
-                                    onClick={() => downloadWaybillPDF(batchId, batchItems, batchTotal)}
+                                    onClick={() => downloadWaybillPDF(batchId, batchItems, batchTotal,batchInvoice)}
                                     disabled={isDownloading}
                                     className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-5 py-2.5 rounded-lg hover:from-emerald-700 hover:to-teal-700 transition-all duration-200 flex items-center gap-2 shadow-sm"
                                   >
