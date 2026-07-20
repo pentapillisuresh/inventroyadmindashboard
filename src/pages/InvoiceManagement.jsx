@@ -431,7 +431,7 @@ const InvoiceManagement = ({ onLogout }) => {
                         <p>
                           <span className="font-semibold">Regd Office :</span>
                           {' '}
-                          {selectedInvoice.Store.address}
+                          {selectedInvoice.Admin.officeAddress}
                         </p>
 
                         {/* <p>
@@ -529,7 +529,7 @@ const InvoiceManagement = ({ onLogout }) => {
                       <p className="mt-1">
                         GST NO :
                         {' '}
-                        {selectedInvoice.Manager?.GST_No}
+                        {selectedInvoice.Store?.Manager?.GST_No}
                       </p>
                     </div>
 
@@ -561,7 +561,7 @@ const InvoiceManagement = ({ onLogout }) => {
                       <p className="mt-1">
                         GST NO :
                         {' '}
-                        {selectedInvoice.Manager?.GST_No}
+                        {selectedInvoice.Store?.Manager?.GST_No}
                       </p>
 
                     </div>
