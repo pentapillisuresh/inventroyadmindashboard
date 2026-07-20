@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
-import { FaPlus, FaEdit, FaTrash, FaSearch, FaFilter } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaSearch, FaFilter, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import AddProductModal from '../components/AddProductModal';
 import ApiService from '../components/ApiService';
 
@@ -16,29 +16,33 @@ const ProductManagement = ({ onLogout }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState(['All']);
-  const [allCategories, setAllCategories] = useState([]); // For category dropdown in modal
+  const [allCategories, setAllCategories] = useState([]);
   const [stats, setStats] = useState({
     total: 0,
     inStock: 0,
     lowStock: 0,
     outOfStock: 0
   });
+  
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(30);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  
   const clientToken = localStorage.getItem('token');
-  useEffect(() => {
-    loadProducts();
-    loadStats();
-    loadAllCategories();
-  }, []);
 
-  const loadProducts = async () => {
+  // Load products with pagination
+  const loadProducts = useCallback(async (page = 1) => {
     setLoading(true);
     try {
-      const response = await ApiService.get('/products',{
+      const response = await ApiService.get(`/products?page=${page}&limit=${itemsPerPage}`, {
         headers: {
           Authorization: `Bearer ${clientToken}`,
           'Content-Type': 'application/json',
         },
       });
+      
       if (response.products) {
         // Transform API data to match your existing format
         const transformedProducts = response.products.map(product => ({
@@ -56,51 +60,52 @@ const ProductManagement = ({ onLogout }) => {
           image: product.image,
           isActive: product.isActive,
           categoryId: product.categoryId,
-          units:product.units,
+          units: product.units,
           IGST: parseInt(product.IGST),
           SGST: parseInt(product.SGST),
           CGST: parseInt(product.CGST)
-  
         }));
         
         setProducts(transformedProducts);
+        setTotalItems(response.total || response.count || transformedProducts.length);
+        setTotalPages(response.totalPages || Math.ceil((response.total || transformedProducts.length) / itemsPerPage));
+        setCurrentPage(page);
         
         // Extract unique categories
-        const uniqueCategories = ['All'];
-        response.products.forEach(product => {
-          if (product.Category?.name && !uniqueCategories.includes(product.Category.name)) {
-            uniqueCategories.push(product.Category.name);
-          }
-        });
-        setCategories(uniqueCategories);
+        if (page === 1) {
+          const uniqueCategories = ['All'];
+          response.products.forEach(product => {
+            if (product.Category?.name && !uniqueCategories.includes(product.Category.name)) {
+              uniqueCategories.push(product.Category.name);
+            }
+          });
+          setCategories(uniqueCategories);
+        }
       }
     } catch (error) {
       console.error('Error loading products:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [clientToken, itemsPerPage]);
 
   const loadAllCategories = async () => {
-    
     try {
-      // Assuming you have a categories endpoint
-      const response = await ApiService.get('/categories',{
+      const response = await ApiService.get('/categories', {
         headers: {
           Authorization: `Bearer ${clientToken}`,
           'Content-Type': 'application/json',
         },
       });
-      setAllCategories(response.categories || data || []);
+      setAllCategories(response.categories || []);
     } catch (error) {
       console.error('Error loading categories:', error);
-      // If categories endpoint doesn't exist, we'll handle it in the modal
     }
   };
 
   const loadStats = async () => {
     try {
-      const response = await ApiService.get('/products/admin/allCount',{
+      const response = await ApiService.get('/products/admin/allCount', {
         headers: {
           Authorization: `Bearer ${clientToken}`,
           'Content-Type': 'application/json',
@@ -117,6 +122,12 @@ const ProductManagement = ({ onLogout }) => {
       console.error('Error loading stats:', error);
     }
   };
+
+  useEffect(() => {
+    loadProducts(1);
+    loadStats();
+    loadAllCategories();
+  }, [loadProducts]);
 
   const getProductStatus = (quantity, threshold) => {
     const qty = parseInt(quantity);
@@ -138,7 +149,6 @@ const ProductManagement = ({ onLogout }) => {
 
   const handleDeleteProduct = async (id) => {
     try {
-      // Make API call to delete product
       await ApiService.delete(`/products/${id}`, {
         headers: {
           Authorization: `Bearer ${clientToken}`,
@@ -146,8 +156,7 @@ const ProductManagement = ({ onLogout }) => {
         },
       });
       
-      // Reload data
-      loadProducts();
+      loadProducts(currentPage);
       loadStats();
       setShowDeleteConfirm(null);
     } catch (error) {
@@ -157,7 +166,6 @@ const ProductManagement = ({ onLogout }) => {
 
   const handleSaveProduct = async (productData) => {
     try {
-      // Prepare the request payload based on your API specification
       const productPayload = {
         name: productData.name.trim(),
         sku: productData.sku.trim(),
@@ -167,31 +175,25 @@ const ProductManagement = ({ onLogout }) => {
         costPrice: parseFloat(productData.costPrice || 0),
         thresholdQuantity: parseInt(productData.thresholdQuantity),
         HSN_No: productData.HSN_No,
-        units:productData.units,
+        units: productData.units,
         IGST: parseInt(productData.IGST),
         SGST: parseInt(productData.SGST),
         CGST: parseInt(productData.CGST)
-
       };
-      
 
-      // Add description if it exists
       if (productData.description && productData.description.trim()) {
         productPayload.description = productData.description.trim();
       }
-      let response;
       
       if (editingProduct) {
-        // Update existing product
-        response = await ApiService.put(`/products/${editingProduct.id}`,productPayload, {
+        await ApiService.put(`/products/${editingProduct.id}`, productPayload, {
           headers: {
             Authorization: `Bearer ${clientToken}`,
             'Content-Type': 'application/json',
           },
         });
       } else {
-        // Add new product
-        response = await ApiService.post('/products',productPayload, {
+        await ApiService.post('/products', productPayload, {
           headers: {
             Authorization: `Bearer ${clientToken}`,
             'Content-Type': 'application/json',
@@ -199,14 +201,8 @@ const ProductManagement = ({ onLogout }) => {
         });
       }
       
-      
-      if (!response) {
-        throw new Error(response.message || 'Failed to save product');
-      }
-      
-      // Reload data
-      await loadProducts();
-      await loadStats();
+      loadProducts(currentPage);
+      loadStats();
       setShowModal(false);
       setEditingProduct(null);
       
@@ -225,12 +221,49 @@ const ProductManagement = ({ onLogout }) => {
     }
   };
 
+  // Pagination handlers
+  const handlePageChange = (page) => {
+    if (page >= 1 && page <= totalPages) {
+      loadProducts(page);
+    }
+  };
+
+  const handlePreviousPage = () => {
+    if (currentPage > 1) {
+      loadProducts(currentPage - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      loadProducts(currentPage + 1);
+    }
+  };
+
+  // Filter products (client-side filtering for current page)
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          product.sku.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = selectedCategory === 'All' || product.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
+
+  // Calculate pagination range
+  const getPageNumbers = () => {
+    const pageNumbers = [];
+    const maxVisiblePages = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+    
+    if (endPage - startPage + 1 < maxVisiblePages) {
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+      pageNumbers.push(i);
+    }
+    return pageNumbers;
+  };
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -302,29 +335,29 @@ const ProductManagement = ({ onLogout }) => {
               </div>
             </div>
             
-            {/* Products Table */}
+            {/* Products Table with horizontal scroll only inside */}
             <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PRODUCT</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SKU</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">HSN</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CATEGORY</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PRICE</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">STOCK</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">IGST</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CGST</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SGST</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">STATUS</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ACTIONS</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">PRODUCT</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">SKU</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">HSN</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">CATEGORY</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">PRICE</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">STOCK</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">IGST</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">CGST</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">SGST</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">STATUS</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">ACTIONS</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {loading ? (
                       <tr>
-                        <td colSpan="7" className="px-6 py-8 text-center">
+                        <td colSpan="11" className="px-4 py-8 text-center">
                           <div className="flex justify-center">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                           </div>
@@ -334,30 +367,30 @@ const ProductManagement = ({ onLogout }) => {
                     ) : filteredProducts.length > 0 ? (
                       filteredProducts.map((product) => (
                         <tr key={product.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-4 py-4 whitespace-nowrap">
                             <div className="font-medium text-gray-900">{product.name}</div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{product.sku}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{product.HSN_No}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{product.category}</td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{product.sku}</td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{product.HSN_No}</td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{product.category}</td>
+                          <td className="px-4 py-4 whitespace-nowrap">
                             <div className="text-sm font-semibold text-gray-900">₹{product.price.toFixed(2)}</div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-4 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-900">
                               {product.stock} units
                               <div className="text-xs text-gray-500">Min: {product.minStock}</div>
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{product.IGST}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{product.CGST}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{product.SGST}</td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{product.IGST}</td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{product.CGST}</td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{product.SGST}</td>
+                          <td className="px-4 py-4 whitespace-nowrap">
                             <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(product.status)}`}>
                               {product.status}
                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
                             <div className="flex space-x-2">
                               <button
                                 onClick={() => handleEditProduct(product)}
@@ -377,7 +410,7 @@ const ProductManagement = ({ onLogout }) => {
                       ))
                     ) : (
                       <tr>
-                        <td colSpan="7" className="px-6 py-12 text-center">
+                        <td colSpan="11" className="px-4 py-12 text-center">
                           <div className="text-gray-400 mb-2">No products found</div>
                           <div className="text-gray-500 text-sm">Try adjusting your search or add a new product</div>
                         </td>
@@ -387,6 +420,56 @@ const ProductManagement = ({ onLogout }) => {
                 </table>
               </div>
             </div>
+
+            {/* Pagination Section */}
+            {!loading && totalPages > 0 && (
+              <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-lg border border-gray-200">
+                <div className="text-sm text-gray-600">
+                  Showing {(currentPage - 1) * itemsPerPage + 1} to{' '}
+                  {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} products
+                </div>
+                
+                <div className="flex items-center space-x-1">
+                  <button
+                    onClick={handlePreviousPage}
+                    disabled={currentPage === 1}
+                    className={`px-3 py-1 rounded-md ${
+                      currentPage === 1
+                        ? 'text-gray-400 cursor-not-allowed'
+                        : 'text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    <FaChevronLeft />
+                  </button>
+                  
+                  {getPageNumbers().map(page => (
+                    <button
+                      key={page}
+                      onClick={() => handlePageChange(page)}
+                      className={`px-3 py-1 rounded-md text-sm font-medium ${
+                        currentPage === page
+                          ? 'bg-blue-600 text-white'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  ))}
+                  
+                  <button
+                    onClick={handleNextPage}
+                    disabled={currentPage === totalPages}
+                    className={`px-3 py-1 rounded-md ${
+                      currentPage === totalPages
+                        ? 'text-gray-400 cursor-not-allowed'
+                        : 'text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    <FaChevronRight />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -395,7 +478,7 @@ const ProductManagement = ({ onLogout }) => {
       {showModal && (
         <AddProductModal
           product={editingProduct}
-          categories={allCategories} // Pass categories to modal for dropdown
+          categories={allCategories}
           onSave={handleSaveProduct}
           onClose={() => {
             setShowModal(false);
