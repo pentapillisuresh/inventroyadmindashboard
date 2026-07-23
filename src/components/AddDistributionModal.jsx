@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { FaTimes, FaPlus, FaMinus, FaPercent, FaBox, FaWarehouse, FaTag, FaSnowflake, FaArchive, FaStore, FaToggleOn, FaToggleOff, FaTruck, FaFileInvoice, FaChevronDown, FaChevronUp, FaCheckCircle } from 'react-icons/fa';
 import ApiService from './ApiService';
 
@@ -14,7 +14,8 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
     outlets: false,
     products: false,
     rooms: false,
-    submitting: false
+    submitting: false,
+    loadingMore: false
   });
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [formData, setFormData] = useState({
@@ -26,21 +27,31 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
     paidAmount: 0,
     creditAmount: 0,
   });
-  // State for temporary quantity and box name when adding products
   const [tempQuantities, setTempQuantities] = useState({});
   const [tempBoxNames, setTempBoxNames] = useState({});
+  
+  // Pagination state
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalItems: 0,
+    limit: 50,
+    hasMore: true
+  });
+  const [allProductsLoaded, setAllProductsLoaded] = useState(false);
+  
+  // Reference for the scroll container
+  const productListRef = useRef(null);
 
-  // Get token from localStorage inside component
   const clientToken = localStorage.getItem('token');
 
-  // Helper function to format Rupee
   const formatRupee = (amount) => {
     return `₹${parseFloat(amount || 0).toLocaleString('en-IN')}`;
   };
 
   useEffect(() => {
     loadStores();
-    loadProducts();
+    loadProducts(1, true); // Load first page on mount
     loadOutlets();
   }, [distributionMode]);
 
@@ -89,29 +100,102 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
     }
   };
 
-  const loadProducts = async () => {
+  const loadProducts = async (page = 1, reset = false) => {
     try {
-      setLoading(prev => ({ ...prev, products: true }));
-      const response = await ApiService.get('/products', {
+      if (reset) {
+        setLoading(prev => ({ ...prev, products: true }));
+      } else {
+        setLoading(prev => ({ ...prev, loadingMore: true }));
+      }
+      
+      const params = new URLSearchParams({
+        page: page,
+        limit: 50
+      });
+
+      if (distributionMode === 'outlet' && formData.storeId) {
+        params.append('storeId', formData.storeId);
+      }
+
+      console.log(`Loading products - Page: ${page}, Limit: 50`); // Debug log
+
+      const response = await ApiService.get(`/products?${params.toString()}`, {
         headers: {
           Authorization: `Bearer ${clientToken}`,
           'Content-Type': 'application/json',
         },
       });
+      
       if (response.products) {
-        setProducts(response.products);
+        const newProducts = response.products;
+        
+        // Update pagination info
+        setPagination({
+          currentPage: response.currentPage || page,
+          totalPages: response.totalPages || 1,
+          totalItems: response.totalItems || 0,
+          limit: response.limit || 50,
+          hasMore: response.hasMore || false
+        });
+
+        if (reset) {
+          setProducts(newProducts);
+          console.log(`Loaded ${newProducts.length} products (Page ${page})`); // Debug log
+        } else {
+          setProducts(prev => {
+            const updated = [...prev, ...newProducts];
+            console.log(`Total products loaded: ${updated.length}`); // Debug log
+            return updated;
+          });
+        }
+
+        // Check if all products are loaded
+        const totalLoaded = reset ? newProducts.length : products.length + newProducts.length;
+        const totalAvailable = response.totalItems || 0;
+        
+        if (!response.hasMore || newProducts.length === 0 || totalLoaded >= totalAvailable) {
+          setAllProductsLoaded(true);
+          console.log('All products loaded!'); // Debug log
+        } else {
+          setAllProductsLoaded(false);
+        }
       }
     } catch (error) {
       console.error('Error loading products:', error);
-      alert('Failed to load products. Please try again.');
+      if (reset) {
+        alert('Failed to load products. Please try again.');
+      }
     } finally {
-      setLoading(prev => ({ ...prev, products: false }));
+      if (reset) {
+        setLoading(prev => ({ ...prev, products: false }));
+      } else {
+        setLoading(prev => ({ ...prev, loadingMore: false }));
+      }
     }
   };
+
+  // Function to load more products when scrolling
+  const loadMoreProducts = useCallback(() => {
+    // Check conditions before loading more
+    if (!loading.loadingMore && pagination.hasMore && !allProductsLoaded) {
+      const nextPage = pagination.currentPage + 1;
+      console.log(`Loading page ${nextPage}...`); // Debug log
+      loadProducts(nextPage, false);
+    } else {
+      if (allProductsLoaded) {
+        console.log('All products already loaded'); // Debug log
+      }
+      if (!pagination.hasMore) {
+        console.log('No more products to load'); // Debug log
+      }
+    }
+  }, [loading.loadingMore, pagination.hasMore, pagination.currentPage, allProductsLoaded]);
 
   const loadInventory = async () => {
     try {
       setLoading(prev => ({ ...prev, products: true }));
+      setAllProductsLoaded(false);
+      
       const response = await ApiService.get(`/inventory/store/${formData.storeId}`, {
         headers: {
           Authorization: `Bearer ${clientToken}`,
@@ -134,6 +218,12 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
           };
         });
         setProducts(inventoryData);
+        setAllProductsLoaded(true);
+        setPagination(prev => ({
+          ...prev,
+          totalItems: inventoryData.length,
+          hasMore: false
+        }));
       }
     } catch (error) {
       console.error('Error loading products:', error);
@@ -171,7 +261,16 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
     setSelectedProducts([]);
     setTempQuantities({});
     setTempBoxNames({});
-    loadProducts();
+    setProducts([]);
+    setPagination({
+      currentPage: 1,
+      totalPages: 1,
+      totalItems: 0,
+      limit: 50,
+      hasMore: true
+    });
+    setAllProductsLoaded(false);
+    loadProducts(1, true);
   };
 
   const handleStoreChange = (storeId) => {
@@ -182,6 +281,19 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
     setSelectedProducts([]);
     setTempQuantities({});
     setTempBoxNames({});
+    
+    if (distributionMode === 'outlet') {
+      setProducts([]);
+      setPagination({
+        currentPage: 1,
+        totalPages: 1,
+        totalItems: 0,
+        limit: 50,
+        hasMore: true
+      });
+      setAllProductsLoaded(false);
+      loadProducts(1, true);
+    }
   };
 
   const handleOutletChange = (outletId) => {
@@ -195,7 +307,6 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
     loadInventory();
   };
 
-  // Toggle product expansion
   const toggleProductExpand = (productId) => {
     setExpandedProducts(prev => ({
       ...prev,
@@ -203,7 +314,6 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
     }));
   };
 
-  // Add product to selected list
   const addToSelected = (product) => {
     const quantity = tempQuantities[product.id] || 0;
     const boxName = tempBoxNames[product.id] || '';
@@ -238,7 +348,6 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
 
     setSelectedProducts([...selectedProducts, newProduct]);
     
-    // Reset temp values for this product
     setTempQuantities(prev => ({ ...prev, [product.id]: 0 }));
     setTempBoxNames(prev => ({ ...prev, [product.id]: '' }));
     setExpandedProducts(prev => ({ ...prev, [product.id]: false }));
@@ -526,18 +635,6 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
   };
 
   const showSuccessPopup = (distributionData) => {
-    const groupedBoxes = distributionData.products.reduce((acc, product) => {
-      if (!acc[product.boxName]) {
-        acc[product.boxName] = {
-          products: [],
-          total: 0
-        };
-      }
-      acc[product.boxName].products.push(product);
-      acc[product.boxName].total += product.total;
-      return acc;
-    }, {});
-
     const popupDiv = document.createElement('div');
     popupDiv.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]';
 
@@ -603,10 +700,21 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
     ? outlets.filter(outlet => outlet.storeId === parseInt(formData.storeId))
     : outlets;
 
-  // Filter out products that are already selected
   const availableProducts = products.filter(
     product => !selectedProducts.some(p => p.productId === product.id)
   );
+
+  // Enhanced scroll handler with debounce for better performance
+  const handleScroll = useCallback((e) => {
+    const element = e.target;
+    const scrollBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
+    
+    // Trigger load when user is within 200px of bottom
+    if (scrollBottom < 200) {
+      console.log('Near bottom of list, checking for more products...'); // Debug log
+      loadMoreProducts();
+    }
+  }, [loadMoreProducts]);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
@@ -706,7 +814,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                     <FaCheckCircle className="text-green-600" />
                     Selected Products ({selectedProducts.length})
                   </h3>
-                  <div className="space-y-2">
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
                     {selectedProducts.map((product, index) => (
                       <div key={product.id} className="bg-white border border-green-200 rounded-lg p-3">
                         <div className="flex justify-between items-center mb-2">
@@ -803,13 +911,15 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                 </div>
               )}
 
-              {/* Available Products Section - Initially Shown */}
+              {/* Available Products Section with Infinite Scroll */}
               <div>
                 <div className="flex justify-between items-center mb-4">
                   <label className="block text-sm font-medium text-gray-700">
                     Available Products
                   </label>
-                  <span className="text-sm text-gray-500">{availableProducts.length} products available</span>
+                  <span className="text-sm text-gray-500">
+                    Showing {availableProducts.length} of {pagination.totalItems} products
+                  </span>
                 </div>
 
                 {loading.products ? (
@@ -817,7 +927,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                     <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-600"></div>
                     <p className="mt-4 text-gray-600">Loading products...</p>
                   </div>
-                ) : availableProducts.length === 0 ? (
+                ) : availableProducts.length === 0 && !loading.products ? (
                   <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
                     <FaBox className="text-4xl text-gray-400 mx-auto mb-4" />
                     <p className="text-gray-600 font-medium">No products available</p>
@@ -828,34 +938,38 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                     </p>
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div 
+                    ref={productListRef}
+                    className="space-y-3 max-h-96 overflow-y-auto pr-2 border border-gray-200 rounded-lg p-3 bg-gray-50"
+                    onScroll={handleScroll}
+                  >
                     {availableProducts.map((product) => (
-                      <div key={product.id} className="border border-gray-200 rounded-lg overflow-hidden">
+                      <div key={product.id} className="border border-gray-200 rounded-lg overflow-hidden bg-white">
                         {/* Accordion Header */}
                         <div 
                           className={`flex items-center justify-between p-4 cursor-pointer transition-colors ${
-                            expandedProducts[product.id] ? 'bg-blue-50 border-b border-blue-100' : 'bg-gray-50 hover:bg-gray-100'
+                            expandedProducts[product.id] ? 'bg-blue-50 border-b border-blue-100' : 'hover:bg-gray-50'
                           }`}
                           onClick={() => toggleProductExpand(product.id)}
                         >
                           <div className="flex items-center space-x-3 flex-1">
-                            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
                               <FaBox className="text-blue-600 text-sm" />
                             </div>
-                            <div className="flex-1">
-                              <div className="flex items-center space-x-3 flex-wrap gap-2">
-                                <span className="font-medium text-gray-900">{product.name}</span>
-                                <span className="text-xs text-gray-500">SKU: {product.sku}</span>
-                                <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded">
-                                  Available: {product.quantity || 0}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center space-x-3 flex-wrap gap-1">
+                                <span className="font-medium text-gray-900 truncate">{product.name}</span>
+                                <span className="text-xs text-gray-500 flex-shrink-0">SKU: {product.sku}</span>
+                                <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded flex-shrink-0">
+                                  Qty: {product.quantity || 0}
                                 </span>
                               </div>
-                              <p className="text-xs text-gray-500 mt-1">
+                              <p className="text-xs text-gray-500 mt-1 truncate">
                                 Category: {product.Category?.name || 'Uncategorized'} | Price: {formatRupee(product.price)}
                               </p>
                             </div>
                           </div>
-                          <div className="flex items-center space-x-4">
+                          <div className="flex items-center space-x-4 flex-shrink-0">
                             {expandedProducts[product.id] ? (
                               <FaChevronUp className="text-gray-400" />
                             ) : (
@@ -901,9 +1015,9 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                               <button
                                 type="button"
                                 onClick={() => addToSelected(product)}
-                                disabled={!tempQuantities[product.id] || tempQuantities[product.id] <= 0}
+                                disabled={!tempQuantities[product.id] || tempQuantities[product.id] <= 0 || !tempBoxNames[product.id]?.trim()}
                                 className={`px-4 py-2 rounded-lg transition flex items-center space-x-2 ${
-                                  tempQuantities[product.id] && tempQuantities[product.id] > 0
+                                  tempQuantities[product.id] && tempQuantities[product.id] > 0 && tempBoxNames[product.id]?.trim()
                                     ? 'bg-green-600 text-white hover:bg-green-700'
                                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                 }`}
@@ -916,6 +1030,29 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                         )}
                       </div>
                     ))}
+                    
+                    {/* Loading indicator at bottom */}
+                    {loading.loadingMore && (
+                      <div className="text-center py-4 bg-white rounded-lg border border-gray-200">
+                        <div className="inline-block animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-blue-600"></div>
+                        <p className="mt-2 text-sm text-gray-600">Loading more products...</p>
+                      </div>
+                    )}
+                    
+                    {/* End of list indicator */}
+                    {allProductsLoaded && pagination.totalItems > 0 && (
+                      <div className="text-center py-4 bg-white rounded-lg border border-gray-200">
+                        <FaCheckCircle className="text-green-500 mx-auto mb-2 text-xl" />
+                        <p className="text-sm text-gray-600">All {pagination.totalItems} products loaded</p>
+                      </div>
+                    )}
+
+                    {/* Show remaining products count */}
+                    {!allProductsLoaded && !loading.loadingMore && pagination.hasMore && (
+                      <div className="text-center py-2 text-xs text-gray-400">
+                        Scroll for more products ({pagination.totalItems - products.length} remaining)
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

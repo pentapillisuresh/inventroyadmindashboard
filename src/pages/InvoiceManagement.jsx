@@ -6,11 +6,13 @@ import {
   FaSearch, FaFilter, FaEye, FaCheckCircle, FaTimesCircle,
   FaFileInvoice, FaExclamationTriangle, FaDownload, FaPrint,
   FaRupeeSign, FaClock, FaStore, FaUser, FaCalendarAlt,
-  FaMapMarkerAlt, FaTruck, FaBox, FaHashtag, FaDollarSign
+  FaMapMarkerAlt, FaTruck, FaBox, FaHashtag, FaDollarSign,
+  FaFileExcel
 } from 'react-icons/fa';
 import ApiService from '../components/ApiService';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import * as XLSX from 'xlsx';
 
 const InvoiceManagement = ({ onLogout }) => {
   const navigate = useNavigate();
@@ -214,6 +216,138 @@ const InvoiceManagement = ({ onLogout }) => {
     }
   };
 
+  // Individual Invoice Excel Download with GST included
+  const downloadIndividualExcel = () => {
+    if (!selectedInvoice) {
+      alert('No invoice selected');
+      return;
+    }
+
+    try {
+      // Prepare invoice header data with GST included
+      const headerData = [
+        ['INVOICE DETAILS'],
+        [''],
+        ['Invoice Number', selectedInvoice.id],
+        ['Store Name', selectedInvoice.storeName],
+        ['Store GST No', selectedInvoice.Store?.Manager?.GST_No || 'N/A'],
+        ['Store Address', selectedInvoice.Store?.address || 'N/A'],
+        ['Store Phone', selectedInvoice.Store?.phoneNumber || 'N/A'],
+        ['Store Email', selectedInvoice.Store?.email || 'N/A'],
+        ['Outlet Name', selectedInvoice.outletName || 'N/A'],
+        ['Manager', selectedInvoice.managerName],
+        ['Date', selectedInvoice.date],
+        ['Payment Method', selectedInvoice.paymentMethod],
+        ['Payment Type', selectedInvoice.paymentType],
+        ['Status', selectedInvoice.status],
+        ['Total Amount', `₹ ${selectedInvoice.totalAmount.toFixed(2)}`],
+        ['Paid Amount', `₹ ${selectedInvoice.paidAmount.toFixed(2)}`],
+        ['Credit Amount', `₹ ${selectedInvoice.creditAmount.toFixed(2)}`],
+        ['Created At', new Date(selectedInvoice.createdAt).toLocaleString()],
+        ['Due Date', selectedInvoice.dueDate || 'N/A'],
+        ['Notes', selectedInvoice.notes || 'N/A'],
+        ['']
+      ];
+
+      // Prepare products data
+      const productHeaders = [
+        'S.No',
+        'Product Name',
+        'SKU',
+        'HSN No',
+        'Quantity',
+        'Price (₹)',
+        'Total (₹)',
+        'CGST (₹)',
+        'SGST (₹)',
+        'IGST (₹)',
+        'Net Value (₹)'
+      ];
+
+      const productRows = selectedInvoice.items?.map((item, index) => [
+        index + 1,
+        item.Product?.name || 'Unknown Product',
+        item.Product?.sku || 'N/A',
+        item.Product?.HSN_No || 'N/A',
+        item.quantity,
+        parseFloat(item.price || 0).toFixed(2),
+        (parseFloat(item.price || 0) * parseFloat(item.quantity || 0)).toFixed(2),
+        parseFloat(item.CGSTAmount || 0).toFixed(2),
+        parseFloat(item.SGSTAmount || 0).toFixed(2),
+        parseFloat(item.IGSTAmount || 0).toFixed(2),
+        (
+          parseFloat(item.totalPrice || 0) +
+          parseFloat(item.CGSTAmount || 0) +
+          parseFloat(item.SGSTAmount || 0) +
+          parseFloat(item.IGSTAmount || 0)
+        ).toFixed(2)
+      ]) || [];
+
+      // Add summary row
+      const summaryRow = [
+        '',
+        '',
+        '',
+        '',
+        'TOTAL',
+        '',
+        selectedInvoice.totalAmount.toFixed(2),
+        '',
+        '',
+        '',
+        (selectedInvoice.totalAmount * 1.18).toFixed(2)
+      ];
+
+      // Combine all data
+      const excelData = [
+        ...headerData,
+        ['PRODUCT DETAILS'],
+        [],
+        productHeaders,
+        ...productRows,
+        [],
+        summaryRow,
+        [],
+        ['PAYMENT SUMMARY'],
+        ['Total Gross Amount', `₹ ${selectedInvoice.totalAmount.toFixed(2)}`],
+        ['Add OUTPUT CGST 9%', `₹ ${(selectedInvoice.totalAmount * 0.09).toFixed(2)}`],
+        ['Add OUTPUT SGST 9%', `₹ ${(selectedInvoice.totalAmount * 0.09).toFixed(2)}`],
+        ['Grand Total', `₹ ${(selectedInvoice.totalAmount * 1.18).toFixed(2)}`]
+      ];
+
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(excelData);
+
+      // Set column widths
+      const colWidths = [
+        { wch: 15 },  // S.No
+        { wch: 30 },  // Product Name
+        { wch: 20 },  // SKU
+        { wch: 15 },  // HSN No
+        { wch: 12 },  // Quantity
+        { wch: 15 },  // Price
+        { wch: 15 },  // Total
+        { wch: 15 },  // CGST
+        { wch: 15 },  // SGST
+        { wch: 15 },  // IGST
+        { wch: 18 }   // Net Value
+      ];
+      ws['!cols'] = colWidths;
+
+      XLSX.utils.book_append_sheet(wb, ws, 'Invoice');
+
+      // Generate Excel file
+      const fileName = `Invoice_${selectedInvoice.id}_${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+      
+      alert('Invoice Excel file downloaded successfully!');
+    } catch (error) {
+      console.error('Error downloading invoice Excel:', error);
+      alert('Failed to download Excel file. Please try again.');
+    }
+  };
+
   const handleViewDetails = (invoice) => {
     setSelectedInvoice(invoice);
     console.log("rrr::", invoice)
@@ -390,15 +524,22 @@ const InvoiceManagement = ({ onLogout }) => {
                   </div>
 
                   <div className="flex gap-3">
-
                     <button
                       onClick={downloadPDF}
                       className="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+                      disabled={isDownloading}
                     >
                       <FaDownload />
-                      PDF
+                      {isDownloading ? 'Generating...' : 'PDF'}
                     </button>
 
+                    <button
+                      onClick={downloadIndividualExcel}
+                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+                    >
+                      <FaFileExcel />
+                      Excel
+                    </button>
 
                     <button
                       onClick={handleCloseDetails}
@@ -422,7 +563,7 @@ const InvoiceManagement = ({ onLogout }) => {
                   <div className="border-b-2 border-gray-300 pb-4">
 
                     <h1 className="text-center text-3xl font-bold uppercase">
-                      {selectedInvoice.Admin.name}
+                      {selectedInvoice.Admin?.name || 'Company Name'}
                     </h1>
 
                     <div className="grid grid-cols-3 gap-4 mt-4 text-sm">
@@ -431,39 +572,27 @@ const InvoiceManagement = ({ onLogout }) => {
                         <p>
                           <span className="font-semibold">Regd Office :</span>
                           {' '}
-                          {selectedInvoice.Admin.officeAddress}
+                          {selectedInvoice.Admin?.officeAddress || 'N/A'}
                         </p>
-
-                        {/* <p>
-                          <span className="font-semibold">Godown :</span>
-                          {' '}
-                          AUTONAGAR VIZAG
-                        </p>
-
-                        <p>
-                          <span className="font-semibold">Office :</span>
-                          {' '}
-                          VISAKHAPATNAM
-                        </p> */}
                       </div>
 
                       <div>
                         <p>
                           <span className="font-semibold">FSSAI No :</span>
                           {' '}
-                          {selectedInvoice.Admin.FSSAI_No}
+                          {selectedInvoice.Admin?.FSSAI_No || 'N/A'}
                         </p>
 
                         <p>
                           <span className="font-semibold">GST No :</span>
                           {' '}
-                          {selectedInvoice.Admin.GST_No}
+                          {selectedInvoice.Admin?.GST_No || 'N/A'}
                         </p>
 
                         <p>
                           <span className="font-semibold">CIN No :</span>
                           {' '}
-                          {selectedInvoice.Admin.CIN_No}
+                          {selectedInvoice.Admin?.CIN_No || 'N/A'}
                         </p>
                       </div>
 
@@ -473,12 +602,6 @@ const InvoiceManagement = ({ onLogout }) => {
                           {' '}
                           {selectedInvoice.id}
                         </p>
-
-                        {/* <p>
-                          <span className="font-semibold">Batch ID :</span>
-                          {' '}
-                          {selectedInvoice.batchID}
-                        </p> */}
 
                         <p>
                           <span className="font-semibold">Invoice Date :</span>
@@ -508,28 +631,28 @@ const InvoiceManagement = ({ onLogout }) => {
                       </h3>
 
                       <p className="font-semibold">
-                        {selectedInvoice.Store?.name}
+                        {selectedInvoice.Store?.name || 'N/A'}
                       </p>
 
                       <p className="mt-1">
-                        {selectedInvoice.Store?.address}
+                        {selectedInvoice.Store?.address || 'N/A'}
                       </p>
 
                       <p className="mt-1">
                         PHONE NO :
                         {' '}
-                        {selectedInvoice.Store?.phoneNumber}
+                        {selectedInvoice.Store?.phoneNumber || 'N/A'}
                       </p>
 
                       <p className="mt-1">
                         EMAIL :
                         {' '}
-                        {selectedInvoice.Store?.email}
+                        {selectedInvoice.Store?.email || 'N/A'}
                       </p>
                       <p className="mt-1">
                         GST NO :
                         {' '}
-                        {selectedInvoice.Store?.Manager?.GST_No}
+                        {selectedInvoice.Store?.Manager?.GST_No || 'N/A'}
                       </p>
                     </div>
 
@@ -541,27 +664,28 @@ const InvoiceManagement = ({ onLogout }) => {
                       </h3>
 
                       <p className="font-semibold">
-                        {selectedInvoice.Store?.name}
+                        {selectedInvoice.Store?.name || 'N/A'}
                       </p>
 
                       <p className="mt-1">
-                        {selectedInvoice.Store?.address}
+                        {selectedInvoice.Store?.address || 'N/A'}
                       </p>
 
                       <p className="mt-1">
                         PHONE NO :
                         {' '}
-                        {selectedInvoice.Store?.phoneNumber}
+                        {selectedInvoice.Store?.phoneNumber || 'N/A'}
                       </p>
+
                       <p className="mt-1">
                         EMAIL :
                         {' '}
-                        {selectedInvoice.Store?.email}
+                        {selectedInvoice.Store?.email || 'N/A'}
                       </p>
                       <p className="mt-1">
                         GST NO :
                         {' '}
-                        {selectedInvoice.Store?.Manager?.GST_No}
+                        {selectedInvoice.Store?.Manager?.GST_No || 'N/A'}
                       </p>
 
                     </div>
@@ -638,25 +762,25 @@ const InvoiceManagement = ({ onLogout }) => {
 
 
                             <td className="border border-gray-300 px-2 py-2">
-                              {item.Product?.HSN_No}
+                              {item.Product?.HSN_No || 'N/A'}
                             </td>
                             <td className="border border-gray-300 px-2 py-2">
-                              {item.Product?.sku}
-                            </td>
-
-                            <td className="border border-gray-300 px-2 py-2">
-                              {item.Product?.name}
+                              {item.Product?.sku || 'N/A'}
                             </td>
 
                             <td className="border border-gray-300 px-2 py-2">
-                              {item.Product?.costPrice}
+                              {item.Product?.name || 'Unknown'}
+                            </td>
+
+                            <td className="border border-gray-300 px-2 py-2">
+                              {item.Product?.costPrice || '0'}
                             </td>
 
                             <td className="border border-gray-300 px-2 py-2 text-right">
                               {item.quantity}
                             </td>
                             <td className="border border-gray-300 px-2 py-2 text-right">
-                              {item.batchId}
+                              {item.batchId || 'N/A'}
                             </td>
                             <td className="border border-gray-300 px-2 py-2 text-right">
                               {item.quantity}
@@ -665,7 +789,7 @@ const InvoiceManagement = ({ onLogout }) => {
                               ₹{parseFloat(item.price || 0).toFixed(2)}
                             </td>
                             <td className="border border-gray-300 px-2 py-2 text-right">
-                              {item.Product?.units}
+                              {item.Product?.units || 'N/A'}
                             </td>
                             <td className="border border-gray-300 px-2 py-2 text-right font-medium">
                               ₹{parseFloat(item.price || 0).toFixed(2) * parseFloat(item.quantity || 0)}
@@ -756,7 +880,7 @@ const InvoiceManagement = ({ onLogout }) => {
                         Payment Method :
                       </span>
                       {' '}
-                      {selectedInvoice.paymentMethod}
+                      {selectedInvoice.paymentMethod || 'N/A'}
                     </p>
 
                     <p className="mt-1">
@@ -782,8 +906,7 @@ const InvoiceManagement = ({ onLogout }) => {
 
                     <div>
                       <p className="font-medium">
-                        Customer Signature
-                      </p>
+                        Customer Signature                      </p>
 
                       <div className="mt-12 border-b border-gray-400"></div>
                     </div>
