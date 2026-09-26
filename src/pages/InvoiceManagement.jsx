@@ -350,7 +350,7 @@ const InvoiceManagement = ({ onLogout }) => {
 
   const handleViewDetails = (invoice) => {
     setSelectedInvoice(invoice);
-    console.log("rrr::", invoice)
+
     if (invoice.type === 'credit' && invoice.Store) {
       checkStoreCredit(invoice.Store, invoice.totalAmount);
     }
@@ -394,9 +394,9 @@ const InvoiceManagement = ({ onLogout }) => {
         }
       }
 
-      const response = await ApiService.patch(
-        `/invoice/updateStatus/${invoice.invoiceId}`,
-        { status: 'completed' },
+      const response = await ApiService.put(
+        `/invoice/${invoice.invoiceId}`,
+        { status: 'paid' },
         {
           headers: {
             Authorization: `Bearer ${clientToken}`,
@@ -429,8 +429,8 @@ const InvoiceManagement = ({ onLogout }) => {
         return;
       }
 
-      const response = await ApiService.patch(
-        `/invoice/updateStatus/${invoice.invoiceId}`,
+      const response = await ApiService.put(
+        `/invoice/${invoice.invoiceId}`,
         { status: 'cancelled' },
         {
           headers: {
@@ -652,7 +652,7 @@ const InvoiceManagement = ({ onLogout }) => {
                       <p className="mt-1">
                         GST NO :
                         {' '}
-                        {selectedInvoice.Store?.Manager?.GST_No || 'N/A'}
+                        {selectedInvoice.Store?.GST_No || 'N/A'}
                       </p>
                     </div>
 
@@ -685,7 +685,7 @@ const InvoiceManagement = ({ onLogout }) => {
                       <p className="mt-1">
                         GST NO :
                         {' '}
-                        {selectedInvoice.Store?.Manager?.GST_No || 'N/A'}
+                        {selectedInvoice.Store?.GST_No || 'N/A'}
                       </p>
 
                     </div>

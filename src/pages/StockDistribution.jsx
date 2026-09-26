@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import AddDistributionModal from '../components/AddDistributionModal';
-import {FaPlus,FaSearch,FaFilter,FaEye,FaEdit,FaTrash,FaTruck,FaClock,FaCheckCircle,FaWarehouse,FaBox,FaInfoCircle,FaTimes} from 'react-icons/fa';
+import {
+  FaPlus, FaSearch, FaFilter, FaEye, FaTrash, FaTruck, FaClock,
+  FaCheckCircle, FaBox, FaTimes
+} from 'react-icons/fa';
 import ApiService from '../components/ApiService';
 
 const StockDistribution = ({ onLogout }) => {
@@ -16,6 +19,7 @@ const StockDistribution = ({ onLogout }) => {
   const [selectedDistribution, setSelectedDistribution] = useState(null);
   const [stores, setStores] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [stats, setStats] = useState({
     all: 0,
     pending: 0,
@@ -25,168 +29,215 @@ const StockDistribution = ({ onLogout }) => {
     credit: 0,
     totalValue: 0
   });
+
   const clientToken = localStorage.getItem('token');
 
-  // Helper function to format Rupee
-  const formatRupee = (amount) => {
-    return `₹${parseFloat(amount || 0).toLocaleString('en-IN')}`;
+  const authHeaders = {
+    Authorization: `Bearer ${clientToken}`,
+    'Content-Type': 'application/json',
   };
+
+  /* ------------------------------------------------------------------ */
+  /* Helpers                                                            */
+  /* ------------------------------------------------------------------ */
+
+  const formatRupee = (amount) =>
+    `₹${parseFloat(amount || 0).toLocaleString('en-IN')}`;
+
+  const mapStatus = (apiStatus) => {
+    switch (apiStatus) {
+      case 'pending': return 'Pending';
+      case 'completed': return 'Completed';
+      case 'cancelled': return 'Cancelled';
+      case 'in_transit':
+      case 'inTransit': return 'In Transit';
+      default: return 'Pending';
+    }
+  };
+
+  const mapPaymentType = (paymentMethod) => {
+    switch (paymentMethod) {
+      case 'paid': return 'Paid';
+      case 'credit': return 'Credit';
+      case 'mixed': return 'Mixed';
+      default: return 'Paid';
+    }
+  };
+
+  const mapToApiStatus = (uiStatus) => {
+    switch (uiStatus) {
+      case 'Pending': return 'pending';
+      case 'In Transit': return 'in_transit';
+      case 'Completed': return 'completed';
+      case 'Cancelled': return 'cancelled';
+      default: return 'pending';
+    }
+  };
+
+  /* ------------------------------------------------------------------ */
+  /* Data loading                                                       */
+  /* ------------------------------------------------------------------ */
+
+  const loadDistributions = useCallback(async () => {
+    if (!clientToken) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const response = await ApiService.get(
+        '/invoice/allDistributed/Invoices/admin',
+        { headers: authHeaders }
+      );
+
+      const invoices = response?.invoices || [];
+
+      /* ---- Build manager lookup map ---- */
+      const managerMap = {};
+      try {
+        const managersResponse = await ApiService.get(
+          'users/admin/all/store-managers',
+          { headers: authHeaders }
+        );
+
+        if (managersResponse?.success && Array.isArray(managersResponse.data)) {
+          managersResponse.data.forEach((manager) => {
+            if (manager.id) managerMap[manager.id] = manager.name;
+          });
+        }
+      } catch (err) {
+        console.error('Error loading managers for lookup:', err);
+      }
+
+      /* ---- Build unique store list (by real storeId) ---- */
+      const storeMap = new Map();
+      invoices.forEach((inv) => {
+        if (inv.Store?.name && inv.storeId != null) {
+          storeMap.set(String(inv.storeId), inv.Store.name);
+        }
+      });
+      setStores(
+        Array.from(storeMap.entries()).map(([id, name]) => ({ id, name }))
+      );
+
+      /* ---- Transform invoices for the UI ---- */
+      const transformed = invoices.map((invoice) => {
+        const items = invoice.items || [];
+
+        const totalItems = items.reduce(
+          (sum, item) => sum + (item.quantity || 0),
+          0
+        );
+
+        const products = items.map((item) => ({
+          productId: item.productId,
+          productName: item.Product?.name || 'Unknown product',
+          quantity: item.quantity,
+          price: parseFloat(item.price || 0),
+          total: parseFloat(item.totalPrice || 0),
+          sku: item.Product?.sku || '-'
+        }));
+
+        let managerName = 'Unassigned';
+        if (invoice.Store?.managerId && managerMap[invoice.Store.managerId]) {
+          managerName = managerMap[invoice.Store.managerId];
+        }
+
+        return {
+          id: invoice.invoiceNumber,
+          invoiceId: invoice.id,
+          storeId: String(invoice.storeId),
+          storeName: invoice.Store?.name || 'Unknown store',
+          managerName,
+          managerId: invoice.Store?.managerId,
+          date: new Date(invoice.invoiceDate).toLocaleDateString(),
+          createdAt: invoice.createdAt,
+          totalItems,
+          products,
+          totalValue: parseFloat(invoice.totalAmount || 0),
+          paymentType: mapPaymentType(invoice.paymentMethod),
+          status: mapStatus(invoice.status),
+          discount: 0,
+          notes: '',
+          creditAmount: parseFloat(invoice.creditAmount || 0),
+          paidAmount: parseFloat(invoice.paidAmount || 0),
+          adminName: invoice.Admin?.name || 'Admin',
+          adminEmail: invoice.Admin?.email
+        };
+      });
+
+      setDistributions(transformed);
+
+      /* ---- Stats ---- */
+      const all = transformed.length;
+      const pending = transformed.filter((d) => d.status === 'Pending').length;
+      const inTransit = transformed.filter((d) => d.status === 'In Transit').length;
+      const completed = transformed.filter((d) => d.status === 'Completed').length;
+      const paid = transformed.filter((d) => d.paymentType === 'Paid').length;
+      const credit = transformed.filter((d) => d.paymentType === 'Credit').length;
+      const totalValue = transformed.reduce((sum, d) => sum + d.totalValue, 0);
+
+      setStats({ all, pending, inTransit, completed, paid, credit, totalValue });
+    } catch (error) {
+      console.error('Error loading distributions:', error);
+      alert('Failed to load distributions. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [clientToken]);
 
   useEffect(() => {
     loadDistributions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const loadDistributions = async () => {
-  try {
-    setLoading(true);
-    const response = await ApiService.get('/invoice/allDistributed/Invoices/admin', {
-      headers: {
-        Authorization: `Bearer ${clientToken}`,
-        'Content-Type': 'application/json',
-      },
-    });
-    
-    // First, fetch all managers to create a lookup map
-    let managerMap = {};
-    try {
-      const managersResponse = await ApiService.get('users/admin/all/store-managers', {
-        headers: {
-          Authorization: `Bearer ${clientToken}`,
-          'Content-Type': 'application/json',
-        }
-      });
-      
-      if (managersResponse.success) {
-        // Create a map of managerId to manager name
-        managersResponse.data.forEach(manager => {
-          if (manager.id) {
-            managerMap[manager.id] = manager.name;
-          }
-        });
-      }
-    } catch (error) {
-      console.error('Error loading managers for lookup:', error);
-    }
-    
-    // Extract unique store names
-    const uniqueStores = [...new Set(response.invoices.map(inv => inv.Store.name))];
-    setStores(uniqueStores.map((name, index) => ({
-      id: index + 1,
-      name: name
-    })));
-    
-    // Transform API data to match your UI structure
-    const transformedDistributions = response.invoices.map(invoice => {
-      // Calculate total items
-      const totalItems = invoice.items.reduce((sum, item) => sum + item.quantity, 0);
-      
-      // Map items to products format
-      const products = invoice.items.map(item => ({
-        productId: item.productId,
-        productName: item.Product.name,
-        quantity: item.quantity,
-        price: parseFloat(item.price),
-        total: parseFloat(item.totalPrice),
-        sku: item.Product.sku
-      }));
+  /* ------------------------------------------------------------------ */
+  /* Handlers                                                           */
+  /* ------------------------------------------------------------------ */
 
-      // Map API status to your UI status
-      const mapStatus = (apiStatus) => {
-        switch (apiStatus) {
-          case 'pending': return 'Pending';
-          case 'completed': return 'Completed';
-          case 'cancelled': return 'Cancelled';
-          default: return 'Pending';
-        }
-      };
-
-      // Map payment method
-      const mapPaymentType = (paymentMethod) => {
-        switch (paymentMethod) {
-          case 'paid': return 'Paid';
-          case 'credit': return 'Credit';
-          case 'mixed': return 'Mixed';
-          default: return 'Paid';
-        }
-      };
-
-      // Get manager name using managerId from Store object
-      let managerName = 'Unassigned';
-      if (invoice.Store?.managerId && managerMap[invoice.Store.managerId]) {
-        managerName = managerMap[invoice.Store.managerId];
-      }
-
-      return {
-        id: invoice.invoiceNumber,
-        storeId: invoice.storeId.toString(),
-        storeName: invoice.Store.name,
-        managerName: managerName,
-        managerId: invoice.Store?.managerId,
-        date: new Date(invoice.invoiceDate).toLocaleDateString(),
-        createdAt: invoice.createdAt,
-        totalItems: totalItems,
-        products: products,
-        totalValue: parseFloat(invoice.totalAmount),
-        paymentType: mapPaymentType(invoice.paymentMethod),
-        status: mapStatus(invoice.status),
-        discount: 0,
-        notes: '',
-        invoiceId: invoice.id,
-        creditAmount: parseFloat(invoice.creditAmount),
-        paidAmount: parseFloat(invoice.paidAmount),
-        adminName: invoice.Admin?.name || 'Admin',
-        adminEmail: invoice.Admin?.email
-      };
-    });
-
-    setDistributions(transformedDistributions);
-    
-    // Calculate statistics from transformed data
-    const all = transformedDistributions.length;
-    const pending = transformedDistributions.filter(d => d.status === 'Pending').length;
-    const inTransit = 0;
-    const completed = transformedDistributions.filter(d => d.status === 'Completed').length;
-    const paid = transformedDistributions.filter(d => d.paymentType === 'Paid').length;
-    const credit = transformedDistributions.filter(d => d.paymentType === 'Credit').length;
-    const totalValue = transformedDistributions.reduce((sum, d) => sum + d.totalValue, 0);
-    
-    setStats({ all, pending, inTransit, completed, paid, credit, totalValue });
-    
-  } catch (error) {
-    console.error('Error loading distributions:', error);
-    alert('Failed to load distributions. Please try again.');
-  } finally {
-    setLoading(false);
-  }
-};
-
-  const handleCreateDistribution = () => {
-    setShowModal(true);
-  };
+  const handleCreateDistribution = () => setShowModal(true);
 
   const handleSaveDistribution = async (distributionData) => {
     try {
-      // Prepare API-compatible data
+      setSaving(true);
+
+      const isCredit = distributionData.paymentType === 'Credit';
+      const isMixed = distributionData.paymentType === 'Mixed';
+
       const apiData = {
-        storeId: parseInt(distributionData.storeId),
+        storeId: parseInt(distributionData.storeId, 10),
         type: 'distribution',
         paymentMethod: distributionData.paymentType.toLowerCase(),
         totalAmount: distributionData.totalValue,
-        creditAmount: distributionData.paymentType === 'Credit' ? distributionData.totalValue : 0,
-        paidAmount: distributionData.paymentType === 'Paid' ? distributionData.totalValue : 0,
-        items: distributionData.products.map(product => ({
+        creditAmount: isCredit
+          ? distributionData.totalValue
+          : isMixed
+          ? distributionData.creditAmount || 0
+          : 0,
+        paidAmount: isCredit
+          ? 0
+          : isMixed
+          ? distributionData.paidAmount || 0
+          : distributionData.totalValue,
+        items: (distributionData.products || []).map((product) => ({
           productId: product.productId,
           quantity: product.quantity,
           price: product.price
         }))
       };
 
-      console.log('Saving distribution:', apiData);
-      
-      loadDistributions();
+      await ApiService.post('/invoice/create', apiData, { headers: authHeaders });
+
+      alert('Distribution created successfully!');
       setShowModal(false);
+      await loadDistributions();
     } catch (error) {
       console.error('Error saving distribution:', error);
+      alert('Failed to create distribution. Please try again.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -196,39 +247,67 @@ const StockDistribution = ({ onLogout }) => {
   };
 
   const handleStatusUpdate = async (invoiceNumber, newStatus) => {
-    try {
-      const mapToApiStatus = (uiStatus) => {
-        switch (uiStatus) {
-          case 'Pending': return 'pending';
-          case 'In Transit': return 'pending';
-          case 'Completed': return 'completed';
-          case 'Cancelled': return 'cancelled';
-          default: return 'pending';
-        }
-      };
+    const distribution = distributions.find((d) => d.id === invoiceNumber);
+    if (!distribution) {
+      alert('Distribution not found');
+      return;
+    }
 
+    try {
       const apiStatus = mapToApiStatus(newStatus);
-      const distribution = distributions.find(d => d.id === invoiceNumber);
-      
-      console.log(`Updating status of ${invoiceNumber} to ${apiStatus}`);
-      
-      loadDistributions();
+
+      await ApiService.put(
+        `/invoice/${distribution.invoiceId}`,
+        { status: apiStatus },
+        { headers: authHeaders }
+      );
+
+      // Update local state immediately (optimistic UI)
+      setDistributions((prev) =>
+        prev.map((d) =>
+          d.id === invoiceNumber ? { ...d, status: newStatus } : d
+        )
+      );
+
+      if (selectedDistribution && selectedDistribution.id === invoiceNumber) {
+        setSelectedDistribution((prev) => ({ ...prev, status: newStatus }));
+      }
+
+      alert(`Distribution marked as ${newStatus}.`);
+      await loadDistributions();
     } catch (error) {
       console.error('Error updating status:', error);
+      alert('Failed to update distribution status. Please try again.');
     }
   };
 
   const handleDeleteDistribution = async (invoiceNumber) => {
-    if (window.confirm('Are you sure you want to delete this distribution?')) {
-      try {
-        const distribution = distributions.find(d => d.id === invoiceNumber);
-        console.log(`Deleting invoice: ${invoiceNumber}`);
-        loadDistributions();
-      } catch (error) {
-        console.error('Error deleting distribution:', error);
-      }
+    if (!window.confirm('Are you sure you want to delete this distribution?')) {
+      return;
+    }
+
+    const distribution = distributions.find((d) => d.id === invoiceNumber);
+    if (!distribution) {
+      alert('Distribution not found');
+      return;
+    }
+
+    try {
+      await ApiService.delete(`/invoice/${distribution.invoiceId}`, {
+        headers: authHeaders
+      });
+
+      alert('Distribution deleted successfully!');
+      await loadDistributions();
+    } catch (error) {
+      console.error('Error deleting distribution:', error);
+      alert('Failed to delete distribution. Please try again.');
     }
   };
+
+  /* ------------------------------------------------------------------ */
+  /* Styling helpers                                                    */
+  /* ------------------------------------------------------------------ */
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -259,35 +338,52 @@ const StockDistribution = ({ onLogout }) => {
     }
   };
 
-  const filteredDistributions = distributions.filter(distribution => {
-    const matchesSearch = 
-      distribution.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      distribution.storeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      distribution.managerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      distribution.products.some(p => 
-        p.productName.toLowerCase().includes(searchTerm.toLowerCase())
+  /* ------------------------------------------------------------------ */
+  /* Filtering                                                          */
+  /* ------------------------------------------------------------------ */
+
+  const filteredDistributions = distributions.filter((distribution) => {
+    const term = searchTerm.toLowerCase();
+
+    const matchesSearch =
+      distribution.id.toLowerCase().includes(term) ||
+      distribution.storeName.toLowerCase().includes(term) ||
+      distribution.managerName.toLowerCase().includes(term) ||
+      distribution.products.some((p) =>
+        p.productName.toLowerCase().includes(term)
       );
-    
-    const matchesStatus = statusFilter === 'All' || distribution.status === statusFilter;
-    const matchesPayment = paymentFilter === 'All' || distribution.paymentType === paymentFilter;
-    const matchesStore = storeFilter === 'All' || distribution.storeId.toString() === storeFilter;
-    
+
+    const matchesStatus =
+      statusFilter === 'All' || distribution.status === statusFilter;
+    const matchesPayment =
+      paymentFilter === 'All' || distribution.paymentType === paymentFilter;
+    const matchesStore =
+      storeFilter === 'All' || distribution.storeId === storeFilter;
+
     return matchesSearch && matchesStatus && matchesPayment && matchesStore;
   });
+
+  /* ------------------------------------------------------------------ */
+  /* Render                                                             */
+  /* ------------------------------------------------------------------ */
 
   return (
     <div className="flex min-h-screen bg-gray-50">
       <Sidebar onLogout={onLogout} />
-      
+
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header title="Stock Distribution" />
-        
+
         <div className="flex-1 overflow-auto p-6">
           <div className="mb-8">
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-4">
               <div className="flex-1">
-                <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Stock Distribution</h1>
-                <p className="text-gray-600 mt-2">Distribute inventory to stores and track distribution history</p>
+                <h1 className="text-2xl md:text-3xl font-bold text-gray-800">
+                  Stock Distribution
+                </h1>
+                <p className="text-gray-600 mt-2">
+                  Distribute inventory to stores and track distribution history
+                </p>
               </div>
               <button
                 onClick={handleCreateDistribution}
@@ -297,25 +393,31 @@ const StockDistribution = ({ onLogout }) => {
                 <span className="font-medium">New Distribution</span>
               </button>
             </div>
-            
-            {/* Stats Cards - Updated to Rupee */}
+
+            {/* Stats Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-7 gap-4 mb-8">
-              <div className="col-span-2 lg:col-span-2 bg-white p-5 rounded-xl border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
-                   onClick={() => setStatusFilter('All')}>
+              <div
+                className="col-span-2 lg:col-span-2 bg-white p-5 rounded-xl border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+                onClick={() => setStatusFilter('All')}
+              >
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-sm text-gray-500 mb-1">All Distributions</div>
                     <div className="text-2xl font-bold text-gray-800">{stats.all}</div>
-                    <div className="text-xs text-gray-500 mt-1">Total Value: {formatRupee(stats.totalValue)}</div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      Total Value: {formatRupee(stats.totalValue)}
+                    </div>
                   </div>
                   <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
                     <FaTruck className="text-blue-600 text-lg" />
                   </div>
                 </div>
               </div>
-              
-              <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
-                   onClick={() => setStatusFilter('Pending')}>
+
+              <div
+                className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+                onClick={() => setStatusFilter('Pending')}
+              >
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-sm text-gray-500 mb-1">Pending</div>
@@ -326,9 +428,11 @@ const StockDistribution = ({ onLogout }) => {
                   </div>
                 </div>
               </div>
-              
-              <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
-                   onClick={() => setStatusFilter('In Transit')}>
+
+              <div
+                className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+                onClick={() => setStatusFilter('In Transit')}
+              >
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-sm text-gray-500 mb-1">In Transit</div>
@@ -339,9 +443,11 @@ const StockDistribution = ({ onLogout }) => {
                   </div>
                 </div>
               </div>
-              
-              <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
-                   onClick={() => setStatusFilter('Completed')}>
+
+              <div
+                className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+                onClick={() => setStatusFilter('Completed')}
+              >
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-sm text-gray-500 mb-1">Completed</div>
@@ -352,9 +458,11 @@ const StockDistribution = ({ onLogout }) => {
                   </div>
                 </div>
               </div>
-              
-              <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
-                   onClick={() => setPaymentFilter('Paid')}>
+
+              <div
+                className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+                onClick={() => setPaymentFilter('Paid')}
+              >
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-sm text-gray-500 mb-1">Paid</div>
@@ -365,9 +473,11 @@ const StockDistribution = ({ onLogout }) => {
                   </div>
                 </div>
               </div>
-              
-              <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
-                   onClick={() => setPaymentFilter('Credit')}>
+
+              <div
+                className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+                onClick={() => setPaymentFilter('Credit')}
+              >
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-sm text-gray-500 mb-1">Credit</div>
@@ -379,11 +489,10 @@ const StockDistribution = ({ onLogout }) => {
                 </div>
               </div>
             </div>
-            
+
             {/* Filters */}
             <div className="bg-white p-6 rounded-xl border border-gray-200 mb-8">
               <div className="flex flex-col lg:flex-row gap-4">
-                {/* Search */}
                 <div className="flex-1">
                   <div className="relative">
                     <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
@@ -396,8 +505,7 @@ const StockDistribution = ({ onLogout }) => {
                     />
                   </div>
                 </div>
-                
-                {/* Filters Row */}
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {/* Status Filter */}
                   <div className="relative">
@@ -410,12 +518,13 @@ const StockDistribution = ({ onLogout }) => {
                       >
                         <option value="All">All Status</option>
                         <option value="Pending">Pending</option>
+                        <option value="In Transit">In Transit</option>
                         <option value="Completed">Completed</option>
                         <option value="Cancelled">Cancelled</option>
                       </select>
                     </div>
                   </div>
-                  
+
                   {/* Payment Filter */}
                   <div className="relative">
                     <select
@@ -429,7 +538,7 @@ const StockDistribution = ({ onLogout }) => {
                       <option value="Mixed">Mixed</option>
                     </select>
                   </div>
-                  
+
                   {/* Store Filter */}
                   <div className="relative">
                     <select
@@ -438,8 +547,8 @@ const StockDistribution = ({ onLogout }) => {
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="All">All Stores</option>
-                      {stores.map(store => (
-                        <option key={store.id} value={store.id.toString()}>
+                      {stores.map((store) => (
+                        <option key={store.id} value={store.id}>
                           {store.name}
                         </option>
                       ))}
@@ -448,7 +557,7 @@ const StockDistribution = ({ onLogout }) => {
                 </div>
               </div>
             </div>
-            
+
             {/* Distributions Table */}
             {loading ? (
               <div className="text-center py-16">
@@ -461,16 +570,16 @@ const StockDistribution = ({ onLogout }) => {
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">INVOICE NUMBER</th>
-                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">STORE</th>
-                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">MANAGER</th>
-                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">DATE</th>
-                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PRODUCTS</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice Number</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Store</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Manager</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Products</th>
                         <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SKU</th>
-                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">TOTAL</th>
-                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PAYMENT</th>
-                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">STATUS</th>
-                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ACTIONS</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
@@ -479,7 +588,9 @@ const StockDistribution = ({ onLogout }) => {
                           <td className="px-6 py-4">
                             <div className="font-medium text-gray-900">{distribution.id}</div>
                             <div className="text-xs text-gray-500">
-                              {new Date(distribution.createdAt).toLocaleDateString()}
+                              {distribution.createdAt
+                                ? new Date(distribution.createdAt).toLocaleDateString()
+                                : distribution.date}
                             </div>
                           </td>
                           <td className="px-6 py-4">
@@ -495,10 +606,11 @@ const StockDistribution = ({ onLogout }) => {
                             <div className="text-sm text-gray-900">
                               {distribution.totalItems} items
                               <div className="text-xs text-gray-500">
-                                {distribution.products.length} product{distribution.products.length !== 1 ? 's' : ''}
+                                {distribution.products.length} product
+                                {distribution.products.length !== 1 ? 's' : ''}
                               </div>
                               <div className="mt-1">
-                                {distribution.products.slice(0, 2).map(p => (
+                                {distribution.products.slice(0, 2).map((p) => (
                                   <div key={p.productId} className="text-xs text-gray-600">
                                     • {p.productName} ({p.quantity})
                                   </div>
@@ -513,7 +625,7 @@ const StockDistribution = ({ onLogout }) => {
                           </td>
                           <td className="px-6 py-4">
                             <div className="text-sm text-gray-600">
-                              {distribution.products.slice(0, 1).map(p => (
+                              {distribution.products.slice(0, 1).map((p) => (
                                 <div key={p.productId} className="text-xs">
                                   {p.sku}
                                 </div>
@@ -583,20 +695,26 @@ const StockDistribution = ({ onLogout }) => {
                       ))}
                     </tbody>
                   </table>
-                  
+
                   {filteredDistributions.length === 0 && (
                     <div className="text-center py-16">
                       <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
                         <FaBox className="text-gray-400 text-3xl" />
                       </div>
                       <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                        {searchTerm || statusFilter !== 'All' || paymentFilter !== 'All' || storeFilter !== 'All' 
-                          ? 'No distributions found' 
+                        {searchTerm ||
+                        statusFilter !== 'All' ||
+                        paymentFilter !== 'All' ||
+                        storeFilter !== 'All'
+                          ? 'No distributions found'
                           : 'No distributions yet'}
                       </h3>
                       <p className="text-gray-600 max-w-md mx-auto mb-6">
-                        {searchTerm || statusFilter !== 'All' || paymentFilter !== 'All' || storeFilter !== 'All'
-                          ? 'Try adjusting your search or filters' 
+                        {searchTerm ||
+                        statusFilter !== 'All' ||
+                        paymentFilter !== 'All' ||
+                        storeFilter !== 'All'
+                          ? 'Try adjusting your search or filters'
                           : 'Create your first distribution to start managing stock transfers'}
                       </p>
                       <button
@@ -620,10 +738,11 @@ const StockDistribution = ({ onLogout }) => {
         <AddDistributionModal
           onSave={handleSaveDistribution}
           onClose={() => setShowModal(false)}
+          saving={saving}
         />
       )}
 
-      {/* Distribution Details Modal - Updated to Rupee */}
+      {/* Distribution Details Modal */}
       {showDetailsModal && selectedDistribution && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
           <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -642,7 +761,6 @@ const StockDistribution = ({ onLogout }) => {
                 </button>
               </div>
 
-              {/* Distribution Info */}
               <div className="grid grid-cols-2 gap-6 mb-8">
                 <div className="space-y-3">
                   <div>
@@ -673,7 +791,9 @@ const StockDistribution = ({ onLogout }) => {
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Total Value</p>
-                    <p className="text-xl font-bold text-gray-900">{formatRupee(selectedDistribution.totalValue)}</p>
+                    <p className="text-xl font-bold text-gray-900">
+                      {formatRupee(selectedDistribution.totalValue)}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -685,7 +805,7 @@ const StockDistribution = ({ onLogout }) => {
                   {selectedDistribution.products.map((product, index) => (
                     <div key={index} className="border border-gray-200 rounded-lg p-4">
                       <div className="flex justify-between items-start">
-                        <div>
+                        <div className="w-full">
                           <h4 className="font-medium text-gray-900">{product.productName}</h4>
                           <p className="text-sm text-gray-500 mb-2">SKU: {product.sku}</p>
                           <div className="mt-2 grid grid-cols-3 gap-4">
@@ -716,16 +836,22 @@ const StockDistribution = ({ onLogout }) => {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <p className="text-sm text-gray-600">Total Amount</p>
-                      <p className="text-lg font-semibold">{formatRupee(selectedDistribution.totalValue)}</p>
+                      <p className="text-lg font-semibold">
+                        {formatRupee(selectedDistribution.totalValue)}
+                      </p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-600">Paid Amount</p>
-                      <p className="text-lg font-semibold text-green-600">{formatRupee(selectedDistribution.paidAmount || 0)}</p>
+                      <p className="text-lg font-semibold text-green-600">
+                        {formatRupee(selectedDistribution.paidAmount || 0)}
+                      </p>
                     </div>
                     {selectedDistribution.creditAmount > 0 && (
                       <div>
                         <p className="text-sm text-gray-600">Credit Amount</p>
-                        <p className="text-lg font-semibold text-blue-600">{formatRupee(selectedDistribution.creditAmount)}</p>
+                        <p className="text-lg font-semibold text-blue-600">
+                          {formatRupee(selectedDistribution.creditAmount)}
+                        </p>
                       </div>
                     )}
                   </div>
@@ -745,7 +871,9 @@ const StockDistribution = ({ onLogout }) => {
                   </div>
                   <div className="flex justify-between border-t border-gray-200 pt-2">
                     <span className="text-lg font-semibold">Total Amount</span>
-                    <span className="text-xl font-bold text-gray-900">{formatRupee(selectedDistribution.totalValue)}</span>
+                    <span className="text-xl font-bold text-gray-900">
+                      {formatRupee(selectedDistribution.totalValue)}
+                    </span>
                   </div>
                 </div>
               </div>
