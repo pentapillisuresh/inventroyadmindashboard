@@ -4,6 +4,7 @@ import Header from './Header';
 import { FaDownload, FaFilePdf, FaFileExcel, FaFileCsv, FaChartBar, FaChartLine, FaChartPie, FaDollarSign, FaBox, FaReceipt, FaCreditCard, FaSpinner, FaExclamationCircle } from 'react-icons/fa';
 import { storage } from '../data/storage';
 import ApiService from '../components/ApiService';
+import jsPDF from 'jspdf';
 
 const ReportsAnalytics = ({ onLogout }) => {
   const [reports, setReports] = useState([]);
@@ -12,7 +13,7 @@ const ReportsAnalytics = ({ onLogout }) => {
     dateRange: 'Month',
     startDate: '',
     endDate: '',
-    exportFormat: 'json'
+    exportFormat: 'PDF'
   });
   const clientToken = localStorage.getItem('token');
   const [stats, setStats] = useState({
@@ -45,7 +46,127 @@ const ReportsAnalytics = ({ onLogout }) => {
     setReports(allReports);
   };
 
+  const formatPdfRupee = (amount) => {
+    return `Rs. ${parseFloat(amount || 0).toLocaleString('en-IN')}`;
+  };
+
+  const downloadPdfReport = (data) => {
+    const doc = new jsPDF();
+    const reportType = formData.reportType.toLowerCase();
+    const report = data?.report?.report || data?.report || {};
+    const summary = report?.summary || {};
+
+    const reportTitle =
+      `${formData.reportType.charAt(0).toUpperCase() + formData.reportType.slice(1)} Report`;
+
+    const startDate = formData.startDate || 'All time';
+    const endDate = formData.endDate || 'Now';
+
+    let y = 20;
+
+    const addText = (text, x = 20, size = 10, bold = false) => {
+      if (y > 275) {
+        doc.addPage();
+        y = 20;
+      }
+
+      doc.setFont('helvetica', bold ? 'bold' : 'normal');
+      doc.setFontSize(size);
+
+      const lines = doc.splitTextToSize(String(text ?? ''), 170);
+      doc.text(lines, x, y);
+      y += lines.length * (size >= 16 ? 8 : 6);
+    };
+
+    const addSection = (title) => {
+      if (y > 255) {
+        doc.addPage();
+        y = 20;
+      }
+
+      y += 4;
+      addText(title, 20, 13, true);
+      y += 2;
+    };
+
+    addText('BUSINESS REPORT', 20, 20, true);
+    y += 2;
+    addText(reportTitle, 20, 15, true);
+    addText(`Date Range: ${startDate} to ${endDate}`);
+    addText(`Generated On: ${new Date().toLocaleString('en-IN')}`);
+    y += 5;
+
+    addSection('Overall Summary');
+    addText(`Total Revenue: ${formatPdfRupee(data?.TotalRevenue || 0)}`);
+    addText(`Total Invoices: ${Number(data?.TotalInvoice || 0).toLocaleString('en-IN')}`);
+    addText(`Total Credit: ${formatPdfRupee(data?.TotalCredit || 0)}`);
+
+    if (reportType === 'inventory') {
+      addSection('Inventory Summary');
+      addText(`Total Items: ${summary.totalItems || 0}`);
+      addText(`Total Quantity: ${summary.totalQuantity || 0}`);
+      addText(`Total Value: ${formatPdfRupee(summary.totalValue || 0)}`);
+      addText(`Low Stock Items: ${summary.lowStockItems || 0}`);
+      addText(`Out of Stock Items: ${summary.outOfStockItems || 0}`);
+
+      if (Array.isArray(report.inventory) && report.inventory.length > 0) {
+        addSection('Inventory Items');
+
+        report.inventory.forEach((item, index) => {
+          const productName = item?.Product?.name || 'N/A';
+          const location = [
+            item?.Store?.name,
+            item?.Room?.name,
+            item?.Rack?.name,
+            item?.Freezer?.name
+          ].filter(Boolean).join(' / ') || 'N/A';
+
+          addText(`${index + 1}. ${productName}`, 20, 10, true);
+          addText(`Quantity: ${item?.quantity ?? 0}`);
+          addText(`Location: ${location}`);
+          addText(
+            `Last Updated: ${
+              item?.lastUpdated
+                ? new Date(item.lastUpdated).toLocaleDateString('en-IN')
+                : 'N/A'
+            }`
+          );
+          y += 2;
+        });
+      }
+    }
+
+    if (reportType === 'credit') {
+      addSection('Credit Summary');
+      addText(`Total Credit Given: ${formatPdfRupee(summary.totalCreditGiven || 0)}`);
+      addText(`Total Outstanding: ${formatPdfRupee(summary.totalOutstanding || 0)}`);
+      addText(
+        `Credit Utilization: ${
+          typeof summary.creditUtilization === 'number'
+            ? `${summary.creditUtilization.toFixed(2)}%`
+            : '0%'
+        }`
+      );
+      addText(`Overdue Invoices: ${summary.overdueInvoices || 0}`);
+    }
+
+    if (reportType === 'expenditure') {
+      addSection('Expenditure Summary');
+      addText(`Total Expenditures: ${summary.totalExpenditures || 0}`);
+      addText(`Total Amount: ${formatPdfRupee(summary.totalAmount || 0)}`);
+      addText(`Verified Amount: ${formatPdfRupee(summary.verifiedAmount || 0)}`);
+      addText(`Pending Amount: ${formatPdfRupee(summary.pendingAmount || 0)}`);
+    }
+
+    const safeReportType = formData.reportType.toLowerCase();
+    const datePart = new Date().toISOString().split('T')[0];
+    const fileName = `${safeReportType}-report-${datePart}.pdf`;
+
+    doc.save(fileName);
+  };
+
   const handleGenerateReport = async (e) => {
+    e?.preventDefault();
     setLoading(true);
     setError('');
     setShowReportDetails(true);
@@ -108,9 +229,9 @@ const ReportsAnalytics = ({ onLogout }) => {
         storage.addReport(newReport);
         loadReports();
 
-        // Simulate download if not JSON format
-        if (formData.exportFormat.toLowerCase() !== 'json') {
-          alert(`Report generated successfully!\n\nName: ${reportName}\nFormat: ${formData.exportFormat}\nSize: ${size}`);
+        // Generate and download a real PDF file in the browser.
+        if (formData.exportFormat === 'PDF') {
+          downloadPdfReport(response);
         }
 
       } else {
@@ -401,7 +522,7 @@ const ReportsAnalytics = ({ onLogout }) => {
                   </div>
                 )}
 
-                <form>
+                <form onSubmit={handleGenerateReport}>
                   <div className="space-y-6">
                     {/* Report Type */}
                     <div>
@@ -469,46 +590,42 @@ const ReportsAnalytics = ({ onLogout }) => {
 
                     {/* Export Format */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Export Format</label>
-                      <div className="grid grid-cols-3 gap-3">
-                        <label className={`flex flex-col items-center p-3 border rounded-lg cursor-pointer transition-colors ${formData.exportFormat === 'JSON' ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:bg-gray-50'
-                          }`}>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Export Format
+                      </label>
+
+                      <div className="grid grid-cols-1 gap-3">
+                        <label
+                          className={`flex items-center justify-center gap-3 p-4 border rounded-lg cursor-pointer transition-colors ${
+                            formData.exportFormat === 'PDF'
+                              ? 'border-red-500 bg-red-50'
+                              : 'border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
                           <input
                             type="radio"
                             name="exportFormat"
-                            value="JSON"
-                            checked={formData.exportFormat === 'JSON'}
-                            onChange={(e) => setFormData(prev => ({ ...prev, exportFormat: e.target.value }))}
+                            value="PDF"
+                            checked={formData.exportFormat === 'PDF'}
+                            onChange={(e) =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                exportFormat: e.target.value
+                              }))
+                            }
                             className="sr-only"
                           />
-                          <FaFilePdf className="text-red-500 text-xl mb-2" />
-                          <span className="text-sm">JSON</span>
-                        </label>
-                        <label className={`flex flex-col items-center p-3 border rounded-lg cursor-pointer transition-colors ${formData.exportFormat === 'Excel' ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:bg-gray-50'
-                          }`}>
-                          <input
-                            type="radio"
-                            name="exportFormat"
-                            value="Excel"
-                            checked={formData.exportFormat === 'Excel'}
-                            onChange={(e) => setFormData(prev => ({ ...prev, exportFormat: e.target.value }))}
-                            className="sr-only"
-                          />
-                          <FaFileExcel className="text-green-500 text-xl mb-2" />
-                          <span className="text-sm">Excel</span>
-                        </label>
-                        <label className={`flex flex-col items-center p-3 border rounded-lg cursor-pointer transition-colors ${formData.exportFormat === 'CSV' ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:bg-gray-50'
-                          }`}>
-                          <input
-                            type="radio"
-                            name="exportFormat"
-                            value="CSV"
-                            checked={formData.exportFormat === 'CSV'}
-                            onChange={(e) => setFormData(prev => ({ ...prev, exportFormat: e.target.value }))}
-                            className="sr-only"
-                          />
-                          <FaFileCsv className="text-blue-500 text-xl mb-2" />
-                          <span className="text-sm">CSV</span>
+
+                          <FaFilePdf className="text-red-500 text-2xl" />
+
+                          <div>
+                            <span className="block text-sm font-semibold text-gray-800">
+                              PDF
+                            </span>
+                            <span className="block text-xs text-gray-500">
+                              Download the generated report as a PDF file
+                            </span>
+                          </div>
                         </label>
                       </div>
                     </div>
@@ -521,8 +638,7 @@ const ReportsAnalytics = ({ onLogout }) => {
                           ? 'bg-blue-400 cursor-not-allowed'
                           : 'bg-blue-600 hover:bg-blue-700'
                         } text-white`}
-                        onClick={handleGenerateReport}
-                    >
+>
                       {loading ? (
                         <>
                           <FaSpinner className="animate-spin" />

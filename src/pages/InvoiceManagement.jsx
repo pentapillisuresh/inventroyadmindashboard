@@ -18,6 +18,7 @@ const InvoiceManagement = ({ onLogout }) => {
   const navigate = useNavigate();
   const { id } = useParams();
   const invoiceRef = useRef();
+
   const [invoices, setInvoices] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -25,6 +26,7 @@ const InvoiceManagement = ({ onLogout }) => {
   const [storeCreditStatus, setStoreCreditStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isDownloading, setIsDownloading] = useState(false);
+
   const [stats, setStats] = useState({
     total: 0,
     outlet_sale: 0,
@@ -33,118 +35,284 @@ const InvoiceManagement = ({ onLogout }) => {
     totalValue: 0
   });
 
+  // =========================================================
+  // PAGINATION STATE
+  // =========================================================
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(20);
+
   const clientToken = localStorage.getItem('token');
 
+  // =========================================================
+  // LOAD INVOICES
+  // =========================================================
   useEffect(() => {
     loadInvoices();
   }, []);
 
+  // =========================================================
+  // HANDLE URL INVOICE ID
+  // =========================================================
   useEffect(() => {
     if (id) {
-      const invoice = invoices.find(inv => inv.id.toString() === id);
+      const invoice = invoices.find(
+        inv => inv.id.toString() === id
+      );
+
       setSelectedInvoice(invoice);
-      if (invoice && invoice.type === 'credit' && invoice.Store) {
-        checkStoreCredit(invoice.Store, invoice.totalAmount);
+
+      if (
+        invoice &&
+        invoice.type === 'credit' &&
+        invoice.Store
+      ) {
+        checkStoreCredit(
+          invoice.Store,
+          invoice.totalAmount
+        );
       }
     }
   }, [id, invoices]);
 
+  // =========================================================
+  // LOAD INVOICES API
+  // =========================================================
   const loadInvoices = async () => {
     try {
       setLoading(true);
-      const response = await ApiService.get('/invoice/allDistributed/Invoices/admin', {
-        headers: {
-          Authorization: `Bearer ${clientToken}`,
-          'Content-Type': 'application/json',
-        },
-      });
+
+      const response = await ApiService.get(
+        '/invoice/allDistributed/Invoices/admin',
+        {
+          headers: {
+            Authorization: `Bearer ${clientToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
 
       if (response.invoices) {
-        const transformedInvoices = response.invoices.map(invoice => {
-          const totalItems = invoice.items.reduce((sum, item) => sum + item.quantity, 0);
+        const transformedInvoices = response.invoices.map(
+          invoice => {
+            const totalItems = invoice.items.reduce(
+              (sum, item) => sum + item.quantity,
+              0
+            );
 
-          const mapStatus = (status) => {
-            switch (status) {
-              case 'pending': return 'pending';
-              case 'completed': return 'completed';
-              case 'cancelled': return 'cancelled';
-              default: return status;
-            }
-          };
+            const mapStatus = (status) => {
+              switch (status) {
+                case 'pending':
+                  return 'pending';
 
-          const mapPaymentMethod = (method) => {
-            switch (method) {
-              case 'paid': return 'Paid';
-              case 'credit': return 'Credit';
-              case 'mixed': return 'Mixed';
-              default: return method.charAt(0).toUpperCase() + method.slice(1);
-            }
-          };
+                case 'completed':
+                  return 'completed';
 
-          return {
-            id: invoice.invoiceNumber,
-            invoiceId: invoice.id,
-            outletName: invoice.Outlet?.name || 'N/A',
-            storeName: invoice.Store?.name || 'N/A',
-            storeId: invoice.storeId,
-            managerName: invoice.StoreManager?.name || invoice.Admin?.name || 'Unassigned',
-            date: new Date(invoice.invoiceDate).toLocaleDateString(),
-            totalAmount: parseFloat(invoice.totalAmount),
-            creditAmount: parseFloat(invoice.creditAmount),
-            paidAmount: parseFloat(invoice.paidAmount),
-            paymentMethod: invoice.paymentMethod,
-            paymentType: mapPaymentMethod(invoice.paymentMethod),
-            type: invoice.type,
-            status: mapStatus(invoice.status),
-            createdAt: invoice.createdAt,
-            dueDate: invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : '',
-            totalItems: totalItems,
-            products: invoice.items.map(item => ({
-              productId: item.productId,
-              productName: item.Product?.name || 'Unknown Product',
-              sku: item.Product?.sku || 'N/A',
-              quantity: item.quantity,
-              price: parseFloat(item.price),
-              total: parseFloat(item.totalPrice)
-            })),
-            Store: invoice.Store,
-            Admin: invoice.Admin,
-            items: invoice.items,
-            notes: invoice.notes || 'Thank you for your business!'
-          };
-        });
+                case 'cancelled':
+                  return 'cancelled';
+
+                default:
+                  return status;
+              }
+            };
+
+            const mapPaymentMethod = (method) => {
+              switch (method) {
+                case 'paid':
+                  return 'Paid';
+
+                case 'credit':
+                  return 'Credit';
+
+                case 'mixed':
+                  return 'Mixed';
+
+                default:
+                  return method.charAt(0).toUpperCase() +
+                    method.slice(1);
+              }
+            };
+
+            return {
+              id: invoice.invoiceNumber,
+              invoiceId: invoice.id,
+
+              outletName:
+                invoice.Outlet?.name || 'N/A',
+
+              storeName:
+                invoice.Store?.name || 'N/A',
+
+              storeId:
+                invoice.storeId,
+
+              managerName:
+                invoice.StoreManager?.name ||
+                invoice.Admin?.name ||
+                'Unassigned',
+
+              date:
+                new Date(
+                  invoice.invoiceDate
+                ).toLocaleDateString(),
+
+              totalAmount:
+                parseFloat(invoice.totalAmount),
+
+              creditAmount:
+                parseFloat(invoice.creditAmount),
+
+              paidAmount:
+                parseFloat(invoice.paidAmount),
+
+              paymentMethod:
+                invoice.paymentMethod,
+
+              paymentType:
+                mapPaymentMethod(
+                  invoice.paymentMethod
+                ),
+
+              type:
+                invoice.type,
+
+              status:
+                mapStatus(invoice.status),
+
+              createdAt:
+                invoice.createdAt,
+
+              dueDate:
+                invoice.dueDate
+                  ? new Date(
+                      invoice.dueDate
+                    ).toLocaleDateString()
+                  : '',
+
+              totalItems:
+                totalItems,
+
+              products:
+                invoice.items.map(item => ({
+                  productId:
+                    item.productId,
+
+                  productName:
+                    item.Product?.name ||
+                    'Unknown Product',
+
+                  sku:
+                    item.Product?.sku ||
+                    'N/A',
+
+                  quantity:
+                    item.quantity,
+
+                  price:
+                    parseFloat(item.price),
+
+                  total:
+                    parseFloat(item.totalPrice)
+                })),
+
+              Store:
+                invoice.Store,
+
+              Admin:
+                invoice.Admin,
+
+              items:
+                invoice.items,
+
+              notes:
+                invoice.notes ||
+                'Thank you for your business!'
+            };
+          }
+        );
 
         setInvoices(transformedInvoices);
 
-        const total = transformedInvoices.length;
-        const outlet_sale = transformedInvoices.filter(i => i.type === 'outlet_sale').length;
-        const credit = transformedInvoices.filter(i => i.type === 'credit').length;
-        const paid = transformedInvoices.filter(i => i.type === 'paid' || i.type === 'distribution').length;
-        const totalValue = transformedInvoices.reduce((sum, invoice) => sum + invoice.totalAmount, 0);
+        const total =
+          transformedInvoices.length;
 
-        setStats({ total, outlet_sale, credit, paid, totalValue });
+        const outlet_sale =
+          transformedInvoices.filter(
+            i => i.type === 'outlet_sale'
+          ).length;
+
+        const credit =
+          transformedInvoices.filter(
+            i => i.type === 'credit'
+          ).length;
+
+        const paid =
+          transformedInvoices.filter(
+            i =>
+              i.type === 'paid' ||
+              i.type === 'distribution'
+          ).length;
+
+        const totalValue =
+          transformedInvoices.reduce(
+            (sum, invoice) =>
+              sum + invoice.totalAmount,
+            0
+          );
+
+        setStats({
+          total,
+          outlet_sale,
+          credit,
+          paid,
+          totalValue
+        });
       }
     } catch (error) {
-      console.error('Error loading invoices:', error);
-      alert('Failed to load invoices. Please try again.');
+      console.error(
+        'Error loading invoices:',
+        error
+      );
+
+      alert(
+        'Failed to load invoices. Please try again.'
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  const checkStoreCredit = (store, invoiceAmount) => {
+  // =========================================================
+  // CHECK STORE CREDIT
+  // =========================================================
+  const checkStoreCredit = (
+    store,
+    invoiceAmount
+  ) => {
     if (!store) {
       setStoreCreditStatus(null);
       return;
     }
 
-    const currentCredit = parseFloat(store.currentCredit) || 0;
-    const creditLimit = parseFloat(store.creditLimit) || 0;
+    const currentCredit =
+      parseFloat(store.currentCredit) || 0;
 
-    const newCreditUsed = currentCredit + invoiceAmount;
-    const percentage = Math.round((newCreditUsed / creditLimit) * 100);
-    const isBlocked = newCreditUsed >= creditLimit;
-    const isNearLimit = percentage >= 80 && percentage < 100;
+    const creditLimit =
+      parseFloat(store.creditLimit) || 0;
+
+    const newCreditUsed =
+      currentCredit + invoiceAmount;
+
+    const percentage =
+      Math.round(
+        (newCreditUsed / creditLimit) * 100
+      );
+
+    const isBlocked =
+      newCreditUsed >= creditLimit;
+
+    const isNearLimit =
+      percentage >= 80 &&
+      percentage < 100;
 
     setStoreCreditStatus({
       store,
@@ -153,70 +321,143 @@ const InvoiceManagement = ({ onLogout }) => {
       percentage,
       isBlocked,
       isNearLimit,
-      availableCredit: creditLimit - currentCredit
+      availableCredit:
+        creditLimit - currentCredit
     });
   };
 
+  // =========================================================
+  // FORMAT CURRENCY
+  // =========================================================
   const formatCurrency = (amount) => {
-    return `₹ ${parseFloat(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `₹ ${parseFloat(amount).toLocaleString(
+      'en-IN',
+      {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      }
+    )}`;
   };
 
+  // =========================================================
+  // DOWNLOAD PDF
+  // =========================================================
   const downloadPDF = async () => {
-    if (!invoiceRef.current || !selectedInvoice) {
-      console.error("No invoice reference or selected invoice");
+    if (
+      !invoiceRef.current ||
+      !selectedInvoice
+    ) {
+      console.error(
+        'No invoice reference or selected invoice'
+      );
       return;
     }
 
     setIsDownloading(true);
 
     try {
-      const element = invoiceRef.current;
-      const images = element.getElementsByTagName('img');
-      await Promise.all(Array.from(images).map(img => {
-        if (img.complete) return Promise.resolve();
-        return new Promise(resolve => {
-          img.onload = resolve;
-          img.onerror = resolve;
+      const element =
+        invoiceRef.current;
+
+      const images =
+        element.getElementsByTagName('img');
+
+      await Promise.all(
+        Array.from(images).map(img => {
+          if (img.complete) {
+            return Promise.resolve();
+          }
+
+          return new Promise(resolve => {
+            img.onload = resolve;
+            img.onerror = resolve;
+          });
+        })
+      );
+
+      const canvas =
+        await html2canvas(element, {
+          scale: 3,
+          backgroundColor: '#ffffff',
+          logging: false,
+          useCORS: true,
+          windowWidth:
+            element.scrollWidth,
+          windowHeight:
+            element.scrollHeight
         });
-      }));
 
-      const canvas = await html2canvas(element, {
-        scale: 3,
-        backgroundColor: "#ffffff",
-        logging: false,
-        useCORS: true,
-        windowWidth: element.scrollWidth,
-        windowHeight: element.scrollHeight,
-      });
+      const data =
+        canvas.toDataURL('image/png');
 
-      const data = canvas.toDataURL("image/png");
-      const pdf = new jsPDF("p", "mm", "a4");
+      const pdf =
+        new jsPDF(
+          'p',
+          'mm',
+          'a4'
+        );
+
       const imgWidth = 210;
       const pageHeight = 297;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
+
+      const imgHeight =
+        (canvas.height * imgWidth) /
+        canvas.width;
+
+      let heightLeft =
+        imgHeight;
+
       let position = 0;
 
-      pdf.addImage(data, "PNG", 0, position, imgWidth, imgHeight);
+      pdf.addImage(
+        data,
+        'PNG',
+        0,
+        position,
+        imgWidth,
+        imgHeight
+      );
+
       heightLeft -= pageHeight;
 
       while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
+        position =
+          heightLeft - imgHeight;
+
         pdf.addPage();
-        pdf.addImage(data, "PNG", 0, position, imgWidth, imgHeight);
+
+        pdf.addImage(
+          data,
+          'PNG',
+          0,
+          position,
+          imgWidth,
+          imgHeight
+        );
+
         heightLeft -= pageHeight;
       }
 
-      pdf.save(`${selectedInvoice.id}.pdf`);
+      pdf.save(
+        `${selectedInvoice.id}.pdf`
+      );
     } catch (error) {
-      console.error("Error generating PDF:", error);
-      alert("Failed to generate PDF. Please try again.");
+      console.error(
+        'Error generating PDF:',
+        error
+      );
+
+      alert(
+        'Failed to generate PDF. Please try again.'
+      );
     } finally {
       setIsDownloading(false);
     }
   };
 
-  // Individual Invoice Excel Download with GST included
+  // =========================================================
+  // INDIVIDUAL INVOICE EXCEL DOWNLOAD
+  // =========================================================
   const downloadIndividualExcel = () => {
     if (!selectedInvoice) {
       alert('No invoice selected');
@@ -228,24 +469,106 @@ const InvoiceManagement = ({ onLogout }) => {
       const headerData = [
         ['INVOICE DETAILS'],
         [''],
-        ['Invoice Number', selectedInvoice.id],
-        ['Store Name', selectedInvoice.storeName],
-        ['Store GST No', selectedInvoice.Store?.Manager?.GST_No || 'N/A'],
-        ['Store Address', selectedInvoice.Store?.address || 'N/A'],
-        ['Store Phone', selectedInvoice.Store?.phoneNumber || 'N/A'],
-        ['Store Email', selectedInvoice.Store?.email || 'N/A'],
-        ['Outlet Name', selectedInvoice.outletName || 'N/A'],
-        ['Manager', selectedInvoice.managerName],
-        ['Date', selectedInvoice.date],
-        ['Payment Method', selectedInvoice.paymentMethod],
-        ['Payment Type', selectedInvoice.paymentType],
-        ['Status', selectedInvoice.status],
-        ['Total Amount', `₹ ${selectedInvoice.totalAmount.toFixed(2)}`],
-        ['Paid Amount', `₹ ${selectedInvoice.paidAmount.toFixed(2)}`],
-        ['Credit Amount', `₹ ${selectedInvoice.creditAmount.toFixed(2)}`],
-        ['Created At', new Date(selectedInvoice.createdAt).toLocaleString()],
-        ['Due Date', selectedInvoice.dueDate || 'N/A'],
-        ['Notes', selectedInvoice.notes || 'N/A'],
+
+        [
+          'Invoice Number',
+          selectedInvoice.id
+        ],
+
+        [
+          'Store Name',
+          selectedInvoice.storeName
+        ],
+
+        [
+          'Store GST No',
+          selectedInvoice.Store?.Manager?.GST_No ||
+            'N/A'
+        ],
+
+        [
+          'Store Address',
+          selectedInvoice.Store?.address ||
+            'N/A'
+        ],
+
+        [
+          'Store Phone',
+          selectedInvoice.Store?.phoneNumber ||
+            'N/A'
+        ],
+
+        [
+          'Store Email',
+          selectedInvoice.Store?.email ||
+            'N/A'
+        ],
+
+        [
+          'Outlet Name',
+          selectedInvoice.outletName ||
+            'N/A'
+        ],
+
+        [
+          'Manager',
+          selectedInvoice.managerName
+        ],
+
+        [
+          'Date',
+          selectedInvoice.date
+        ],
+
+        [
+          'Payment Method',
+          selectedInvoice.paymentMethod
+        ],
+
+        [
+          'Payment Type',
+          selectedInvoice.paymentType
+        ],
+
+        [
+          'Status',
+          selectedInvoice.status
+        ],
+
+        [
+          'Total Amount',
+          `₹ ${selectedInvoice.totalAmount.toFixed(2)}`
+        ],
+
+        [
+          'Paid Amount',
+          `₹ ${selectedInvoice.paidAmount.toFixed(2)}`
+        ],
+
+        [
+          'Credit Amount',
+          `₹ ${selectedInvoice.creditAmount.toFixed(2)}`
+        ],
+
+        [
+          'Created At',
+          new Date(
+            selectedInvoice.createdAt
+          ).toLocaleString()
+        ],
+
+        [
+          'Due Date',
+          selectedInvoice.dueDate ||
+            'N/A'
+        ],
+
+        [
+          'Notes',
+          selectedInvoice.notes ||
+            'N/A'
+        ],
+
         ['']
       ];
 
@@ -264,24 +587,63 @@ const InvoiceManagement = ({ onLogout }) => {
         'Net Value (₹)'
       ];
 
-      const productRows = selectedInvoice.items?.map((item, index) => [
-        index + 1,
-        item.Product?.name || 'Unknown Product',
-        item.Product?.sku || 'N/A',
-        item.Product?.HSN_No || 'N/A',
-        item.quantity,
-        parseFloat(item.price || 0).toFixed(2),
-        (parseFloat(item.price || 0) * parseFloat(item.quantity || 0)).toFixed(2),
-        parseFloat(item.CGSTAmount || 0).toFixed(2),
-        parseFloat(item.SGSTAmount || 0).toFixed(2),
-        parseFloat(item.IGSTAmount || 0).toFixed(2),
-        (
-          parseFloat(item.totalPrice || 0) +
-          parseFloat(item.CGSTAmount || 0) +
-          parseFloat(item.SGSTAmount || 0) +
-          parseFloat(item.IGSTAmount || 0)
-        ).toFixed(2)
-      ]) || [];
+      const productRows =
+        selectedInvoice.items?.map(
+          (item, index) => [
+            index + 1,
+
+            item.Product?.name ||
+              'Unknown Product',
+
+            item.Product?.sku ||
+              'N/A',
+
+            item.Product?.HSN_No ||
+              'N/A',
+
+            item.quantity,
+
+            parseFloat(
+              item.price || 0
+            ).toFixed(2),
+
+            (
+              parseFloat(
+                item.price || 0
+              ) *
+              parseFloat(
+                item.quantity || 0
+              )
+            ).toFixed(2),
+
+            parseFloat(
+              item.CGSTAmount || 0
+            ).toFixed(2),
+
+            parseFloat(
+              item.SGSTAmount || 0
+            ).toFixed(2),
+
+            parseFloat(
+              item.IGSTAmount || 0
+            ).toFixed(2),
+
+            (
+              parseFloat(
+                item.totalPrice || 0
+              ) +
+              parseFloat(
+                item.CGSTAmount || 0
+              ) +
+              parseFloat(
+                item.SGSTAmount || 0
+              ) +
+              parseFloat(
+                item.IGSTAmount || 0
+              )
+            ).toFixed(2)
+          ]
+        ) || [];
 
       // Add summary row
       const summaryRow = [
@@ -295,222 +657,614 @@ const InvoiceManagement = ({ onLogout }) => {
         '',
         '',
         '',
-        (selectedInvoice.totalAmount * 1.18).toFixed(2)
+        (
+          selectedInvoice.totalAmount *
+          1.18
+        ).toFixed(2)
       ];
 
       // Combine all data
       const excelData = [
         ...headerData,
+
         ['PRODUCT DETAILS'],
+
         [],
+
         productHeaders,
+
         ...productRows,
+
         [],
+
         summaryRow,
+
         [],
+
         ['PAYMENT SUMMARY'],
-        ['Total Gross Amount', `₹ ${selectedInvoice.totalAmount.toFixed(2)}`],
-        ['Add OUTPUT CGST 9%', `₹ ${(selectedInvoice.totalAmount * 0.09).toFixed(2)}`],
-        ['Add OUTPUT SGST 9%', `₹ ${(selectedInvoice.totalAmount * 0.09).toFixed(2)}`],
-        ['Grand Total', `₹ ${(selectedInvoice.totalAmount * 1.18).toFixed(2)}`]
+
+        [
+          'Total Gross Amount',
+          `₹ ${selectedInvoice.totalAmount.toFixed(2)}`
+        ],
+
+        [
+          'Add OUTPUT CGST 9%',
+          `₹ ${(selectedInvoice.totalAmount * 0.09).toFixed(2)}`
+        ],
+
+        [
+          'Add OUTPUT SGST 9%',
+          `₹ ${(selectedInvoice.totalAmount * 0.09).toFixed(2)}`
+        ],
+
+        [
+          'Grand Total',
+          `₹ ${(selectedInvoice.totalAmount * 1.18).toFixed(2)}`
+        ]
       ];
 
       // Create workbook
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.aoa_to_sheet(excelData);
+      const wb =
+        XLSX.utils.book_new();
+
+      const ws =
+        XLSX.utils.aoa_to_sheet(
+          excelData
+        );
 
       // Set column widths
       const colWidths = [
-        { wch: 15 },  // S.No
-        { wch: 30 },  // Product Name
-        { wch: 20 },  // SKU
-        { wch: 15 },  // HSN No
-        { wch: 12 },  // Quantity
-        { wch: 15 },  // Price
-        { wch: 15 },  // Total
-        { wch: 15 },  // CGST
-        { wch: 15 },  // SGST
-        { wch: 15 },  // IGST
-        { wch: 18 }   // Net Value
+        { wch: 15 },
+        { wch: 30 },
+        { wch: 20 },
+        { wch: 15 },
+        { wch: 12 },
+        { wch: 15 },
+        { wch: 15 },
+        { wch: 15 },
+        { wch: 15 },
+        { wch: 15 },
+        { wch: 18 }
       ];
-      ws['!cols'] = colWidths;
 
-      XLSX.utils.book_append_sheet(wb, ws, 'Invoice');
+      ws['!cols'] =
+        colWidths;
+
+      XLSX.utils.book_append_sheet(
+        wb,
+        ws,
+        'Invoice'
+      );
 
       // Generate Excel file
-      const fileName = `Invoice_${selectedInvoice.id}_${new Date().toISOString().split('T')[0]}.xlsx`;
-      XLSX.writeFile(wb, fileName);
-      
-      alert('Invoice Excel file downloaded successfully!');
+      const fileName =
+        `Invoice_${selectedInvoice.id}_${new Date()
+          .toISOString()
+          .split('T')[0]}.xlsx`;
+
+      XLSX.writeFile(
+        wb,
+        fileName
+      );
+
+      alert(
+        'Invoice Excel file downloaded successfully!'
+      );
     } catch (error) {
-      console.error('Error downloading invoice Excel:', error);
-      alert('Failed to download Excel file. Please try again.');
+      console.error(
+        'Error downloading invoice Excel:',
+        error
+      );
+
+      alert(
+        'Failed to download Excel file. Please try again.'
+      );
     }
   };
 
-  const handleViewDetails = (invoice) => {
+  // =========================================================
+  // VIEW DETAILS
+  // =========================================================
+  const handleViewDetails = (
+    invoice
+  ) => {
     setSelectedInvoice(invoice);
 
-    if (invoice.type === 'credit' && invoice.Store) {
-      checkStoreCredit(invoice.Store, invoice.totalAmount);
+    if (
+      invoice.type === 'credit' &&
+      invoice.Store
+    ) {
+      checkStoreCredit(
+        invoice.Store,
+        invoice.totalAmount
+      );
     }
   };
 
+  // =========================================================
+  // CLOSE DETAILS
+  // =========================================================
   const handleCloseDetails = () => {
     setSelectedInvoice(null);
     setStoreCreditStatus(null);
+
     if (id) {
       navigate('/invoices');
     }
   };
 
-  const handleApproveInvoice = async (invoiceId) => {
+  // =========================================================
+  // APPROVE INVOICE
+  // =========================================================
+  const handleApproveInvoice = async (
+    invoiceId
+  ) => {
     try {
-      const invoice = invoices.find(inv => inv.id === invoiceId);
+      const invoice =
+        invoices.find(
+          inv => inv.id === invoiceId
+        );
 
       if (!invoice) {
         alert('Invoice not found');
         return;
       }
 
-      if (invoice.type === 'credit' || invoice.paymentMethod === 'credit') {
+      if (
+        invoice.type === 'credit' ||
+        invoice.paymentMethod === 'credit'
+      ) {
         if (invoice.Store) {
-          const currentCredit = parseFloat(invoice.Store.currentCredit) || 0;
-          const creditLimit = parseFloat(invoice.Store.creditLimit) || 0;
-          const newCreditUsed = currentCredit + invoice.totalAmount;
-          const percentage = Math.round((newCreditUsed / creditLimit) * 100);
+          const currentCredit =
+            parseFloat(
+              invoice.Store.currentCredit
+            ) || 0;
+
+          const creditLimit =
+            parseFloat(
+              invoice.Store.creditLimit
+            ) || 0;
+
+          const newCreditUsed =
+            currentCredit +
+            invoice.totalAmount;
+
+          const percentage =
+            Math.round(
+              (newCreditUsed /
+                creditLimit) *
+                100
+            );
 
           if (percentage >= 100) {
-            alert(`⚠️ Store "${invoice.storeName}" credit limit would be exceeded (${percentage}%) if this invoice is approved.`);
+            alert(
+              `⚠️ Store "${invoice.storeName}" credit limit would be exceeded (${percentage}%) if this invoice is approved.`
+            );
+
             return;
           }
 
           if (percentage >= 80) {
-            const confirmProceed = window.confirm(
-              `⚠️ Warning: Store "${invoice.storeName}" credit usage would be at ${percentage}% (near limit). Do you want to proceed?`
-            );
-            if (!confirmProceed) return;
+            const confirmProceed =
+              window.confirm(
+                `⚠️ Warning: Store "${invoice.storeName}" credit usage would be at ${percentage}% (near limit). Do you want to proceed?`
+              );
+
+            if (!confirmProceed) {
+              return;
+            }
           }
         }
       }
 
-      const response = await ApiService.put(
-        `/invoice/${invoice.invoiceId}`,
-        { status: 'paid' },
-        {
-          headers: {
-            Authorization: `Bearer ${clientToken}`,
-            'Content-Type': 'application/json',
+      const response =
+        await ApiService.put(
+          `/invoice/${invoice.invoiceId}`,
+          {
+            status: 'paid'
           },
-        }
-      );
+          {
+            headers: {
+              Authorization:
+                `Bearer ${clientToken}`,
+              'Content-Type':
+                'application/json'
+            }
+          }
+        );
 
       if (response) {
-        alert('Invoice approved successfully!');
+        alert(
+          'Invoice approved successfully!'
+        );
+
         loadInvoices();
 
-        if (selectedInvoice && selectedInvoice.id === invoiceId) {
-          const updatedInvoice = { ...selectedInvoice, status: 'completed' };
-          setSelectedInvoice(updatedInvoice);
+        if (
+          selectedInvoice &&
+          selectedInvoice.id === invoiceId
+        ) {
+          const updatedInvoice = {
+            ...selectedInvoice,
+            status: 'completed'
+          };
+
+          setSelectedInvoice(
+            updatedInvoice
+          );
         }
       }
     } catch (error) {
-      console.error('Error approving invoice:', error);
-      alert('Failed to approve invoice. Please try again.');
+      console.error(
+        'Error approving invoice:',
+        error
+      );
+
+      alert(
+        'Failed to approve invoice. Please try again.'
+      );
     }
   };
 
-  const handleRejectInvoice = async (invoiceId) => {
+  // =========================================================
+  // REJECT INVOICE
+  // =========================================================
+  const handleRejectInvoice = async (
+    invoiceId
+  ) => {
     try {
-      const invoice = invoices.find(inv => inv.id === invoiceId);
+      const invoice =
+        invoices.find(
+          inv => inv.id === invoiceId
+        );
 
       if (!invoice) {
         alert('Invoice not found');
         return;
       }
 
-      const response = await ApiService.put(
-        `/invoice/${invoice.invoiceId}`,
-        { status: 'cancelled' },
-        {
-          headers: {
-            Authorization: `Bearer ${clientToken}`,
-            'Content-Type': 'application/json',
+      const response =
+        await ApiService.put(
+          `/invoice/${invoice.invoiceId}`,
+          {
+            status: 'cancelled'
           },
-        }
-      );
+          {
+            headers: {
+              Authorization:
+                `Bearer ${clientToken}`,
+              'Content-Type':
+                'application/json'
+            }
+          }
+        );
 
       if (response) {
-        alert('Invoice rejected successfully!');
+        alert(
+          'Invoice rejected successfully!'
+        );
+
         loadInvoices();
 
-        if (selectedInvoice && selectedInvoice.id === invoiceId) {
-          const updatedInvoice = { ...selectedInvoice, status: 'cancelled' };
-          setSelectedInvoice(updatedInvoice);
+        if (
+          selectedInvoice &&
+          selectedInvoice.id === invoiceId
+        ) {
+          const updatedInvoice = {
+            ...selectedInvoice,
+            status: 'cancelled'
+          };
+
+          setSelectedInvoice(
+            updatedInvoice
+          );
         }
       }
     } catch (error) {
-      console.error('Error rejecting invoice:', error);
-      alert('Failed to reject invoice. Please try again.');
+      console.error(
+        'Error rejecting invoice:',
+        error
+      );
+
+      alert(
+        'Failed to reject invoice. Please try again.'
+      );
     }
   };
 
-  const getStatusColor = (status) => {
+  // =========================================================
+  // STATUS COLOR
+  // =========================================================
+  const getStatusColor = (
+    status
+  ) => {
     switch (status) {
-      case 'completed': return { bg: 'bg-green-100', text: 'text-green-800', label: 'Completed' };
-      case 'pending': return { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'Pending' };
-      case 'cancelled': return { bg: 'bg-red-100', text: 'text-red-800', label: 'Cancelled' };
-      default: return { bg: 'bg-gray-100', text: 'text-gray-800', label: status };
+      case 'completed':
+        return {
+          bg: 'bg-green-100',
+          text: 'text-green-800',
+          label: 'Completed'
+        };
+
+      case 'pending':
+        return {
+          bg: 'bg-yellow-100',
+          text: 'text-yellow-800',
+          label: 'Pending'
+        };
+
+      case 'cancelled':
+        return {
+          bg: 'bg-red-100',
+          text: 'text-red-800',
+          label: 'Cancelled'
+        };
+
+      default:
+        return {
+          bg: 'bg-gray-100',
+          text: 'text-gray-800',
+          label: status
+        };
     }
   };
 
-  const getTypeColor = (type) => {
+  // =========================================================
+  // TYPE COLOR
+  // =========================================================
+  const getTypeColor = (
+    type
+  ) => {
     switch (type) {
-      case 'outlet_sale': return 'bg-purple-100 text-purple-800';
-      case 'credit': return 'bg-blue-100 text-blue-800';
+      case 'outlet_sale':
+        return 'bg-purple-100 text-purple-800';
+
+      case 'credit':
+        return 'bg-blue-100 text-blue-800';
+
       case 'paid':
       case 'distribution':
         return 'bg-green-100 text-green-800';
-      default: return 'bg-gray-100 text-gray-800';
+
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const getPaymentColor = (paymentType) => {
+  // =========================================================
+  // PAYMENT COLOR
+  // =========================================================
+  const getPaymentColor = (
+    paymentType
+  ) => {
     switch (paymentType) {
-      case 'Paid': return 'bg-green-50 text-green-700 border border-green-200';
-      case 'Credit': return 'bg-blue-50 text-blue-700 border border-blue-200';
-      case 'Mixed': return 'bg-purple-50 text-purple-700 border border-purple-200';
-      default: return 'bg-gray-50 text-gray-700 border border-gray-200';
+      case 'Paid':
+        return 'bg-green-50 text-green-700 border border-green-200';
+
+      case 'Credit':
+        return 'bg-blue-50 text-blue-700 border border-blue-200';
+
+      case 'Mixed':
+        return 'bg-purple-50 text-purple-700 border border-purple-200';
+
+      default:
+        return 'bg-gray-50 text-gray-700 border border-gray-200';
     }
   };
 
-  const filteredInvoices = invoices.filter(invoice => {
-    const matchesSearch =
-      invoice.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      invoice.outletName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      invoice.storeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      invoice.managerName.toLowerCase().includes(searchTerm.toLowerCase());
+  // =========================================================
+  // FILTER INVOICES
+  // =========================================================
+  const filteredInvoices =
+    invoices.filter(invoice => {
+      const matchesSearch =
+        invoice.id
+          .toLowerCase()
+          .includes(
+            searchTerm.toLowerCase()
+          ) ||
 
-    const matchesStatus = statusFilter === 'All' || invoice.status === statusFilter;
+        invoice.outletName
+          .toLowerCase()
+          .includes(
+            searchTerm.toLowerCase()
+          ) ||
 
-    return matchesSearch && matchesStatus;
-  });
+        invoice.storeName
+          .toLowerCase()
+          .includes(
+            searchTerm.toLowerCase()
+          ) ||
+
+        invoice.managerName
+          .toLowerCase()
+          .includes(
+            searchTerm.toLowerCase()
+          );
+
+      const matchesStatus =
+        statusFilter === 'All' ||
+        invoice.status ===
+          statusFilter;
+
+      return (
+        matchesSearch &&
+        matchesStatus
+      );
+    });
+
+  // =========================================================
+  // RESET PAGINATION WHEN SEARCH/FILTER CHANGES
+  // =========================================================
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    searchTerm,
+    statusFilter
+  ]);
+
+  // =========================================================
+  // PAGINATION CALCULATIONS
+  // =========================================================
+  const totalFilteredInvoices =
+    filteredInvoices.length;
+
+  const totalPages =
+    Math.max(
+      1,
+      Math.ceil(
+        totalFilteredInvoices /
+          itemsPerPage
+      )
+    );
+
+  const safeCurrentPage =
+    Math.min(
+      currentPage,
+      totalPages
+    );
+
+  const startIndex =
+    (safeCurrentPage - 1) *
+    itemsPerPage;
+
+  const endIndex =
+    Math.min(
+      startIndex +
+        itemsPerPage,
+      totalFilteredInvoices
+    );
+
+  const paginatedInvoices =
+    filteredInvoices.slice(
+      startIndex,
+      endIndex
+    );
+
+  // =========================================================
+  // PAGE CHANGE
+  // =========================================================
+  const handlePageChange = (
+    page
+  ) => {
+    if (
+      page >= 1 &&
+      page <= totalPages
+    ) {
+      setCurrentPage(page);
+    }
+  };
+
+  // =========================================================
+  // PREVIOUS PAGE
+  // =========================================================
+  const handlePreviousPage = () => {
+    if (
+      safeCurrentPage > 1
+    ) {
+      setCurrentPage(
+        safeCurrentPage - 1
+      );
+    }
+  };
+
+  // =========================================================
+  // NEXT PAGE
+  // =========================================================
+  const handleNextPage = () => {
+    if (
+      safeCurrentPage <
+      totalPages
+    ) {
+      setCurrentPage(
+        safeCurrentPage + 1
+      );
+    }
+  };
+
+  // =========================================================
+  // PAGE NUMBERS
+  // =========================================================
+  const getPageNumbers = () => {
+    const pageNumbers = [];
+
+    const maxVisiblePages = 5;
+
+    let startPage =
+      Math.max(
+        1,
+        safeCurrentPage -
+          Math.floor(
+            maxVisiblePages / 2
+          )
+      );
+
+    let endPage =
+      Math.min(
+        totalPages,
+        startPage +
+          maxVisiblePages -
+          1
+      );
+
+    if (
+      endPage -
+        startPage +
+        1 <
+      maxVisiblePages
+    ) {
+      startPage =
+        Math.max(
+          1,
+          endPage -
+            maxVisiblePages +
+            1
+        );
+    }
+
+    for (
+      let i = startPage;
+      i <= endPage;
+      i++
+    ) {
+      pageNumbers.push(i);
+    }
+
+    return pageNumbers;
+  };
 
   return (
     <div className="flex min-h-screen bg-gray-50">
+
+      {/* =====================================================
+          SIDEBAR
+      ====================================================== */}
       <Sidebar onLogout={onLogout} />
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Header title="Invoice Management" onLogout={onLogout} />
+
+        {/* ===================================================
+            HEADER
+        ==================================================== */}
+        <Header
+          title="Invoice Management"
+          onLogout={onLogout}
+        />
 
         <div className="flex-1 overflow-auto p-6">
-          {/* Invoice Modal */}
+
+          {/* =================================================
+              INVOICE MODAL
+          ================================================== */}
           {selectedInvoice && (
             <div className="fixed inset-0 bg-black/60 overflow-auto z-50 p-6">
 
               <div className="bg-white max-w-7xl mx-auto rounded-xl shadow-2xl relative">
 
-                {/* HEADER ACTIONS */}
+                {/* ===========================================
+                    HEADER ACTIONS
+                ============================================ */}
                 <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 rounded-t-xl flex justify-between items-center print:hidden z-10">
 
                   <div>
@@ -524,17 +1278,23 @@ const InvoiceManagement = ({ onLogout }) => {
                   </div>
 
                   <div className="flex gap-3">
+
                     <button
                       onClick={downloadPDF}
                       className="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg flex items-center gap-2"
                       disabled={isDownloading}
                     >
                       <FaDownload />
-                      {isDownloading ? 'Generating...' : 'PDF'}
+
+                      {isDownloading
+                        ? 'Generating...'
+                        : 'PDF'}
                     </button>
 
                     <button
-                      onClick={downloadIndividualExcel}
+                      onClick={
+                        downloadIndividualExcel
+                      }
                       className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2"
                     >
                       <FaFileExcel />
@@ -542,7 +1302,9 @@ const InvoiceManagement = ({ onLogout }) => {
                     </button>
 
                     <button
-                      onClick={handleCloseDetails}
+                      onClick={
+                        handleCloseDetails
+                      }
                       className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center gap-2"
                     >
                       <FaTimesCircle />
@@ -550,77 +1312,99 @@ const InvoiceManagement = ({ onLogout }) => {
                     </button>
 
                   </div>
-
                 </div>
 
-                {/* PDF CONTENT */}
+                {/* ===========================================
+                    PDF CONTENT
+                ============================================ */}
                 <div
                   ref={invoiceRef}
                   className="bg-white p-8 text-[13px] text-gray-900"
                 >
 
-                  {/* COMPANY HEADER */}
+                  {/* =========================================
+                      COMPANY HEADER
+                  ========================================== */}
                   <div className="border-b-2 border-gray-300 pb-4">
 
                     <h1 className="text-center text-3xl font-bold uppercase">
-                      {selectedInvoice.Admin?.name || 'Company Name'}
+                      {selectedInvoice.Admin?.name ||
+                        'Company Name'}
                     </h1>
 
                     <div className="grid grid-cols-3 gap-4 mt-4 text-sm">
 
                       <div>
                         <p>
-                          <span className="font-semibold">Regd Office :</span>
-                          {' '}
-                          {selectedInvoice.Admin?.officeAddress || 'N/A'}
+                          <span className="font-semibold">
+                            Regd Office :
+                          </span>{' '}
+                          {selectedInvoice.Admin?.officeAddress ||
+                            'N/A'}
                         </p>
                       </div>
 
                       <div>
+
                         <p>
-                          <span className="font-semibold">FSSAI No :</span>
-                          {' '}
-                          {selectedInvoice.Admin?.FSSAI_No || 'N/A'}
+                          <span className="font-semibold">
+                            FSSAI No :
+                          </span>{' '}
+                          {selectedInvoice.Admin?.FSSAI_No ||
+                            'N/A'}
                         </p>
 
                         <p>
-                          <span className="font-semibold">GST No :</span>
-                          {' '}
-                          {selectedInvoice.Admin?.GST_No || 'N/A'}
+                          <span className="font-semibold">
+                            GST No :
+                          </span>{' '}
+                          {selectedInvoice.Admin?.GST_No ||
+                            'N/A'}
                         </p>
 
                         <p>
-                          <span className="font-semibold">CIN No :</span>
-                          {' '}
-                          {selectedInvoice.Admin?.CIN_No || 'N/A'}
+                          <span className="font-semibold">
+                            CIN No :
+                          </span>{' '}
+                          {selectedInvoice.Admin?.CIN_No ||
+                            'N/A'}
                         </p>
+
                       </div>
 
                       <div className="text-right">
+
                         <p>
-                          <span className="font-semibold">Invoice No :</span>
-                          {' '}
+                          <span className="font-semibold">
+                            Invoice No :
+                          </span>{' '}
                           {selectedInvoice.id}
                         </p>
 
                         <p>
-                          <span className="font-semibold">Invoice Date :</span>
-                          {' '}
-                          {new Date(selectedInvoice.createdAt).toLocaleDateString()}
+                          <span className="font-semibold">
+                            Invoice Date :
+                          </span>{' '}
+                          {new Date(
+                            selectedInvoice.createdAt
+                          ).toLocaleDateString()}
                         </p>
 
                         <p>
-                          <span className="font-semibold">Status :</span>
-                          {' '}
+                          <span className="font-semibold">
+                            Status :
+                          </span>{' '}
                           {selectedInvoice.status}
                         </p>
+
                       </div>
 
                     </div>
-
                   </div>
 
-                  {/* BILL TO & SHIP TO */}
+                  {/* =========================================
+                      BILL TO & SHIP TO
+                  ========================================== */}
                   <div className="grid grid-cols-2 gap-8 py-6 border-b border-gray-300">
 
                     {/* BILL TO */}
@@ -631,29 +1415,33 @@ const InvoiceManagement = ({ onLogout }) => {
                       </h3>
 
                       <p className="font-semibold">
-                        {selectedInvoice.Store?.name || 'N/A'}
+                        {selectedInvoice.Store?.name ||
+                          'N/A'}
                       </p>
 
                       <p className="mt-1">
-                        {selectedInvoice.Store?.address || 'N/A'}
+                        {selectedInvoice.Store?.address ||
+                          'N/A'}
                       </p>
 
                       <p className="mt-1">
-                        PHONE NO :
-                        {' '}
-                        {selectedInvoice.Store?.phoneNumber || 'N/A'}
+                        PHONE NO :{' '}
+                        {selectedInvoice.Store?.phoneNumber ||
+                          'N/A'}
                       </p>
 
                       <p className="mt-1">
-                        EMAIL :
-                        {' '}
-                        {selectedInvoice.Store?.email || 'N/A'}
+                        EMAIL :{' '}
+                        {selectedInvoice.Store?.email ||
+                          'N/A'}
                       </p>
+
                       <p className="mt-1">
-                        GST NO :
-                        {' '}
-                        {selectedInvoice.Store?.GST_No || 'N/A'}
+                        GST NO :{' '}
+                        {selectedInvoice.Store?.GST_No ||
+                          'N/A'}
                       </p>
+
                     </div>
 
                     {/* SHIP TO */}
@@ -664,35 +1452,40 @@ const InvoiceManagement = ({ onLogout }) => {
                       </h3>
 
                       <p className="font-semibold">
-                        {selectedInvoice.Store?.name || 'N/A'}
+                        {selectedInvoice.Store?.name ||
+                          'N/A'}
                       </p>
 
                       <p className="mt-1">
-                        {selectedInvoice.Store?.address || 'N/A'}
+                        {selectedInvoice.Store?.address ||
+                          'N/A'}
                       </p>
 
                       <p className="mt-1">
-                        PHONE NO :
-                        {' '}
-                        {selectedInvoice.Store?.phoneNumber || 'N/A'}
+                        PHONE NO :{' '}
+                        {selectedInvoice.Store?.phoneNumber ||
+                          'N/A'}
                       </p>
 
                       <p className="mt-1">
-                        EMAIL :
-                        {' '}
-                        {selectedInvoice.Store?.email || 'N/A'}
+                        EMAIL :{' '}
+                        {selectedInvoice.Store?.email ||
+                          'N/A'}
                       </p>
+
                       <p className="mt-1">
-                        GST NO :
-                        {' '}
-                        {selectedInvoice.Store?.GST_No || 'N/A'}
+                        GST NO :{' '}
+                        {selectedInvoice.Store?.GST_No ||
+                          'N/A'}
                       </p>
 
                     </div>
 
                   </div>
 
-                  {/* ITEMS TABLE */}
+                  {/* =========================================
+                      ITEMS TABLE
+                  ========================================== */}
                   <div className="mt-6 overflow-x-auto">
 
                     <table className="w-full border border-gray-300 text-sm">
@@ -700,9 +1493,11 @@ const InvoiceManagement = ({ onLogout }) => {
                       <thead>
 
                         <tr className="bg-gray-100 border-b border-gray-300">
+
                           <th className="border border-gray-300 px-2 py-2 text-left">
                             HSN_No
                           </th>
+
                           <th className="border border-gray-300 px-2 py-2 text-left">
                             SKU
                           </th>
@@ -710,114 +1505,176 @@ const InvoiceManagement = ({ onLogout }) => {
                           <th className="border border-gray-300 px-2 py-2 text-left">
                             Product
                           </th>
+
                           <th className="border border-gray-300 px-2 py-2 text-left">
                             MRP
                           </th>
-                          
+
                           <th className="border border-gray-300 px-2 py-2 text-right">
                             Order Qty
                           </th>
+
                           <th className="border border-gray-300 px-2 py-2 text-right">
                             Batch
                           </th>
+
                           <th className="border border-gray-300 px-2 py-2 text-right">
                             Delvd Qty
                           </th>
+
                           <th className="border border-gray-300 px-2 py-2 text-right">
                             Rate
                           </th>
+
                           <th className="border border-gray-300 px-2 py-2 text-right">
                             Ltr/Kg
                           </th>
+
                           <th className="border border-gray-300 px-2 py-2 text-right">
                             Amt
                           </th>
+
                           <th className="border border-gray-300 px-2 py-2 text-right">
                             Net Amt
                           </th>
+
                           <th className="border border-gray-300 px-2 py-2 text-right">
                             IGST
                           </th>
+
                           <th className="border border-gray-300 px-2 py-2 text-right">
                             SGST
                           </th>
+
                           <th className="border border-gray-300 px-2 py-2 text-right">
                             CGST
                           </th>
+
                           <th className="border border-gray-300 px-2 py-2 text-right">
                             Net Value
                           </th>
+
                         </tr>
 
                       </thead>
 
                       <tbody>
 
-                        {selectedInvoice.items?.map((item, idx) => (
+                        {selectedInvoice.items?.map(
+                          (item, idx) => (
 
-                          <tr
-                            key={idx}
-                            className="border-b border-gray-200"
-                          >
+                            <tr
+                              key={idx}
+                              className="border-b border-gray-200"
+                            >
 
+                              <td className="border border-gray-300 px-2 py-2">
+                                {item.Product?.HSN_No ||
+                                  'N/A'}
+                              </td>
 
-                            <td className="border border-gray-300 px-2 py-2">
-                              {item.Product?.HSN_No || 'N/A'}
-                            </td>
-                            <td className="border border-gray-300 px-2 py-2">
-                              {item.Product?.sku || 'N/A'}
-                            </td>
+                              <td className="border border-gray-300 px-2 py-2">
+                                {item.Product?.sku ||
+                                  'N/A'}
+                              </td>
 
-                            <td className="border border-gray-300 px-2 py-2">
-                              {item.Product?.name || 'Unknown'}
-                            </td>
+                              <td className="border border-gray-300 px-2 py-2">
+                                {item.Product?.name ||
+                                  'Unknown'}
+                              </td>
 
-                            <td className="border border-gray-300 px-2 py-2">
-                              {item.Product?.costPrice || '0'}
-                            </td>
+                              <td className="border border-gray-300 px-2 py-2">
+                                {item.Product?.costPrice ||
+                                  '0'}
+                              </td>
 
-                            <td className="border border-gray-300 px-2 py-2 text-right">
-                              {item.quantity}
-                            </td>
-                            <td className="border border-gray-300 px-2 py-2 text-right">
-                              {item.batchId || 'N/A'}
-                            </td>
-                            <td className="border border-gray-300 px-2 py-2 text-right">
-                              {item.quantity}
-                            </td>
-                            <td className="border border-gray-300 px-2 py-2 text-right">
-                              ₹{parseFloat(item.price || 0).toFixed(2)}
-                            </td>
-                            <td className="border border-gray-300 px-2 py-2 text-right">
-                              {item.Product?.units || 'N/A'}
-                            </td>
-                            <td className="border border-gray-300 px-2 py-2 text-right font-medium">
-                              ₹{parseFloat(item.price || 0).toFixed(2) * parseFloat(item.quantity || 0)}
-                            </td>
-                            <td className="border border-gray-300 px-2 py-2 text-right font-medium">
-                              ₹{parseFloat(item.price || 0).toFixed(2) * parseFloat(item.quantity || 0)}
-                            </td>
-                            <td className="border border-gray-300 px-2 py-2 text-right font-medium">
-                              ₹{parseFloat(item.IGSTAmount || 0).toFixed(2)}
-                            </td>
-                            <td className="border border-gray-300 px-2 py-2 text-right font-medium">
-                              ₹{parseFloat(item.SGSTAmount || 0).toFixed(2)}
-                            </td>
-                            <td className="border border-gray-300 px-2 py-2 text-right font-medium">
-                              ₹{parseFloat(item.CGSTAmount || 0).toFixed(2)}
-                            </td>
-                            <td className="border border-gray-300 px-2 py-2 text-right font-medium">
-                              ₹
-                              {(
-                                parseFloat(item.totalPrice || 0) +
-                                parseFloat(item.CGSTAmount || 0) +
-                                parseFloat(item.SGSTAmount || 0) +
-                                parseFloat(item.IGSTAmount || 0)
-                              ).toFixed(2)}
-                            </td>
-                          </tr>
+                              <td className="border border-gray-300 px-2 py-2 text-right">
+                                {item.quantity}
+                              </td>
 
-                        ))}
+                              <td className="border border-gray-300 px-2 py-2 text-right">
+                                {item.batchId ||
+                                  'N/A'}
+                              </td>
+
+                              <td className="border border-gray-300 px-2 py-2 text-right">
+                                {item.quantity}
+                              </td>
+
+                              <td className="border border-gray-300 px-2 py-2 text-right">
+                                ₹
+                                {parseFloat(
+                                  item.price || 0
+                                ).toFixed(2)}
+                              </td>
+
+                              <td className="border border-gray-300 px-2 py-2 text-right">
+                                {item.Product?.units ||
+                                  'N/A'}
+                              </td>
+
+                              <td className="border border-gray-300 px-2 py-2 text-right font-medium">
+                                ₹
+                                {parseFloat(
+                                  item.price || 0
+                                ).toFixed(2) *
+                                  parseFloat(
+                                    item.quantity || 0
+                                  )}
+                              </td>
+
+                              <td className="border border-gray-300 px-2 py-2 text-right font-medium">
+                                ₹
+                                {parseFloat(
+                                  item.price || 0
+                                ).toFixed(2) *
+                                  parseFloat(
+                                    item.quantity || 0
+                                  )}
+                              </td>
+
+                              <td className="border border-gray-300 px-2 py-2 text-right font-medium">
+                                ₹
+                                {parseFloat(
+                                  item.IGSTAmount || 0
+                                ).toFixed(2)}
+                              </td>
+
+                              <td className="border border-gray-300 px-2 py-2 text-right font-medium">
+                                ₹
+                                {parseFloat(
+                                  item.SGSTAmount || 0
+                                ).toFixed(2)}
+                              </td>
+
+                              <td className="border border-gray-300 px-2 py-2 text-right font-medium">
+                                ₹
+                                {parseFloat(
+                                  item.CGSTAmount || 0
+                                ).toFixed(2)}
+                              </td>
+
+                              <td className="border border-gray-300 px-2 py-2 text-right font-medium">
+                                ₹
+                                {(
+                                  parseFloat(
+                                    item.totalPrice || 0
+                                  ) +
+                                  parseFloat(
+                                    item.CGSTAmount || 0
+                                  ) +
+                                  parseFloat(
+                                    item.SGSTAmount || 0
+                                  ) +
+                                  parseFloat(
+                                    item.IGSTAmount || 0
+                                  )
+                                ).toFixed(2)}
+                              </td>
+
+                            </tr>
+                          )
+                        )}
 
                       </tbody>
 
@@ -825,90 +1682,136 @@ const InvoiceManagement = ({ onLogout }) => {
 
                   </div>
 
-                  {/* TOTALS */}
+                  {/* =========================================
+                      TOTALS
+                  ========================================== */}
                   <div className="flex justify-end mt-8">
 
                     <div className="w-[350px] border border-gray-300">
 
                       <div className="flex justify-between border-b border-gray-300 px-4 py-2">
-                        <span>Total Gross Amount</span>
 
                         <span>
-                          ₹{parseFloat(selectedInvoice.totalAmount || 0).toFixed(2)}
+                          Total Gross Amount
                         </span>
+
+                        <span>
+                          ₹
+                          {parseFloat(
+                            selectedInvoice.totalAmount ||
+                              0
+                          ).toFixed(2)}
+                        </span>
+
                       </div>
 
                       <div className="flex justify-between border-b border-gray-300 px-4 py-2">
-                        <span>Add OUTPUT CGST 9%</span>
 
                         <span>
-                          ₹{(
-                            parseFloat(selectedInvoice.totalAmount || 0) * 0.09
+                          Add OUTPUT CGST 9%
+                        </span>
+
+                        <span>
+                          ₹
+                          {(
+                            parseFloat(
+                              selectedInvoice.totalAmount ||
+                                0
+                            ) * 0.09
                           ).toFixed(2)}
                         </span>
+
                       </div>
 
                       <div className="flex justify-between border-b border-gray-300 px-4 py-2">
-                        <span>Add OUTPUT SGST 9%</span>
 
                         <span>
-                          ₹{(
-                            parseFloat(selectedInvoice.totalAmount || 0) * 0.09
+                          Add OUTPUT SGST 9%
+                        </span>
+
+                        <span>
+                          ₹
+                          {(
+                            parseFloat(
+                              selectedInvoice.totalAmount ||
+                                0
+                            ) * 0.09
                           ).toFixed(2)}
                         </span>
+
                       </div>
 
                       <div className="flex justify-between px-4 py-3 font-bold text-lg bg-gray-50">
-                        <span>Total</span>
 
                         <span>
-                          ₹{(
-                            parseFloat(selectedInvoice.totalAmount || 0) * 1.18
+                          Total
+                        </span>
+
+                        <span>
+                          ₹
+                          {(
+                            parseFloat(
+                              selectedInvoice.totalAmount ||
+                                0
+                            ) * 1.18
                           ).toFixed(2)}
                         </span>
+
                       </div>
 
                     </div>
-
                   </div>
 
-                  {/* NOTES */}
+                  {/* =========================================
+                      NOTES
+                  ========================================== */}
                   <div className="mt-8 text-sm">
 
                     <p>
                       <span className="font-semibold">
                         Payment Method :
-                      </span>
-                      {' '}
-                      {selectedInvoice.paymentMethod || 'N/A'}
+                      </span>{' '}
+                      {selectedInvoice.paymentMethod ||
+                        'N/A'}
                     </p>
 
                     <p className="mt-1">
                       <span className="font-semibold">
                         Paid Amount :
-                      </span>
-                      {' '}
-                      ₹{parseFloat(selectedInvoice.paidAmount || 0).toFixed(2)}
+                      </span>{' '}
+                      ₹
+                      {parseFloat(
+                        selectedInvoice.paidAmount ||
+                          0
+                      ).toFixed(2)}
                     </p>
 
                     <p className="mt-1">
                       <span className="font-semibold">
                         Credit Amount :
-                      </span>
-                      {' '}
-                      ₹{parseFloat(selectedInvoice.creditAmount || 0).toFixed(2)}
+                      </span>{' '}
+                      ₹
+                      {parseFloat(
+                        selectedInvoice.creditAmount ||
+                          0
+                      ).toFixed(2)}
                     </p>
 
                   </div>
 
-                  {/* SIGNATURES */}
+                  {/* =========================================
+                      SIGNATURES
+                  ========================================== */}
                   <div className="grid grid-cols-3 gap-8 mt-20">
 
                     <div>
+
                       <p className="font-medium">
-                        Customer Signature                      </p>
+                        Customer Signature
+                      </p>
 
                       <div className="mt-12 border-b border-gray-400"></div>
+
                     </div>
 
                     <div className="text-center">
@@ -931,7 +1834,9 @@ const InvoiceManagement = ({ onLogout }) => {
 
                   </div>
 
-                  {/* FOOTER */}
+                  {/* =========================================
+                      FOOTER
+                  ========================================== */}
                   <div className="mt-10 border-t border-gray-300 pt-4 text-center text-xs text-gray-500">
 
                     This is a computer generated invoice.
@@ -940,193 +1845,601 @@ const InvoiceManagement = ({ onLogout }) => {
 
                 </div>
 
-               
               </div>
 
             </div>
           )}
-          {/* Stats Cards */}
+
+          {/* =================================================
+              STATS CARDS
+          ================================================== */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+
+            {/* TOTAL */}
             <div className="bg-white p-4 rounded-lg border-l-4 border-gray-500 shadow-sm">
+
               <div className="flex items-center justify-between">
+
                 <div>
-                  <p className="text-sm text-gray-500 mb-1">Total Invoices</p>
-                  <p className="text-2xl font-bold text-gray-800">{stats.total}</p>
+
+                  <p className="text-sm text-gray-500 mb-1">
+                    Total Invoices
+                  </p>
+
+                  <p className="text-2xl font-bold text-gray-800">
+                    {stats.total}
+                  </p>
+
                 </div>
+
                 <FaFileInvoice className="text-gray-400 text-3xl" />
+
               </div>
+
             </div>
-            <div className="bg-white p-4 rounded-lg border-l-4 border-purple-500 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
-              onClick={() => setStatusFilter('outlet_sale')}>
+
+            {/* OUTLET SALES */}
+            <div
+              className="bg-white p-4 rounded-lg border-l-4 border-purple-500 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() =>
+                setStatusFilter('outlet_sale')
+              }
+            >
+
               <div className="flex items-center justify-between">
+
                 <div>
-                  <p className="text-sm text-gray-500 mb-1">Outlet Sales</p>
-                  <p className="text-2xl font-bold text-purple-600">{stats.outlet_sale}</p>
+
+                  <p className="text-sm text-gray-500 mb-1">
+                    Outlet Sales
+                  </p>
+
+                  <p className="text-2xl font-bold text-purple-600">
+                    {stats.outlet_sale}
+                  </p>
+
                 </div>
+
                 <FaStore className="text-purple-400 text-3xl" />
+
               </div>
+
             </div>
-            <div className="bg-white p-4 rounded-lg border-l-4 border-blue-500 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
-              onClick={() => setStatusFilter('credit')}>
+
+            {/* CREDIT */}
+            <div
+              className="bg-white p-4 rounded-lg border-l-4 border-blue-500 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() =>
+                setStatusFilter('credit')
+              }
+            >
+
               <div className="flex items-center justify-between">
+
                 <div>
-                  <p className="text-sm text-gray-500 mb-1">Credit</p>
-                  <p className="text-2xl font-bold text-blue-600">{stats.credit}</p>
+
+                  <p className="text-sm text-gray-500 mb-1">
+                    Credit
+                  </p>
+
+                  <p className="text-2xl font-bold text-blue-600">
+                    {stats.credit}
+                  </p>
+
                 </div>
+
                 <FaRupeeSign className="text-blue-400 text-3xl" />
+
               </div>
+
             </div>
-            <div className="bg-white p-4 rounded-lg border-l-4 border-green-500 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
-              onClick={() => setStatusFilter('paid')}>
+
+            {/* PAID */}
+            <div
+              className="bg-white p-4 rounded-lg border-l-4 border-green-500 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() =>
+                setStatusFilter('paid')
+              }
+            >
+
               <div className="flex items-center justify-between">
+
                 <div>
-                  <p className="text-sm text-gray-500 mb-1">Paid/Distribution</p>
-                  <p className="text-2xl font-bold text-green-600">{stats.paid}</p>
+
+                  <p className="text-sm text-gray-500 mb-1">
+                    Paid/Distribution
+                  </p>
+
+                  <p className="text-2xl font-bold text-green-600">
+                    {stats.paid}
+                  </p>
+
                 </div>
+
                 <FaCheckCircle className="text-green-400 text-3xl" />
+
               </div>
+
             </div>
+
+            {/* TOTAL VALUE */}
             <div className="bg-white p-4 rounded-lg border-l-4 border-amber-500 shadow-sm">
+
               <div className="flex items-center justify-between">
+
                 <div>
-                  <p className="text-sm text-gray-500 mb-1">Total Value</p>
-                  <p className="text-2xl font-bold text-amber-600">{formatCurrency(stats.totalValue)}</p>
+
+                  <p className="text-sm text-gray-500 mb-1">
+                    Total Value
+                  </p>
+
+                  <p className="text-2xl font-bold text-amber-600">
+                    {formatCurrency(
+                      stats.totalValue
+                    )}
+                  </p>
+
                 </div>
+
                 <FaDollarSign className="text-amber-400 text-3xl" />
+
               </div>
+
             </div>
+
           </div>
 
-          {/* Filters */}
+          {/* =================================================
+              FILTERS
+          ================================================== */}
           <div className="bg-white p-4 rounded-lg border border-gray-200 mb-6">
+
             <div className="flex flex-col md:flex-row gap-4">
+
+              {/* SEARCH */}
               <div className="flex-1">
+
                 <div className="relative">
+
                   <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+
                   <input
                     type="text"
                     placeholder="Search invoices by ID, store, outlet, or manager..."
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={(e) =>
+                      setSearchTerm(
+                        e.target.value
+                      )
+                    }
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
+
                 </div>
+
               </div>
+
+              {/* STATUS FILTER */}
               <div className="flex items-center space-x-2">
+
                 <FaFilter className="text-gray-400" />
+
                 <select
                   value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
+                  onChange={(e) =>
+                    setStatusFilter(
+                      e.target.value
+                    )
+                  }
                   className="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="All">All Status</option>
-                  <option value="pending">Pending</option>
-                  <option value="completed">Completed</option>
-                  <option value="cancelled">Cancelled</option>
+
+                  <option value="All">
+                    All Status
+                  </option>
+
+                  <option value="pending">
+                    Pending
+                  </option>
+
+                  <option value="completed">
+                    Completed
+                  </option>
+
+                  <option value="cancelled">
+                    Cancelled
+                  </option>
+
                 </select>
+
               </div>
+
             </div>
+
           </div>
 
-          {/* Invoices Table */}
+          {/* =================================================
+              INVOICES TABLE
+          ================================================== */}
           {loading ? (
+
             <div className="text-center py-12">
+
               <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
-              <p className="mt-4 text-gray-600">Loading invoices...</p>
+
+              <p className="mt-4 text-gray-600">
+                Loading invoices...
+              </p>
+
             </div>
+
           ) : (
+
             <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+
               <div className="overflow-x-auto">
+
                 <table className="min-w-full divide-y divide-gray-200">
+
                   <thead className="bg-gray-50">
+
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">INVOICE</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">STORE / OUTLET</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">DATE</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ITEMS</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">AMOUNT</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">TYPE</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PAYMENT</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">STATUS</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ACTIONS</th>
+
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        INVOICE
+                      </th>
+
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        STORE / OUTLET
+                      </th>
+
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        DATE
+                      </th>
+
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        ITEMS
+                      </th>
+
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        AMOUNT
+                      </th>
+
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        TYPE
+                      </th>
+
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        PAYMENT
+                      </th>
+
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        STATUS
+                      </th>
+
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        ACTIONS
+                      </th>
+
                     </tr>
+
                   </thead>
+
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredInvoices.map((invoice) => {
-                      const statusStyle = getStatusColor(invoice.status);
-                      return (
-                        <tr key={invoice.id} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-6 py-4">
-                            <div className="font-medium text-gray-900">{invoice.id}</div>
-                            <div className="text-xs text-gray-500">Mgr: {invoice.managerName}</div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="font-medium text-gray-900">{invoice.storeName}</div>
-                            {invoice.outletName !== 'N/A' && (
-                              <div className="text-xs text-gray-500">Outlet: {invoice.outletName}</div>
-                            )}
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="text-sm text-gray-500">{invoice.date}</div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="text-sm text-gray-900">{invoice.totalItems} items</div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="text-sm font-semibold text-gray-900">{formatCurrency(invoice.totalAmount)}</div>
-                            {invoice.creditAmount > 0 && (
-                              <div className="text-xs text-blue-600">Credit: {formatCurrency(invoice.creditAmount)}</div>
-                            )}
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={`px-2 py-1 text-xs font-medium rounded ${getTypeColor(invoice.type)}`}>
-                              {invoice.type}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={`px-2 py-1 text-xs font-medium rounded ${getPaymentColor(invoice.paymentType)}`}>
-                              {invoice.paymentType}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusStyle.bg} ${statusStyle.text}`}>
-                              {invoice.status === 'completed' && <FaCheckCircle className="mr-1 text-xs" />}
-                              {invoice.status === 'pending' && <FaClock className="mr-1 text-xs" />}
-                              {invoice.status === 'cancelled' && <FaTimesCircle className="mr-1 text-xs" />}
-                              {statusStyle.label}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <button
-                              onClick={() => handleViewDetails(invoice)}
-                              className="text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors"
-                            >
-                              <FaEye size={14} />
-                              View
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
+
+                    {/* =================================================
+                        IMPORTANT:
+                        PAGINATION IS APPLIED HERE
+                    ================================================== */}
+                    {paginatedInvoices.map(
+                      (invoice) => {
+
+                        const statusStyle =
+                          getStatusColor(
+                            invoice.status
+                          );
+
+                        return (
+
+                          <tr
+                            key={invoice.id}
+                            className="hover:bg-gray-50 transition-colors"
+                          >
+
+                            {/* INVOICE */}
+                            <td className="px-6 py-4">
+
+                              <div className="font-medium text-gray-900">
+                                {invoice.id}
+                              </div>
+
+                              <div className="text-xs text-gray-500">
+                                Mgr: {invoice.managerName}
+                              </div>
+
+                            </td>
+
+                            {/* STORE / OUTLET */}
+                            <td className="px-6 py-4">
+
+                              <div className="font-medium text-gray-900">
+                                {invoice.storeName}
+                              </div>
+
+                              {invoice.outletName !==
+                                'N/A' && (
+                                <div className="text-xs text-gray-500">
+                                  Outlet:{' '}
+                                  {invoice.outletName}
+                                </div>
+                              )}
+
+                            </td>
+
+                            {/* DATE */}
+                            <td className="px-6 py-4">
+
+                              <div className="text-sm text-gray-500">
+                                {invoice.date}
+                              </div>
+
+                            </td>
+
+                            {/* ITEMS */}
+                            <td className="px-6 py-4">
+
+                              <div className="text-sm text-gray-900">
+                                {invoice.totalItems}{' '}
+                                items
+                              </div>
+
+                            </td>
+
+                            {/* AMOUNT */}
+                            <td className="px-6 py-4">
+
+                              <div className="text-sm font-semibold text-gray-900">
+                                {formatCurrency(
+                                  invoice.totalAmount
+                                )}
+                              </div>
+
+                              {invoice.creditAmount >
+                                0 && (
+                                <div className="text-xs text-blue-600">
+                                  Credit:{' '}
+                                  {formatCurrency(
+                                    invoice.creditAmount
+                                  )}
+                                </div>
+                              )}
+
+                            </td>
+
+                            {/* TYPE */}
+                            <td className="px-6 py-4">
+
+                              <span
+                                className={`px-2 py-1 text-xs font-medium rounded ${getTypeColor(
+                                  invoice.type
+                                )}`}
+                              >
+                                {invoice.type}
+                              </span>
+
+                            </td>
+
+                            {/* PAYMENT */}
+                            <td className="px-6 py-4">
+
+                              <span
+                                className={`px-2 py-1 text-xs font-medium rounded ${getPaymentColor(
+                                  invoice.paymentType
+                                )}`}
+                              >
+                                {invoice.paymentType}
+                              </span>
+
+                            </td>
+
+                            {/* STATUS */}
+                            <td className="px-6 py-4">
+
+                              <span
+                                className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusStyle.bg} ${statusStyle.text}`}
+                              >
+
+                                {invoice.status ===
+                                  'completed' && (
+                                  <FaCheckCircle className="mr-1 text-xs" />
+                                )}
+
+                                {invoice.status ===
+                                  'pending' && (
+                                  <FaClock className="mr-1 text-xs" />
+                                )}
+
+                                {invoice.status ===
+                                  'cancelled' && (
+                                  <FaTimesCircle className="mr-1 text-xs" />
+                                )}
+
+                                {statusStyle.label}
+
+                              </span>
+
+                            </td>
+
+                            {/* ACTIONS */}
+                            <td className="px-6 py-4">
+
+                              <button
+                                onClick={() =>
+                                  handleViewDetails(
+                                    invoice
+                                  )
+                                }
+                                className="text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors"
+                              >
+
+                                <FaEye size={14} />
+
+                                View
+
+                              </button>
+
+                            </td>
+
+                          </tr>
+
+                        );
+                      }
+                    )}
+
                   </tbody>
+
                 </table>
 
+                {/* =================================================
+                    EMPTY STATE
+                ================================================== */}
                 {filteredInvoices.length === 0 && (
+
                   <div className="text-center py-12">
+
                     <FaFileInvoice className="text-4xl text-gray-300 mx-auto mb-3" />
-                    <div className="text-gray-400 mb-2">No invoices found</div>
+
+                    <div className="text-gray-400 mb-2">
+                      No invoices found
+                    </div>
+
                     <div className="text-gray-500 text-sm">
-                      {searchTerm || statusFilter !== 'All'
+
+                      {searchTerm ||
+                      statusFilter !== 'All'
                         ? 'Try adjusting your search or filters'
                         : 'No invoices available'}
+
                     </div>
+
                   </div>
+
                 )}
+
+                {/* =================================================
+                    PAGINATION
+                ================================================== */}
+                {filteredInvoices.length > 0 && (
+
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-gray-200 bg-gray-50">
+
+                    {/* PAGINATION INFO */}
+                    <div className="text-sm text-gray-600">
+
+                      Showing{' '}
+
+                      <span className="font-semibold text-gray-800">
+                        {startIndex + 1}
+                      </span>{' '}
+
+                      to{' '}
+
+                      <span className="font-semibold text-gray-800">
+                        {endIndex}
+                      </span>{' '}
+
+                      of{' '}
+
+                      <span className="font-semibold text-gray-800">
+                        {totalFilteredInvoices}
+                      </span>{' '}
+
+                      invoices
+
+                    </div>
+
+                    {/* PAGINATION BUTTONS */}
+                    <div className="flex items-center gap-1">
+
+                      {/* PREVIOUS */}
+                      <button
+                        type="button"
+                        onClick={
+                          handlePreviousPage
+                        }
+                        disabled={
+                          safeCurrentPage === 1
+                        }
+                        className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                          safeCurrentPage === 1
+                            ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
+                        }`}
+                      >
+                        Previous
+                      </button>
+
+                      {/* PAGE NUMBERS */}
+                      {getPageNumbers().map(
+                        (page) => (
+
+                          <button
+                            type="button"
+                            key={page}
+                            onClick={() =>
+                              handlePageChange(
+                                page
+                              )
+                            }
+                            className={`min-w-[40px] px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                              safeCurrentPage ===
+                              page
+                                ? 'bg-blue-600 text-white border-blue-600'
+                                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
+                            }`}
+                          >
+                            {page}
+                          </button>
+
+                        )
+                      )}
+
+                      {/* NEXT */}
+                      <button
+                        type="button"
+                        onClick={
+                          handleNextPage
+                        }
+                        disabled={
+                          safeCurrentPage ===
+                          totalPages
+                        }
+                        className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                          safeCurrentPage ===
+                          totalPages
+                            ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
+                        }`}
+                      >
+                        Next
+                      </button>
+
+                    </div>
+
+                  </div>
+
+                )}
+
               </div>
+
             </div>
+
           )}
+
         </div>
+
       </div>
+
     </div>
   );
 };

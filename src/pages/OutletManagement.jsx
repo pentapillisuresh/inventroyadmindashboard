@@ -420,6 +420,7 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
                       disabled={loading}
                     />
                   </div>
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1.5">
                       GST Number
@@ -434,6 +435,7 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
                       disabled={loading}
                     />
                   </div>
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1.5">
                       CIN Number
@@ -881,6 +883,7 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
                     <option value="bank_transfer">Bank Transfer</option>
                   </select>
                 </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Payment Amount (₹)
@@ -899,6 +902,7 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
                     />
                   </div>
                 </div>
+
                 <div className="flex space-x-3">
                   <button
                     onClick={handleProcessPayment}
@@ -917,6 +921,7 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
                       </>
                     )}
                   </button>
+
                   <button
                     onClick={() => setShowPaymentForm(false)}
                     disabled={loading}
@@ -937,6 +942,7 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
                 {calculatePercentage(outlet.currentCredit || 0, outlet.creditLimit || 1)}% used
               </span>
             </div>
+
             <div className="w-full bg-gray-200 rounded-full h-3">
               <div
                 className={`h-3 rounded-full ${
@@ -965,6 +971,7 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
                 >
                   Order History
                 </button>
+
                 <button
                   onClick={() => setActiveTab('invoices')}
                   className={`pb-2 px-1 ${
@@ -995,15 +1002,28 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
                           <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Status</th>
                         </tr>
                       </thead>
+
                       <tbody className="divide-y divide-gray-200">
                         {orders.map((order, index) => (
                           <tr key={index}>
-                            <td className="px-4 py-3 font-medium">{order.id || `ORDER-${index + 1}`}</td>
-                            <td className="px-4 py-3">
-                              {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'N/A'}
+                            <td className="px-4 py-3 font-medium">
+                              {order.id || `ORDER-${index + 1}`}
                             </td>
-                            <td className="px-4 py-3">{order.items?.length || 0}</td>
-                            <td className="px-4 py-3">{formatRupee(order.totalAmount || 0)}</td>
+
+                            <td className="px-4 py-3">
+                              {order.createdAt
+                                ? new Date(order.createdAt).toLocaleDateString()
+                                : 'N/A'}
+                            </td>
+
+                            <td className="px-4 py-3">
+                              {order.items?.length || 0}
+                            </td>
+
+                            <td className="px-4 py-3">
+                              {formatRupee(order.totalAmount || 0)}
+                            </td>
+
                             <td className="px-4 py-3">
                               <span className={`px-2 py-1 rounded text-sm ${
                                 (order.status || 'pending') === 'completed' 
@@ -1023,7 +1043,9 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
                     </table>
                   </div>
                 ) : (
-                  <p className="text-gray-500 text-center py-8">No order history available</p>
+                  <p className="text-gray-500 text-center py-8">
+                    No order history available
+                  </p>
                 )}
               </div>
             ) : (
@@ -1033,24 +1055,52 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
                     <table className="w-full">
                       <thead>
                         <tr className="bg-gray-50">
-                          <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Invoice Number</th>
-                          <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Date</th>
-                          <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Type</th>
-                          <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Amount</th>
-                          <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Payment Method</th>
-                          <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Status</th>
+                          <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">
+                            Invoice Number
+                          </th>
+                          <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">
+                            Date
+                          </th>
+                          <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">
+                            Type
+                          </th>
+                          <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">
+                            Amount
+                          </th>
+                          <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">
+                            Payment Method
+                          </th>
+                          <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">
+                            Status
+                          </th>
                         </tr>
                       </thead>
+
                       <tbody className="divide-y divide-gray-200">
                         {invoices.map((invoice, index) => (
                           <tr key={index}>
-                            <td className="px-4 py-3 font-medium">{invoice.invoiceNumber}</td>
-                            <td className="px-4 py-3">
-                              {invoice.invoiceDate ? new Date(invoice.invoiceDate).toLocaleDateString() : 'N/A'}
+                            <td className="px-4 py-3 font-medium">
+                              {invoice.invoiceNumber}
                             </td>
-                            <td className="px-4 py-3">{invoice.type}</td>
-                            <td className="px-4 py-3">{formatRupee(invoice.totalAmount || 0)}</td>
-                            <td className="px-4 py-3">{invoice.paymentMethod}</td>
+
+                            <td className="px-4 py-3">
+                              {invoice.invoiceDate
+                                ? new Date(invoice.invoiceDate).toLocaleDateString()
+                                : 'N/A'}
+                            </td>
+
+                            <td className="px-4 py-3">
+                              {invoice.type}
+                            </td>
+
+                            <td className="px-4 py-3">
+                              {formatRupee(invoice.totalAmount || 0)}
+                            </td>
+
+                            <td className="px-4 py-3">
+                              {invoice.paymentMethod}
+                            </td>
+
                             <td className="px-4 py-3">
                               <span className={`px-2 py-1 rounded text-sm ${
                                 (invoice.status || 'pending') === 'paid' 
@@ -1066,7 +1116,9 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
                     </table>
                   </div>
                 ) : (
-                  <p className="text-gray-500 text-center py-8">No invoice history available</p>
+                  <p className="text-gray-500 text-center py-8">
+                    No invoice history available
+                  </p>
                 )}
               </div>
             )}
@@ -1081,6 +1133,7 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
               <FaDollarSign />
               <span>Receive Payment</span>
             </button>
+
             <button
               onClick={() => setShowAddOrderModal(true)}
               className="flex-1 bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 transition font-medium flex items-center justify-center space-x-2"
@@ -1088,6 +1141,7 @@ const OutletDetailsModal = ({ isOpen, onClose, outlet, onUpdate }) => {
               <FaPlus />
               <span>Add Test Order</span>
             </button>
+
             <button
               onClick={onClose}
               className="flex-1 bg-gray-200 text-gray-800 py-2.5 rounded-lg hover:bg-gray-300 transition font-medium"
@@ -1117,6 +1171,11 @@ const OutletManagement = ({ onLogout }) => {
   const [currentOutlet, setCurrentOutlet] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Pagination - 20 outlets per page
+  const ITEMS_PER_PAGE = 20;
+  const [currentPage, setCurrentPage] = useState(1);
+
   const [stats, setStats] = useState({
     totalOutlets: 0,
     totalCreditLimit: 0,
@@ -1130,6 +1189,7 @@ const OutletManagement = ({ onLogout }) => {
 
   const loadOutlets = async () => {
     setLoading(true);
+
     try {
       const response = await ApiService.get(`/outlets`,{ 
         headers: {
@@ -1163,11 +1223,19 @@ const OutletManagement = ({ onLogout }) => {
       }
     } catch (error) {
       console.error('Error loading outlets:', error);
+
       const localOutlets = storage.getOutlets();
       setOutlets(localOutlets);
       
-      const totalCreditLimit = localOutlets.reduce((sum, outlet) => sum + (outlet.creditLimit || 0), 0);
-      const totalCreditUsed = localOutlets.reduce((sum, outlet) => sum + (outlet.creditUsed || 0), 0);
+      const totalCreditLimit = localOutlets.reduce(
+        (sum, outlet) => sum + (outlet.creditLimit || 0),
+        0
+      );
+
+      const totalCreditUsed = localOutlets.reduce(
+        (sum, outlet) => sum + (outlet.creditUsed || 0),
+        0
+      );
       
       setStats({
         totalOutlets: localOutlets.length,
@@ -1198,13 +1266,16 @@ const OutletManagement = ({ onLogout }) => {
   const handleDeleteOutlet = async (outlet) => {
     if (window.confirm(`Are you sure you want to delete "${outlet.name}"?`)) {
       setLoading(true);
+
       try {
         await ApiService.delete(`/outlets/${outlet.id}`,{ 
           headers: {
           Authorization: `Bearer ${clientToken}`,
           'Content-Type': 'application/json',
         }});
+
         loadOutlets();
+
         alert('✅ Outlet deleted successfully');
       } catch (error) {
         console.error('Error deleting outlet:', error);
@@ -1280,6 +1351,59 @@ const OutletManagement = ({ onLogout }) => {
     outlet.contactPerson?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Reset pagination when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  // Total number of pages
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredOutlets.length / ITEMS_PER_PAGE)
+  );
+
+  // Prevent invalid page
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+
+  // Calculate current page starting index
+  const startIndex =
+    (safeCurrentPage - 1) * ITEMS_PER_PAGE;
+
+  // Get only current page outlets
+  const paginatedOutlets = filteredOutlets.slice(
+    startIndex,
+    startIndex + ITEMS_PER_PAGE
+  );
+
+  const goToPage = (page) => {
+    const nextPage = Math.max(
+      1,
+      Math.min(page, totalPages)
+    );
+
+    setCurrentPage(nextPage);
+
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth'
+    });
+  };
+
+  // Format Created Date
+  const formatCreatedDate = (createdAt) => {
+    if (!createdAt) return 'N/A';
+
+    const date = new Date(createdAt);
+
+    if (isNaN(date.getTime())) return 'N/A';
+
+    return date.toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+  };
+
   return (
     <div className="flex min-h-screen bg-gray-50">
       <Sidebar onLogout={onLogout} />
@@ -1292,16 +1416,29 @@ const OutletManagement = ({ onLogout }) => {
           <div className="mb-8">
             <div className="flex justify-between items-center flex-wrap gap-4">
               <div>
-                <h1 className="text-3xl font-bold text-gray-800 mb-2">Outlet Management</h1>
-                <p className="text-gray-600">Manage outlets, credit limits, and status</p>
+                <h1 className="text-3xl font-bold text-gray-800 mb-2">
+                  Outlet Management
+                </h1>
+
+                <p className="text-gray-600">
+                  Manage outlets, credit limits, and status
+                </p>
               </div>
+
               <button 
                 onClick={handleCreateOutlet}
                 disabled={loading}
                 className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition font-medium flex items-center space-x-2"
               >
-                {loading ? <FaSpinner className="animate-spin" /> : <FaPlus />}
-                <span>{loading ? 'Loading...' : 'Create Outlet'}</span>
+                {loading ? (
+                  <FaSpinner className="animate-spin" />
+                ) : (
+                  <FaPlus />
+                )}
+
+                <span>
+                  {loading ? 'Loading...' : 'Create Outlet'}
+                </span>
               </button>
             </div>
           </div>
@@ -1313,9 +1450,15 @@ const OutletManagement = ({ onLogout }) => {
                 <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                   <FaShoppingCart className="text-blue-600 text-xl" />
                 </div>
+
                 <div>
-                  <p className="text-gray-600 text-sm">Total Outlets</p>
-                  <p className="text-2xl font-bold">{stats.totalOutlets}</p>
+                  <p className="text-gray-600 text-sm">
+                    Total Outlets
+                  </p>
+
+                  <p className="text-2xl font-bold">
+                    {stats.totalOutlets}
+                  </p>
                 </div>
               </div>
             </div>
@@ -1325,9 +1468,15 @@ const OutletManagement = ({ onLogout }) => {
                 <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                   <FaCheckCircle className="text-green-600 text-xl" />
                 </div>
+
                 <div>
-                  <p className="text-gray-600 text-sm">Active Outlets</p>
-                  <p className="text-2xl font-bold">{stats.activeOutlets}</p>
+                  <p className="text-gray-600 text-sm">
+                    Active Outlets
+                  </p>
+
+                  <p className="text-2xl font-bold">
+                    {stats.activeOutlets}
+                  </p>
                 </div>
               </div>
             </div>
@@ -1337,9 +1486,15 @@ const OutletManagement = ({ onLogout }) => {
                 <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
                   <FaDollarSign className="text-purple-600 text-xl" />
                 </div>
+
                 <div>
-                  <p className="text-gray-600 text-sm">Total Credit Limit</p>
-                  <p className="text-2xl font-bold">{formatRupee(stats.totalCreditLimit)}</p>
+                  <p className="text-gray-600 text-sm">
+                    Total Credit Limit
+                  </p>
+
+                  <p className="text-2xl font-bold">
+                    {formatRupee(stats.totalCreditLimit)}
+                  </p>
                 </div>
               </div>
             </div>
@@ -1349,9 +1504,15 @@ const OutletManagement = ({ onLogout }) => {
                 <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
                   <FaDollarSign className="text-orange-600 text-xl" />
                 </div>
+
                 <div>
-                  <p className="text-gray-600 text-sm">Credit Used</p>
-                  <p className="text-2xl font-bold">{formatRupee(stats.totalCurrentCredit)}</p>
+                  <p className="text-gray-600 text-sm">
+                    Credit Used
+                  </p>
+
+                  <p className="text-2xl font-bold">
+                    {formatRupee(stats.totalCurrentCredit)}
+                  </p>
                 </div>
               </div>
             </div>
@@ -1360,7 +1521,11 @@ const OutletManagement = ({ onLogout }) => {
           {/* Search and Refresh */}
           <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
             <div className="relative w-64">
-              <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
+              <FaSearch
+                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                size={14}
+              />
+
               <input
                 type="text"
                 placeholder="Search outlets"
@@ -1370,34 +1535,53 @@ const OutletManagement = ({ onLogout }) => {
                 disabled={loading}
               />
             </div>
+
             <button 
               onClick={loadOutlets}
               disabled={loading}
               className="flex items-center space-x-2 text-gray-700 hover:text-gray-900"
             >
-              {loading ? <FaSpinner className="animate-spin" /> : <FaHistory />}
-              <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
+              {loading ? (
+                <FaSpinner className="animate-spin" />
+              ) : (
+                <FaHistory />
+              )}
+
+              <span>
+                {loading ? 'Refreshing...' : 'Refresh'}
+              </span>
             </button>
           </div>
 
           {/* All Outlets Section */}
-          <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">All Outlets ({filteredOutlets.length})</h3>
+          <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6 shadow-sm hover:shadow-md transition-shadow duration-200">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">
+              All Outlets ({filteredOutlets.length})
+            </h3>
             
             {loading ? (
               <div className="text-center py-12">
                 <FaSpinner className="animate-spin text-4xl text-blue-600 mx-auto mb-4" />
-                <p className="text-gray-600">Loading outlets...</p>
+                <p className="text-gray-600">
+                  Loading outlets...
+                </p>
               </div>
             ) : filteredOutlets.length === 0 ? (
               <div className="text-center py-12">
                 <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
                   <FaShoppingCart className="text-gray-400 text-3xl" />
                 </div>
-                <h3 className="text-xl font-semibold text-gray-800 mb-2">No outlets found</h3>
+
+                <h3 className="text-xl font-semibold text-gray-800 mb-2">
+                  No outlets found
+                </h3>
+
                 <p className="text-gray-600 mb-6">
-                  {searchTerm ? 'Try a different search term' : 'Create your first outlet to get started'}
+                  {searchTerm
+                    ? 'Try a different search term'
+                    : 'Create your first outlet to get started'}
                 </p>
+
                 {!searchTerm && (
                   <button 
                     onClick={handleCreateOutlet}
@@ -1409,111 +1593,255 @@ const OutletManagement = ({ onLogout }) => {
                 )}
               </div>
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {filteredOutlets.map((outlet) => (
-                  <div key={outlet.id} className="bg-gray-50 rounded-lg border border-gray-200 p-6">
-                    <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-800 mb-2">{outlet.name}</h3>
-                        <div className="flex items-center space-x-2 text-gray-600">
-                          <FaPhone size={12} />
-                          <span className="text-sm">{outlet.phoneNumber}</span>
-                        </div>
-                        {outlet.Store?.name && (
-                          <div className="flex items-center space-x-2 text-gray-600 mt-1">
-                            <FaStore size={12} />
-                            <span className="text-sm">{outlet.Store.name}</span>
+              <>
+                {/* Outlet Cards */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {paginatedOutlets.map((outlet) => (
+                    <div
+                      key={outlet.id}
+                      className="bg-gray-50 rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+                        <div>
+                          <h3 className="text-xl font-bold text-gray-800 mb-2">
+                            {outlet.name}
+                          </h3>
+
+                          <div className="flex items-center space-x-2 text-gray-600">
+                            <FaPhone size={12} />
+                            <span className="text-sm">
+                              {outlet.phoneNumber}
+                            </span>
                           </div>
-                        )}
+
+                          {outlet.Store?.name && (
+                            <div className="flex items-center space-x-2 text-gray-600 mt-1">
+                              <FaStore size={12} />
+                              <span className="text-sm">
+                                {outlet.Store.name}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Created Date */}
+                          <div className="flex items-center space-x-2 text-gray-500 mt-2">
+                            <FaCalendarAlt size={12} />
+
+                            <span className="text-sm">
+                              Created on:{' '}
+                              <span className="font-medium text-gray-700">
+                                {formatCreatedDate(outlet.createdAt)}
+                              </span>
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col items-end space-y-2">
+                          <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                            outlet.type === 'Official' || outlet.type === 'custom'
+                              ? 'bg-blue-100 text-blue-800' 
+                              : 'bg-orange-100 text-orange-800'
+                          }`}>
+                            {outlet.type === 'custom'
+                              ? 'Official'
+                              : outlet.type}
+                          </span>
+
+                          <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                            outlet.status === 'Active' 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-red-100 text-red-800'
+                          }`}>
+                            {outlet.status}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex flex-col items-end space-y-2">
-                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                          outlet.type === 'Official' || outlet.type === 'custom'
-                            ? 'bg-blue-100 text-blue-800' 
-                            : 'bg-orange-100 text-orange-800'
-                        }`}>
-                          {outlet.type === 'custom' ? 'Official' : outlet.type}
-                        </span>
-                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                          outlet.status === 'Active' 
-                            ? 'bg-green-100 text-green-800' 
-                            : 'bg-red-100 text-red-800'
-                        }`}>
-                          {outlet.status}
-                        </span>
+
+                      {/* Credit Usage */}
+                      <div className="mb-6">
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-sm text-gray-600">
+                            Credit Usage
+                          </span>
+
+                          <span className="font-medium text-sm">
+                            {formatRupee(outlet.currentCredit || 0)} /{' '}
+                            {formatRupee(outlet.creditLimit || 0)}
+                          </span>
+                        </div>
+
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div
+                            className={`h-2 rounded-full ${
+                              calculatePercentage(
+                                outlet.currentCredit || 0,
+                                outlet.creditLimit || 1
+                              ) > 80 
+                                ? 'bg-red-600' 
+                                : calculatePercentage(
+                                    outlet.currentCredit || 0,
+                                    outlet.creditLimit || 1
+                                  ) > 50 
+                                ? 'bg-yellow-500' 
+                                : 'bg-green-600'
+                            }`}
+                            style={{
+                              width: `${calculatePercentage(
+                                outlet.currentCredit || 0,
+                                outlet.creditLimit || 1
+                              )}%`
+                            }}
+                          ></div>
+                        </div>
+
+                        <div className="text-right text-sm text-gray-500 mt-1">
+                          {calculatePercentage(
+                            outlet.currentCredit || 0,
+                            outlet.creditLimit || 1
+                          )}% used
+                        </div>
+                      </div>
+
+                      {/* Contact Information */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                        <div>
+                          <div className="text-gray-600 mb-1">
+                            <span className="text-sm">
+                              Contact Person
+                            </span>
+                          </div>
+
+                          <p className="font-medium text-sm">
+                            {outlet.contactPerson}
+                          </p>
+                        </div>
+
+                        <div>
+                          <div className="text-gray-600 mb-1">
+                            <span className="text-sm">
+                              Address
+                            </span>
+                          </div>
+
+                          <p
+                            className="font-medium text-sm truncate"
+                            title={outlet.address}
+                          >
+                            {outlet.address?.substring(0, 30)}...
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex flex-wrap gap-3">
+                        <button 
+                          onClick={() => handleViewDetails(outlet)}
+                          className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition flex items-center justify-center space-x-2"
+                        >
+                          <FaEye size={14} />
+                          <span>View Details</span>
+                        </button>
+
+                        <button 
+                          onClick={() => handleEditOutlet(outlet)}
+                          className="flex-1 bg-gray-100 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-200 transition flex items-center justify-center space-x-2"
+                        >
+                          <FaEdit size={14} />
+                          <span>Edit</span>
+                        </button>
+
+                        <button 
+                          onClick={() => handleDeleteOutlet(outlet)}
+                          className="flex-1 bg-red-100 text-red-700 py-2 px-4 rounded-lg hover:bg-red-200 transition flex items-center justify-center space-x-2"
+                        >
+                          <FaTrash size={14} />
+                          <span>Delete</span>
+                        </button>
                       </div>
                     </div>
+                  ))}
+                </div>
 
-                    {/* Credit Usage */}
-                    <div className="mb-6">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm text-gray-600">Credit Usage</span>
-                        <span className="font-medium text-sm">
-                          {formatRupee(outlet.currentCredit || 0)} / {formatRupee(outlet.creditLimit || 0)}
-                        </span>
+                {/* Pagination */}
+                {filteredOutlets.length > 0 && totalPages > 1 && (
+                  <div className="mt-6 bg-white rounded-2xl border border-gray-200 shadow-sm px-5 py-4">
+                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+
+                      {/* Showing Count */}
+                      <div className="text-sm text-gray-600">
+                        Showing{' '}
+                        <span className="font-semibold text-gray-900">
+                          {startIndex + 1}
+                        </span>{' '}
+                        to{' '}
+                        <span className="font-semibold text-gray-900">
+                          {Math.min(
+                            startIndex + ITEMS_PER_PAGE,
+                            filteredOutlets.length
+                          )}
+                        </span>{' '}
+                        of{' '}
+                        <span className="font-semibold text-gray-900">
+                          {filteredOutlets.length}
+                        </span>{' '}
+                        outlets
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className={`h-2 rounded-full ${
-                            calculatePercentage(outlet.currentCredit || 0, outlet.creditLimit || 1) > 80 
-                              ? 'bg-red-600' 
-                              : calculatePercentage(outlet.currentCredit || 0, outlet.creditLimit || 1) > 50 
-                              ? 'bg-yellow-500' 
-                              : 'bg-green-600'
+
+                      {/* Pagination Controls */}
+                      <div className="flex items-center justify-center gap-1.5 flex-wrap">
+
+                        {/* Previous */}
+                        <button
+                          type="button"
+                          onClick={() => goToPage(safeCurrentPage - 1)}
+                          disabled={safeCurrentPage === 1}
+                          className={`px-3 py-2 rounded-lg text-sm font-medium border transition-all duration-200 ${
+                            safeCurrentPage === 1
+                              ? 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed'
+                              : 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50 hover:border-gray-400'
                           }`}
-                          style={{ width: `${calculatePercentage(outlet.currentCredit || 0, outlet.creditLimit || 1)}%` }}
-                        ></div>
-                      </div>
-                      <div className="text-right text-sm text-gray-500 mt-1">
-                        {calculatePercentage(outlet.currentCredit || 0, outlet.creditLimit || 1)}% used
-                      </div>
-                    </div>
+                        >
+                          Previous
+                        </button>
 
-                    {/* Contact Information */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-                      <div>
-                        <div className="text-gray-600 mb-1">
-                          <span className="text-sm">Contact Person</span>
-                        </div>
-                        <p className="font-medium text-sm">{outlet.contactPerson}</p>
-                      </div>
-                      <div>
-                        <div className="text-gray-600 mb-1">
-                          <span className="text-sm">Address</span>
-                        </div>
-                        <p className="font-medium text-sm truncate" title={outlet.address}>
-                          {outlet.address?.substring(0, 30)}...
-                        </p>
-                      </div>
-                    </div>
+                        {/* Page Numbers */}
+                        {Array.from(
+                          { length: totalPages },
+                          (_, index) => index + 1
+                        ).map(page => (
+                          <button
+                            key={page}
+                            type="button"
+                            onClick={() => goToPage(page)}
+                            className={`min-w-[40px] h-10 px-3 rounded-lg text-sm font-medium border transition-all duration-200 ${
+                              safeCurrentPage === page
+                                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400'
+                            }`}
+                          >
+                            {page}
+                          </button>
+                        ))}
 
-                    {/* Action Buttons */}
-                    <div className="flex flex-wrap gap-3">
-                      <button 
-                        onClick={() => handleViewDetails(outlet)}
-                        className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition flex items-center justify-center space-x-2"
-                      >
-                        <FaEye size={14} />
-                        <span>View Details</span>
-                      </button>
-                      <button 
-                        onClick={() => handleEditOutlet(outlet)}
-                        className="flex-1 bg-gray-100 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-200 transition flex items-center justify-center space-x-2"
-                      >
-                        <FaEdit size={14} />
-                        <span>Edit</span>
-                      </button>
-                      <button 
-                        onClick={() => handleDeleteOutlet(outlet)}
-                        className="flex-1 bg-red-100 text-red-700 py-2 px-4 rounded-lg hover:bg-red-200 transition flex items-center justify-center space-x-2"
-                      >
-                        <FaTrash size={14} />
-                        <span>Delete</span>
-                      </button>
+                        {/* Next */}
+                        <button
+                          type="button"
+                          onClick={() => goToPage(safeCurrentPage + 1)}
+                          disabled={safeCurrentPage === totalPages}
+                          className={`px-3 py-2 rounded-lg text-sm font-medium border transition-all duration-200 ${
+                            safeCurrentPage === totalPages
+                              ? 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed'
+                              : 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50 hover:border-gray-400'
+                          }`}
+                        >
+                          Next
+                        </button>
+
+                      </div>
                     </div>
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             )}
           </div>
         </main>

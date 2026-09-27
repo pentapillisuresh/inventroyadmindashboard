@@ -131,11 +131,11 @@ const CreateStore = ({ onLogout }) => {
       newErrors.zipCode = 'ZIP code is required';
     }
     
-    if (!formData.phoneNumber.trim()) {
-      newErrors.phoneNumber = 'Phone number is required';
-    } else if (!/^[\+]?[1-9][\d]{0,15}$/.test(formData.phoneNumber.replace(/\D/g, ''))) {
-      newErrors.phoneNumber = 'Invalid phone number';
-    }
+  if (!formData.phoneNumber.trim()) {
+  newErrors.phoneNumber = 'Phone number is required';
+} else if (!/^\d{10}$/.test(formData.phoneNumber)) {
+  newErrors.phoneNumber = 'Phone number must be exactly 10 digits';
+}
     
     if (!formData.email.trim()) {
       newErrors.email = 'Email is required';
@@ -284,33 +284,21 @@ const CreateStore = ({ onLogout }) => {
     }
   };
 
-  const handlePhoneChange = (e) => {
-    const value = e.target.value.replace(/\D/g, '');
-    let formattedValue = value;
-    
-    if (value.length > 0) {
-      formattedValue = '(' + value.substring(0, 3);
-      if (value.length > 3) {
-        formattedValue += ') ' + value.substring(3, 6);
-      }
-      if (value.length > 6) {
-        formattedValue += '-' + value.substring(6, 10);
-      }
-    }
-    
-    setFormData(prev => ({
+const handlePhoneChange = (e) => {
+  const value = e.target.value.replace(/\D/g, '').slice(0, 10);
+
+  setFormData(prev => ({
+    ...prev,
+    phoneNumber: value
+  }));
+
+  if (errors.phoneNumber) {
+    setErrors(prev => ({
       ...prev,
-      phoneNumber: formattedValue
+      phoneNumber: ''
     }));
-    
-    // Clear error for this field if it exists
-    if (errors.phoneNumber) {
-      setErrors(prev => ({
-        ...prev,
-        phoneNumber: ''
-      }));
-    }
-  };
+  }
+};
 
   const handleCreditLimitChange = (e) => {
     const value = e.target.value.replace(/[^\d.]/g, '');
@@ -545,17 +533,18 @@ const CreateStore = ({ onLogout }) => {
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           Phone Number *
                         </label>
-                        <input
-                          type="text"
-                          name="phoneNumber"
-                          value={formData.phoneNumber}
-                          onChange={handlePhoneChange}
-                          className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition ${
-                            errors.phoneNumber ? 'border-red-500' : 'border-gray-300'
-                          }`}
-                          placeholder="(123) 456-7890"
-                          maxLength="14"
-                        />
+                      <input
+  type="tel"
+  name="phoneNumber"
+  value={formData.phoneNumber}
+  onChange={handlePhoneChange}
+  inputMode="numeric"
+  maxLength={10}
+  className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition ${
+    errors.phoneNumber ? 'border-red-500' : 'border-gray-300'
+  }`}
+  placeholder="Enter 10 digit phone number"
+/>
                         {errors.phoneNumber && (
                           <p className="mt-1 text-sm text-red-600">{errors.phoneNumber}</p>
                         )}

@@ -9,6 +9,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
   const [rooms, setRooms] = useState([]);
   const [distributionMode, setDistributionMode] = useState(initialMode);
   const [expandedProducts, setExpandedProducts] = useState({});
+  const [productSearchTerm, setProductSearchTerm] = useState('');
   const [loading, setLoading] = useState({
     stores: false,
     outlets: false,
@@ -700,9 +701,30 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
     ? outlets.filter(outlet => outlet.storeId === parseInt(formData.storeId))
     : outlets;
 
-  const availableProducts = products.filter(
-    product => !selectedProducts.some(p => p.productId === product.id)
-  );
+  const availableProducts = products.filter(product => {
+    const isNotSelected = !selectedProducts.some(
+      p => p.productId === product.id
+    );
+
+    const search = productSearchTerm.trim().toLowerCase();
+
+    if (!search) {
+      return isNotSelected;
+    }
+
+    const productName = product.name?.toLowerCase() || '';
+    const sku = product.sku?.toLowerCase() || '';
+    const category = product.Category?.name?.toLowerCase() || '';
+
+    return (
+      isNotSelected &&
+      (
+        productName.includes(search) ||
+        sku.includes(search) ||
+        category.includes(search)
+      )
+    );
+  });
 
   // Enhanced scroll handler with debounce for better performance
   const handleScroll = useCallback((e) => {
@@ -913,13 +935,35 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
 
               {/* Available Products Section with Infinite Scroll */}
               <div>
-                <div className="flex justify-between items-center mb-4">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
                   <label className="block text-sm font-medium text-gray-700">
                     Available Products
                   </label>
                   <span className="text-sm text-gray-500">
                     Showing {availableProducts.length} of {pagination.totalItems} products
                   </span>
+                </div>
+
+                {/* Product Auto Search */}
+                <div className="relative mb-4">
+                  <FaBox className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={productSearchTerm}
+                    onChange={(e) => setProductSearchTerm(e.target.value)}
+                    placeholder="Search products by name, SKU or category..."
+                    className="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                  />
+                  {productSearchTerm && (
+                    <button
+                      type="button"
+                      onClick={() => setProductSearchTerm('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      aria-label="Clear product search"
+                    >
+                      <FaTimes />
+                    </button>
+                  )}
                 </div>
 
                 {loading.products ? (

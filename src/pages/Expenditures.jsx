@@ -33,6 +33,10 @@ const Expenditures = ({ onLogout }) => {
     categoriesCount: 0
   });
 
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(20);
+
   // State for categories from API
   const [categories, setCategories] = useState([]);
 
@@ -179,6 +183,77 @@ const Expenditures = ({ onLogout }) => {
     const matchesStatus = statusFilter === 'All' || expense.status === statusFilter;
     return matchesSearch && matchesCategory && matchesStatus;
   });
+
+  // Reset pagination whenever search or filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, categoryFilter, statusFilter]);
+
+  // Pagination calculations
+  const totalFilteredItems = filteredExpenditures.length;
+  const totalPages = Math.max(
+    1,
+    Math.ceil(totalFilteredItems / itemsPerPage)
+  );
+
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+
+  const startIndex = (safeCurrentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(
+    startIndex + itemsPerPage,
+    totalFilteredItems
+  );
+
+  const paginatedExpenditures = filteredExpenditures.slice(
+    startIndex,
+    endIndex
+  );
+
+  const handlePageChange = (page) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
+  const handlePreviousPage = () => {
+    if (safeCurrentPage > 1) {
+      setCurrentPage(safeCurrentPage - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (safeCurrentPage < totalPages) {
+      setCurrentPage(safeCurrentPage + 1);
+    }
+  };
+
+  const getPageNumbers = () => {
+    const pageNumbers = [];
+    const maxVisiblePages = 5;
+
+    let startPage = Math.max(
+      1,
+      safeCurrentPage - Math.floor(maxVisiblePages / 2)
+    );
+
+    let endPage = Math.min(
+      totalPages,
+      startPage + maxVisiblePages - 1
+    );
+
+    if (endPage - startPage + 1 < maxVisiblePages) {
+      startPage = Math.max(
+        1,
+        endPage - maxVisiblePages + 1
+      );
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      pageNumbers.push(i);
+    }
+
+    return pageNumbers;
+  };
 
   const currentMonth = new Date().toLocaleString('default', { month: 'long' });
 
@@ -542,7 +617,7 @@ const Expenditures = ({ onLogout }) => {
                         </td>
                       </tr>
                     ) : (
-                      filteredExpenditures.map((expense) => (
+                      paginatedExpenditures.map((expense) => (
                         <tr key={expense.id} className="hover:bg-gray-50">
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-900">{expense.date}</div>
@@ -579,6 +654,70 @@ const Expenditures = ({ onLogout }) => {
                   </tbody>
                 </table>
               </div>
+
+              {/* Pagination */}
+              {filteredExpenditures.length > 0 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-gray-200 bg-gray-50">
+                  <div className="text-sm text-gray-600">
+                    Showing{' '}
+                    <span className="font-semibold text-gray-800">
+                      {startIndex + 1}
+                    </span>{' '}
+                    to{' '}
+                    <span className="font-semibold text-gray-800">
+                      {endIndex}
+                    </span>{' '}
+                    of{' '}
+                    <span className="font-semibold text-gray-800">
+                      {totalFilteredItems}
+                    </span>{' '}
+                    expenses
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={handlePreviousPage}
+                      disabled={safeCurrentPage === 1}
+                      className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                        safeCurrentPage === 1
+                          ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
+                      }`}
+                    >
+                      Previous
+                    </button>
+
+                    {getPageNumbers().map((page) => (
+                      <button
+                        type="button"
+                        key={page}
+                        onClick={() => handlePageChange(page)}
+                        className={`min-w-[40px] px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                          safeCurrentPage === page
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    ))}
+
+                    <button
+                      type="button"
+                      onClick={handleNextPage}
+                      disabled={safeCurrentPage === totalPages}
+                      className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                        safeCurrentPage === totalPages
+                          ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
+                      }`}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

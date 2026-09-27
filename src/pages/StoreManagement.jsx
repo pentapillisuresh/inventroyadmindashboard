@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
-import { FaEye, FaEdit, FaTrash, FaPlus, FaUser, FaPhone, FaBox, FaChartBar, FaTimes, FaSave, FaUserCheck } from 'react-icons/fa';
+import { FaEye, FaEdit, FaTrash, FaPlus, FaUser, FaPhone, FaBox, FaChartBar, FaTimes, FaSave, FaUserCheck, FaCalendarAlt } from 'react-icons/fa';
 import { storage } from '../data/storage';
 import ApiService from '../components/ApiService';
 
@@ -20,6 +20,10 @@ const StoreManagement = ({ onLogout }) => {
   const [selectedManager, setSelectedManager] = useState('');
   const [loading, setLoading] = useState(false);
   const [assignLoading, setAssignLoading] = useState(false);
+
+  // Client-side pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const storesPerPage = 6;
   const [stats, setStats] = useState({
     totalStores: 0,
     activeStores: 0,
@@ -57,6 +61,11 @@ const StoreManagement = ({ onLogout }) => {
     loadData();
     loadNonAssignedManagers();
   }, []);
+
+  // Reset pagination when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   const loadNonAssignedManagers = async () => {
     try {
@@ -478,6 +487,35 @@ const StoreManagement = ({ onLogout }) => {
     (getStoreManager(store)?.name?.toLowerCase().includes(searchTerm?.toLowerCase()))
   );
 
+  // Pagination calculations - API/data logic remains unchanged
+  const totalPages = Math.ceil(filteredStores.length / storesPerPage);
+  const indexOfLastStore = currentPage * storesPerPage;
+  const indexOfFirstStore = indexOfLastStore - storesPerPage;
+  const paginatedStores = filteredStores.slice(
+    indexOfFirstStore,
+    indexOfLastStore
+  );
+
+  const goToPage = page => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const formatCreatedDate = createdAt => {
+    if (!createdAt) return 'N/A';
+
+    const date = new Date(createdAt);
+    if (isNaN(date.getTime())) return 'N/A';
+
+    return date.toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+  };
+
   return (
     <div className="flex min-h-screen bg-gray-50">
       <Sidebar onLogout={onLogout} />
@@ -485,21 +523,29 @@ const StoreManagement = ({ onLogout }) => {
       <div className="flex-1">
         <Header title="Store Management" showSearch={false} />
         
-        <main className="p-6">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-800 mb-2">Store Management</h1>
-            <p className="text-gray-600">Manage your stores, infrastructure, and inventory distribution</p>
+        <main className="p-4 sm:p-6 lg:p-8 bg-gradient-to-br from-gray-50 via-white to-blue-50/30 min-h-[calc(100vh-64px)]">
+          <div className="mb-8 rounded-2xl bg-white/95 backdrop-blur border border-gray-200/80 shadow-sm p-6">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+              <div>
+            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-gray-900 mb-2">Store Management</h1>
+            <p className="text-gray-500">Manage your stores, infrastructure, and inventory distribution</p>
+              </div>
+              <div className="hidden md:flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-50 text-blue-700 text-sm font-semibold border border-blue-100">
+                <FaBox />
+                {stats.totalStores} {stats.totalStores === 1 ? 'Store' : 'Stores'}
+              </div>
+            </div>
           </div>
 
           {/* Search and Create Button */}
-          <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div className="relative w-full sm:w-64">
+          <div className="mb-8 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">
+            <div className="relative w-full sm:w-80">
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search stores..."
-                className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-4 py-3 pl-11 border border-gray-200 bg-white rounded-xl shadow-sm focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none transition"
               />
               <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
                 🔍
@@ -508,7 +554,7 @@ const StoreManagement = ({ onLogout }) => {
             
             <Link
               to="/create-store"
-              className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition flex items-center space-x-2 whitespace-nowrap"
+              className="bg-gray-900 text-white px-6 py-3 rounded-xl hover:bg-blue-700 shadow-sm hover:shadow-md transition-all duration-200 flex items-center justify-center space-x-2 whitespace-nowrap"
             >
               <FaPlus />
               <span className="font-medium">Create Store</span>
@@ -516,8 +562,8 @@ const StoreManagement = ({ onLogout }) => {
           </div>
 
           {/* Overview Stats */}
-          <div className="mb-8 grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-white p-4 rounded-lg border border-gray-200">
+          <div className="mb-8 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="bg-white/95 p-5 rounded-2xl border border-gray-200/80 shadow-sm hover:shadow-md transition-all duration-200">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Total Stores</p>
@@ -526,7 +572,7 @@ const StoreManagement = ({ onLogout }) => {
                 <FaBox className="text-blue-600 text-2xl" />
               </div>
             </div>
-            <div className="bg-white p-4 rounded-lg border border-gray-200">
+            <div className="bg-white/95 p-5 rounded-2xl border border-gray-200/80 shadow-sm hover:shadow-md transition-all duration-200">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Active Managers</p>
@@ -538,7 +584,7 @@ const StoreManagement = ({ onLogout }) => {
                 <FaUser className="text-green-600 text-2xl" />
               </div>
             </div>
-            <div className="bg-white p-4 rounded-lg border border-gray-200">
+            <div className="bg-white/95 p-5 rounded-2xl border border-gray-200/80 shadow-sm hover:shadow-md transition-all duration-200">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Total Items</p>
@@ -547,7 +593,7 @@ const StoreManagement = ({ onLogout }) => {
                 <FaChartBar className="text-purple-600 text-2xl" />
               </div>
             </div>
-            <div className="bg-white p-4 rounded-lg border border-gray-200">
+            <div className="bg-white/95 p-5 rounded-2xl border border-gray-200/80 shadow-sm hover:shadow-md transition-all duration-200">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Active Stores</p>
@@ -571,18 +617,18 @@ const StoreManagement = ({ onLogout }) => {
 
           {/* Stores Grid */}
           {!loading && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-              {filteredStores.map((store) => {
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-5">
+              {paginatedStores.map((store) => {
                 const storeManager = getStoreManager(store);
                 
                 return (
-                  <div key={store.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow">
+                  <div key={store.id} className="group bg-white rounded-2xl border border-gray-200/80 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300">
                     {/* Store Header */}
-                    <div className="p-6 pb-4">
+                    <div className="p-5 sm:p-6 pb-4">
                       <div className="flex justify-between items-start mb-4">
                         <div className="flex-1">
-                          <h3 className="text-xl font-bold text-gray-800 mb-1">{store.name}</h3>
-                          <p className="text-sm text-gray-600 mb-3">{store.address}</p>
+                          <h3 className="text-xl font-bold text-gray-900 mb-1 group-hover:text-blue-700 transition-colors">{store.name}</h3>
+                          <p className="text-sm text-gray-500 mb-3 line-clamp-2">{store.address}</p>
                           <div className="flex items-center space-x-2">
                             <span className={`px-3 py-1 rounded-full text-sm font-medium ${
                               store.isActive 
@@ -596,6 +642,11 @@ const StoreManagement = ({ onLogout }) => {
                                 Managed
                               </span>
                             )}
+                          </div>
+
+                          <div className="flex items-center mt-3 px-3 py-2 rounded-lg bg-gray-50 border border-gray-100 text-sm text-gray-500">
+                            <FaCalendarAlt className="mr-2 text-gray-400" />
+                            <span>Created on: <span className="font-semibold text-gray-700">{formatCreatedDate(store.createdAt)}</span></span>
                           </div>
                         </div>
                         <div className="flex space-x-2 ml-2">
@@ -639,7 +690,7 @@ const StoreManagement = ({ onLogout }) => {
                     </div>
                     
                     {/* Store Stats */}
-                    <div className="border-t border-gray-200 p-6 pt-4">
+                    <div className="border-t border-gray-100 p-5 sm:p-6 pt-4 bg-gray-50/40">
                       <div className="grid grid-cols-2 gap-4">
                         <div className="text-center p-3 bg-gray-50 rounded-lg">
                           <p className="text-sm text-gray-600 mb-1">Total Products</p>
@@ -715,9 +766,55 @@ const StoreManagement = ({ onLogout }) => {
             </div>
           )}
 
+          {/* Pagination */}
+          {!loading && filteredStores.length > 0 && totalPages > 1 && (
+            <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 rounded-2xl bg-white border border-gray-200/80 shadow-sm px-5 py-4">
+              <p className="text-sm text-gray-500">
+                Showing <span className="font-semibold text-gray-800">{indexOfFirstStore + 1}</span> to{' '}
+                <span className="font-semibold text-gray-800">{Math.min(indexOfLastStore, filteredStores.length)}</span> of{' '}
+                <span className="font-semibold text-gray-800">{filteredStores.length}</span> stores
+              </p>
+
+              <div className="flex items-center gap-1 flex-wrap justify-center">
+                <button
+                  type="button"
+                  onClick={() => goToPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="px-3 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                >
+                  Previous
+                </button>
+
+                {Array.from({ length: totalPages }, (_, index) => index + 1).map(page => (
+                  <button
+                    key={page}
+                    type="button"
+                    onClick={() => goToPage(page)}
+                    className={`min-w-9 h-9 px-3 rounded-lg text-sm font-semibold transition ${
+                      currentPage === page
+                        ? 'bg-gray-900 text-white shadow-sm'
+                        : 'text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={() => goToPage(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Empty State */}
           {!loading && filteredStores.length === 0 && (
-            <div className="text-center py-16">
+            <div className="text-center py-16 bg-white rounded-2xl border border-gray-200/80 shadow-sm">
               <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-6">
                 <FaPlus className="text-gray-400 text-4xl" />
               </div>
@@ -753,7 +850,7 @@ const StoreManagement = ({ onLogout }) => {
           {!loading && filteredStores.length > 0 && (
             <div className="mt-8 pt-6 border-t border-gray-200">
               <p className="text-sm text-gray-600">
-                Showing <span className="font-medium">{filteredStores.length}</span> of <span className="font-medium">{stores.length}</span> stores
+                Showing <span className="font-medium">{paginatedStores.length}</span> of <span className="font-medium">{filteredStores.length}</span> matching stores
               </p>
             </div>
           )}
