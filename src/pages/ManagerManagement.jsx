@@ -1814,8 +1814,7 @@ const ManagerManagement = ({ onLogout }) => {
                   Pagination
               ================================================== */}
 
-              {filteredManagers.length > 0 &&
-                totalPages > 1 && (
+              {filteredManagers.length > 0 && (
 
                   <div className="mt-6 bg-white rounded-2xl border border-gray-200 shadow-sm px-5 py-4">
 
