@@ -174,7 +174,9 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
     creditLimit: 0,
     FSSAI_No: '',
     GST_No: '',
-    CIN_No: ''
+    CIN_No: '',
+    password: '',
+    outletType: 'Inventory'
   });
 
   const loadStores = async () => {
@@ -207,7 +209,9 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
           currentCredit: outlet.currentCredit || 0,
           FSSAI_No: outlet.FSSAI_No || '',
           GST_No: outlet.GST_No || '',
-          CIN_No: outlet.CIN_No || ''
+          CIN_No: outlet.CIN_No || '',
+          password: '',
+          outletType: outlet.outletType || 'Inventory'
         });
       } else {
         setFormData({
@@ -219,7 +223,9 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
           creditLimit: 300000,
           FSSAI_No: '',
           GST_No: '',
-          CIN_No: ''
+          CIN_No: '',
+          password: '',
+          outletType: 'Inventory'
         });
       }
     }
@@ -250,8 +256,14 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
         type: 'custom',
         FSSAI_No: formData.FSSAI_No,
         GST_No: formData.GST_No,
-        CIN_No: formData.CIN_No
+        CIN_No: formData.CIN_No,
+        outletType: formData.outletType
       };
+
+      // Password: required on create, optional on edit
+      if (formData.password) {
+        submitData.password = formData.password;
+      }
       
       if (outlet) {
         submitData.currentCredit = parseFloat(formData.currentCredit) || 0;
@@ -325,6 +337,48 @@ const CreateOutletModal = ({ isOpen, onClose, outlet, onSubmit }) => {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* NEW: Outlet Type */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Outlet Type *
+                </label>
+                <select
+                  name="outletType"
+                  value={formData.outletType}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white"
+                  required
+                  disabled={loading}
+                >
+                  <option value="Inventory">Inventory</option>
+                  <option value="Non-Inventory">Non-Inventory</option>
+                </select>
+              </div>
+
+              {/* NEW: Password */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Password {outlet ? '(leave blank to keep current)' : '*'}
+                </label>
+                <input
+                  type="password"
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                  placeholder={outlet ? 'Enter new password (optional)' : 'Enter password'}
+                  required={!outlet}
+                  minLength={6}
+                  autoComplete="new-password"
+                  disabled={loading}
+                />
+                {outlet && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Leave empty to keep the existing password unchanged.
+                  </p>
+                )}
               </div>
 
               <div>

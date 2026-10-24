@@ -24,6 +24,7 @@ import StockDistribution from "./pages/StockDistribution";
 import InvoiceManagement from "./pages/InvoiceManagement";
 import Expenditures from "./pages/Expenditures";
 import ReportsAnalytics from "./pages/ReportsAnalytics";
+import OutletRequests from "./pages/OutletRequests";
 
 // Protected Route Component
 function ProtectedRoute({ children }) {
@@ -121,6 +122,16 @@ function AppRoutes() {
         }
       />
 
+
+{/* Outlet Requests */}
+<Route
+  path="/outlet-requests"
+  element={
+    <ProtectedRoute>
+      <OutletRequests onLogout={logout} />
+    </ProtectedRoute>
+  }
+/>
       {/* Managers */}
       <Route
         path="/managers"

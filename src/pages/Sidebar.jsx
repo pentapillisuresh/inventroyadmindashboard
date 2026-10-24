@@ -58,6 +58,13 @@ const Sidebar = ({ onLogout }) => {
       label: 'Outlet Management',
       requiredPermission: 'create_outlets'
     },
+
+    {
+  path: "/outlet-requests",
+  icon: <FaStore />,
+  label: "Outlet Requests",
+  requiredPermission: "create_outlets",
+},
     { 
       path: '/products', 
       icon: <FaBox />, 
