@@ -1311,44 +1311,22 @@ const ManagerManagement = ({ onLogout }) => {
       const url = currentManager
         ? `users/store-managers/${currentManager.id}`
         : 'users/store-managers';
+  
+      const method = currentManager ? 'put' : 'post';
+  
+      const response = await ApiService[method](url, formData, {
+        headers: {
+          Authorization: `Bearer ${clientToken}`,
+          'Content-Type': 'application/json',
+        }
+      });
 
-      const method =
-        currentManager
-          ? 'put'
-          : 'post';
-
-      const response =
-        await ApiService[method](
-          url,
-          formData,
-          {
-            headers: {
-              Authorization:
-                `Bearer ${clientToken}`,
-              'Content-Type':
-                'application/json'
-            }
-          }
-        );
-
-      if (response && response.success) {
-
-        alert(
-          `Manager ${
-            currentManager
-              ? 'updated'
-              : 'created'
-          } successfully!`
-        );
-
+      if (response) {
+        alert(`Manager ${currentManager ? 'updated' : 'created'} successfully!`);
         loadManagers();
 
       } else {
-
-        throw new Error(
-          response?.message ||
-          'Failed to save manager'
-        );
+        throw new Error('Failed to save manager');
       }
 
     } catch (error) {

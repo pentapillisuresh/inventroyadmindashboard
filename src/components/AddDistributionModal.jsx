@@ -30,7 +30,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
   });
   const [tempQuantities, setTempQuantities] = useState({});
   const [tempBoxNames, setTempBoxNames] = useState({});
-  
+
   // Pagination state
   const [pagination, setPagination] = useState({
     currentPage: 1,
@@ -40,7 +40,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
     hasMore: true
   });
   const [allProductsLoaded, setAllProductsLoaded] = useState(false);
-  
+
   // Reference for the scroll container
   const productListRef = useRef(null);
 
@@ -108,7 +108,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
       } else {
         setLoading(prev => ({ ...prev, loadingMore: true }));
       }
-      
+
       const params = new URLSearchParams({
         page: page,
         limit: 50
@@ -126,10 +126,10 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
           'Content-Type': 'application/json',
         },
       });
-      
+
       if (response.products) {
         const newProducts = response.products;
-        
+
         // Update pagination info
         setPagination({
           currentPage: response.currentPage || page,
@@ -153,7 +153,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
         // Check if all products are loaded
         const totalLoaded = reset ? newProducts.length : products.length + newProducts.length;
         const totalAvailable = response.totalItems || 0;
-        
+
         if (!response.hasMore || newProducts.length === 0 || totalLoaded >= totalAvailable) {
           setAllProductsLoaded(true);
           console.log('All products loaded!'); // Debug log
@@ -196,7 +196,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
     try {
       setLoading(prev => ({ ...prev, products: true }));
       setAllProductsLoaded(false);
-      
+
       const response = await ApiService.get(`/inventory/store/${formData.storeId}`, {
         headers: {
           Authorization: `Bearer ${clientToken}`,
@@ -282,7 +282,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
     setSelectedProducts([]);
     setTempQuantities({});
     setTempBoxNames({});
-    
+
     if (distributionMode === 'outlet') {
       setProducts([]);
       setPagination({
@@ -318,7 +318,6 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
   const addToSelected = (product) => {
     const quantity = tempQuantities[product.id] || 0;
     const boxName = tempBoxNames[product.id] || '';
-
     if (quantity <= 0) {
       alert('Please enter a valid quantity');
       return;
@@ -331,7 +330,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
 
     const newProduct = {
       id: Date.now(),
-      productId: product.id,
+      productId: product.productId,
       productName: product.name,
       sku: product.sku,
       category: product.Category?.name || 'Uncategorized',
@@ -346,9 +345,9 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
       total: parseFloat(product.price) * quantity,
       maxQuantity: product.quantity || 0
     };
-
+    console.log("selected product::",newProduct)
     setSelectedProducts([...selectedProducts, newProduct]);
-    
+
     setTempQuantities(prev => ({ ...prev, [product.id]: 0 }));
     setTempBoxNames(prev => ({ ...prev, [product.id]: '' }));
     setExpandedProducts(prev => ({ ...prev, [product.id]: false }));
@@ -368,7 +367,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
       let quantity = parseInt(value) || 0;
       if (quantity > maxQty) quantity = maxQty;
       if (quantity < 1) quantity = 1;
-      
+
       updatedProducts[index] = {
         ...updatedProducts[index],
         quantity: quantity,
@@ -383,7 +382,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
       const room = rooms.find(r => r.id === parseInt(value));
       const racks = room?.Racks || [];
       const freezers = room?.Freezers || [];
-      
+
       updatedProducts[index] = {
         ...updatedProducts[index],
         roomId: value,
@@ -409,7 +408,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
         locationId: value
       };
     }
-    
+
     setSelectedProducts(updatedProducts);
   };
 
@@ -532,6 +531,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
       }
 
       let response;
+console.log("product::",selectedProducts)
 
       if (distributionMode === 'stock') {
         const requestData = {
@@ -730,7 +730,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
   const handleScroll = useCallback((e) => {
     const element = e.target;
     const scrollBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
-    
+
     // Trigger load when user is within 200px of bottom
     if (scrollBottom < 200) {
       console.log('Near bottom of list, checking for more products...'); // Debug log
@@ -976,13 +976,13 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                     <FaBox className="text-4xl text-gray-400 mx-auto mb-4" />
                     <p className="text-gray-600 font-medium">No products available</p>
                     <p className="text-gray-500 text-sm mt-1">
-                      {distributionMode === 'stock' && !formData.storeId 
-                        ? 'Please select a store first to view inventory' 
+                      {distributionMode === 'stock' && !formData.storeId
+                        ? 'Please select a store first to view inventory'
                         : selectedProducts.length > 0 ? 'All products have been added to the distribution' : 'No products found in inventory'}
                     </p>
                   </div>
                 ) : (
-                  <div 
+                  <div
                     ref={productListRef}
                     className="space-y-3 max-h-96 overflow-y-auto pr-2 border border-gray-200 rounded-lg p-3 bg-gray-50"
                     onScroll={handleScroll}
@@ -990,10 +990,9 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                     {availableProducts.map((product) => (
                       <div key={product.id} className="border border-gray-200 rounded-lg overflow-hidden bg-white">
                         {/* Accordion Header */}
-                        <div 
-                          className={`flex items-center justify-between p-4 cursor-pointer transition-colors ${
-                            expandedProducts[product.id] ? 'bg-blue-50 border-b border-blue-100' : 'hover:bg-gray-50'
-                          }`}
+                        <div
+                          className={`flex items-center justify-between p-4 cursor-pointer transition-colors ${expandedProducts[product.id] ? 'bg-blue-50 border-b border-blue-100' : 'hover:bg-gray-50'
+                            }`}
                           onClick={() => toggleProductExpand(product.id)}
                         >
                           <div className="flex items-center space-x-3 flex-1">
@@ -1060,11 +1059,10 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                                 type="button"
                                 onClick={() => addToSelected(product)}
                                 disabled={!tempQuantities[product.id] || tempQuantities[product.id] <= 0 || !tempBoxNames[product.id]?.trim()}
-                                className={`px-4 py-2 rounded-lg transition flex items-center space-x-2 ${
-                                  tempQuantities[product.id] && tempQuantities[product.id] > 0 && tempBoxNames[product.id]?.trim()
+                                className={`px-4 py-2 rounded-lg transition flex items-center space-x-2 ${tempQuantities[product.id] && tempQuantities[product.id] > 0 && tempBoxNames[product.id]?.trim()
                                     ? 'bg-green-600 text-white hover:bg-green-700'
                                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                }`}
+                                  }`}
                               >
                                 <FaPlus />
                                 <span>Add to Distribution</span>
@@ -1074,7 +1072,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                         )}
                       </div>
                     ))}
-                    
+
                     {/* Loading indicator at bottom */}
                     {loading.loadingMore && (
                       <div className="text-center py-4 bg-white rounded-lg border border-gray-200">
@@ -1082,7 +1080,7 @@ const AddDistributionModal = ({ onSave, onClose, initialMode = 'stock' }) => {
                         <p className="mt-2 text-sm text-gray-600">Loading more products...</p>
                       </div>
                     )}
-                    
+
                     {/* End of list indicator */}
                     {allProductsLoaded && pagination.totalItems > 0 && (
                       <div className="text-center py-4 bg-white rounded-lg border border-gray-200">

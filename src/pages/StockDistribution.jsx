@@ -233,7 +233,7 @@ const StockDistribution = ({ onLogout }) => {
         }))
       };
 
-      await ApiService.post('/invoice/create', apiData, { headers: authHeaders });
+      // await ApiService.post('/invoice/create', apiData, { headers: authHeaders });
 
       alert('Distribution created successfully!');
       setShowModal(false);
@@ -301,7 +301,7 @@ const StockDistribution = ({ onLogout }) => {
       await ApiService.delete(`/invoice/${distribution.invoiceId}`, {
         headers: authHeaders
       });
-
+np
       alert('Distribution deleted successfully!');
       await loadDistributions();
     } catch (error) {
